@@ -1,20 +1,35 @@
 "use client";
 
-import { FormEvent, useEffect, useMemo, useState } from "react";
+import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Bot,
   CheckCircle2,
   Clock,
+  Download,
+  FileText,
   MessageCircle,
+  Mic,
+  Paperclip,
   PauseCircle,
   Search,
   Send,
   UserRound,
   Warehouse,
+  X,
 } from "lucide-react";
 import { httpClient } from "@/services/http-client";
+import { useConversationStream, type ConnectionState } from "@/hooks/useConversationStream";
 import { Conversation } from "@/types";
+import type { ConversationMessage, MessageMedia } from "@glamouroso/shared/entities";
+import { toast } from "sonner";
 import "./inbox.css";
+
+interface PendingAttachment {
+  dataBase64: string;
+  mimeType: string;
+  fileName: string;
+  previewUrl: string;
+}
 
 function initials(name?: string) {
   return (name || "?")
@@ -30,6 +45,17 @@ function formatTime(value?: string) {
   return new Intl.DateTimeFormat("es-MX", { hour: "2-digit", minute: "2-digit" }).format(new Date(value));
 }
 
+function dayLabel(value?: string) {
+  if (!value) return "";
+  const date = new Date(value);
+  const today = new Date();
+  const yesterday = new Date();
+  yesterday.setDate(today.getDate() - 1);
+  if (date.toDateString() === today.toDateString()) return "Hoy";
+  if (date.toDateString() === yesterday.toDateString()) return "Ayer";
+  return new Intl.DateTimeFormat("es-MX", { day: "2-digit", month: "long" }).format(date);
+}
+
 function roleLabel(role: string) {
   if (role === "user") return "Cliente";
   if (role === "assistant") return "IA";
@@ -37,47 +63,230 @@ function roleLabel(role: string) {
   return role;
 }
 
+function fileToBase64(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const result = String(reader.result || "");
+      resolve(result.includes(",") ? result.split(",").pop()! : result);
+    };
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+}
+
+function MediaBubble({ media, onImageClick }: { media: MessageMedia; onImageClick: (url: string) => void }) {
+  if (media.type === "image" || media.type === "sticker") {
+    return (
+      <img
+        src={media.url}
+        alt={media.caption || media.fileName || "imagen"}
+        className="bubble-media-image"
+        onClick={() => onImageClick(media.url)}
+      />
+    );
+  }
+  if (media.type === "audio") {
+    return <audio controls src={media.url} className="bubble-media-audio" />;
+  }
+  if (media.type === "video") {
+    return <video controls src={media.url} className="bubble-media-video" />;
+  }
+  return (
+    <a className="bubble-media-file" href={media.url} target="_blank" rel="noreferrer" download>
+      <FileText size={20} />
+      <span>{media.fileName || "Archivo"}</span>
+      <Download size={16} />
+    </a>
+  );
+}
+
 export default function ConversationsPage() {
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [selected, setSelected] = useState<Conversation | null>(null);
+  const selectedRef = useRef<Conversation | null>(null);
+  selectedRef.current = selected;
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState<"all" | "human" | "agent">("all");
   const [draft, setDraft] = useState("");
   const [loading, setLoading] = useState(true);
+  const [sending, setSending] = useState(false);
+  const [attachment, setAttachment] = useState<PendingAttachment | null>(null);
+  const [recording, setRecording] = useState(false);
+  const [typingByConversation, setTypingByConversation] = useState<Record<string, boolean>>({});
+  const [connState, setConnState] = useState<ConnectionState>("connecting");
+  const [lightboxUrl, setLightboxUrl] = useState<string | null>(null);
 
-  const load = async () => {
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const feedEndRef = useRef<HTMLDivElement>(null);
+  const recorderRef = useRef<MediaRecorder | null>(null);
+
+  const load = useCallback(async () => {
     setLoading(true);
     const rows = await httpClient.get<Conversation[]>("/conversations");
     setConversations(rows);
-    if (!selected && rows[0]) await openConversation(rows[0].id);
+    if (!selectedRef.current && rows[0]) await openConversation(rows[0].id);
     setLoading(false);
-  };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   useEffect(() => {
     load().catch(() => setLoading(false));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [load]);
 
   async function openConversation(id: string) {
     const detail = await httpClient.get<Conversation>(`/conversations/${id}`);
     setSelected(detail);
   }
 
+  // --- Tiempo real (SSE) ---
+  const handleStreamEvent = useCallback((event: { type: string } & Record<string, unknown>) => {
+    if (event.type === "agent_typing") {
+      const conversationId = event.conversationId as string;
+      const on = event.on as boolean;
+      setTypingByConversation((prev) => ({ ...prev, [conversationId]: on }));
+      return;
+    }
+    if (event.type === "message_created") {
+      const conversationId = event.conversationId as string;
+      const message = event.message as ConversationMessage;
+
+      // Si llega un mensaje, el agente dejó de escribir
+      if (message.role !== "user") {
+        setTypingByConversation((prev) => ({ ...prev, [conversationId]: false }));
+      }
+
+      // Anexar al hilo abierto (dedupe por id, reemplaza optimista temporal)
+      if (selectedRef.current?.id === conversationId) {
+        setSelected((current) => {
+          if (!current) return current;
+          const existing = current.messages || [];
+          if (existing.some((m) => m.id === message.id)) return current;
+          const withoutTemp = existing.filter(
+            (m) => !(m.id.startsWith("temp-") && m.role === message.role && m.content === message.content)
+          );
+          return { ...current, messages: [...withoutTemp, message] };
+        });
+      }
+
+      // Mover la conversación al tope de la lista
+      setConversations((prev) => {
+        const idx = prev.findIndex((c) => c.id === conversationId);
+        if (idx === -1) {
+          load().catch(() => undefined);
+          return prev;
+        }
+        const updated = { ...prev[idx], lastMessageAt: message.createdAt };
+        return [updated, ...prev.filter((c) => c.id !== conversationId)];
+      });
+    }
+  }, [load]);
+
+  useConversationStream({ onEvent: handleStreamEvent, onState: setConnState });
+
+  // Auto-scroll al fondo cuando cambian los mensajes o el typing
+  const messages = useMemo(() => selected?.messages || [], [selected]);
+  const isTyping = selected ? typingByConversation[selected.id] : false;
+  useEffect(() => {
+    feedEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [messages, isTyping]);
+
   async function toggleAgent(conversation: Conversation) {
     const updated = await httpClient.patch<Conversation>(`/conversations/${conversation.id}/agent`, {
       isAgentActive: !conversation.isAgentActive,
     });
     setSelected((current) => (current?.id === updated.id ? { ...current, ...updated } : current));
-    await load();
+    setConversations((prev) => prev.map((c) => (c.id === updated.id ? { ...c, ...updated } : c)));
+  }
+
+  async function handlePickFile(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
+    if (file.size > 16 * 1024 * 1024) {
+      toast.error("El archivo supera el límite de 16 MB");
+      return;
+    }
+    const dataBase64 = await fileToBase64(file);
+    setAttachment({
+      dataBase64,
+      mimeType: file.type || "application/octet-stream",
+      fileName: file.name,
+      previewUrl: URL.createObjectURL(file),
+    });
+  }
+
+  async function toggleRecording() {
+    if (recording) {
+      recorderRef.current?.stop();
+      return;
+    }
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const recorder = new MediaRecorder(stream);
+      const chunks: BlobPart[] = [];
+      recorder.ondataavailable = (ev) => chunks.push(ev.data);
+      recorder.onstop = async () => {
+        stream.getTracks().forEach((t) => t.stop());
+        const blob = new Blob(chunks, { type: recorder.mimeType || "audio/webm" });
+        const file = new File([blob], `nota-voz-${Date.now()}.webm`, { type: blob.type });
+        const dataBase64 = await fileToBase64(file);
+        setAttachment({
+          dataBase64,
+          mimeType: file.type,
+          fileName: file.name,
+          previewUrl: URL.createObjectURL(blob),
+        });
+        setRecording(false);
+      };
+      recorderRef.current = recorder;
+      recorder.start();
+      setRecording(true);
+    } catch {
+      toast.error("No se pudo acceder al micrófono");
+    }
   }
 
   async function sendMessage(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!selected || !draft.trim()) return;
-    await httpClient.post(`/conversations/${selected.id}/messages`, { text: draft.trim() });
-    setDraft("");
-    await openConversation(selected.id);
-    await load();
+    if (!selected || sending) return;
+    const text = draft.trim();
+    if (!text && !attachment) return;
+
+    setSending(true);
+    const tempId = `temp-${Date.now()}`;
+    const optimistic: ConversationMessage = {
+      id: tempId,
+      role: "staff",
+      content: text || (attachment ? attachment.fileName : ""),
+      createdAt: new Date().toISOString(),
+      metadata: attachment
+        ? { media: { type: "document", url: attachment.previewUrl, fileName: attachment.fileName, mimeType: attachment.mimeType } }
+        : undefined,
+    };
+    setSelected((current) =>
+      current ? { ...current, messages: [...(current.messages || []), optimistic] } : current
+    );
+
+    try {
+      await httpClient.post(`/conversations/${selected.id}/messages`, {
+        text: text || undefined,
+        attachment: attachment
+          ? { dataBase64: attachment.dataBase64, mimeType: attachment.mimeType, fileName: attachment.fileName }
+          : undefined,
+      });
+      setDraft("");
+      setAttachment(null);
+      // El mensaje real llega por SSE y reemplaza al optimista; recargamos el detalle como respaldo
+      await openConversation(selected.id);
+    } catch {
+      toast.error("No se pudo enviar el mensaje");
+      setSelected((current) =>
+        current ? { ...current, messages: (current.messages || []).filter((m) => m.id !== tempId) } : current
+      );
+    } finally {
+      setSending(false);
+    }
   }
 
   const filtered = useMemo(() => {
@@ -95,7 +304,9 @@ export default function ConversationsPage() {
 
   const pendingCount = conversations.filter((conversation) => conversation.needsHumanReview || !conversation.isAgentActive).length;
   const selectedName = selected?.contactName || selected?.customer?.name || selected?.contactPhone || "Sin conversacion";
-  const messages = selected?.messages || [];
+
+  const connLabel =
+    connState === "open" ? "En vivo" : connState === "connecting" ? "Conectando..." : "Reconectando...";
 
   return (
     <div className="inbox-page">
@@ -105,7 +316,7 @@ export default function ConversationsPage() {
             <h1>Inbox</h1>
             <p>WhatsApp Kapso · agente IA</p>
           </div>
-          <span className="status-dot" title="Backend conectado" />
+          <span className={`status-dot ${connState !== "open" ? "offline" : ""}`} title={connLabel} />
         </div>
 
         <label className="inbox-search">
@@ -133,7 +344,13 @@ export default function ConversationsPage() {
                 <span className="conversation-main">
                   <strong>{name}</strong>
                   <small>{conversation.contactPhone || "WhatsApp"}</small>
-                  <em>{conversation.isAgentActive ? "Agente atendiendo" : "Atencion humana"}</em>
+                  <em>
+                    {typingByConversation[conversation.id]
+                      ? "Escribiendo..."
+                      : conversation.isAgentActive
+                        ? "Agente atendiendo"
+                        : "Atencion humana"}
+                  </em>
                 </span>
                 <span className="conversation-meta">
                   <small>{formatTime(conversation.lastMessageAt)}</small>
@@ -168,7 +385,6 @@ export default function ConversationsPage() {
             </header>
 
             <div className="message-feed">
-              <div className="day-divider">Hoy</div>
               {messages.length === 0 ? (
                 <div className="empty-thread">
                   <MessageCircle size={42} />
@@ -176,26 +392,89 @@ export default function ConversationsPage() {
                   <span>Cuando entre un mensaje desde Kapso aparecera aqui.</span>
                 </div>
               ) : (
-                messages.map((message) => {
+                messages.map((message, index) => {
                   const fromCustomer = message.role === "user";
                   const fromAgent = message.role === "assistant";
+                  const media = message.metadata?.media as MessageMedia | undefined;
+                  const showDay =
+                    index === 0 || dayLabel(messages[index - 1].createdAt) !== dayLabel(message.createdAt);
                   return (
-                    <article className={fromCustomer ? "message-row incoming" : "message-row outgoing"} key={message.id}>
-                      {fromCustomer && <span className="avatar mini">{initials(selectedName)}</span>}
-                      <div className={fromCustomer ? "bubble received" : fromAgent ? "bubble agent" : "bubble staff"}>
-                        <span className="bubble-role">{roleLabel(message.role)}</span>
-                        <p>{message.content}</p>
-                        <time>{formatTime(message.createdAt)}</time>
-                      </div>
-                    </article>
+                    <div key={message.id}>
+                      {showDay && <div className="day-divider">{dayLabel(message.createdAt)}</div>}
+                      <article className={fromCustomer ? "message-row incoming" : "message-row outgoing"}>
+                        {fromCustomer && <span className="avatar mini">{initials(selectedName)}</span>}
+                        <div className={fromCustomer ? "bubble received" : fromAgent ? "bubble agent" : "bubble staff"}>
+                          <span className="bubble-role">{roleLabel(message.role)}</span>
+                          {media && <MediaBubble media={media} onImageClick={setLightboxUrl} />}
+                          {message.content && !(media && message.content === `[${media.type}]`) && (
+                            <p>{message.content}</p>
+                          )}
+                          <time>{formatTime(message.createdAt)}</time>
+                        </div>
+                      </article>
+                    </div>
                   );
                 })
               )}
+
+              {isTyping && (
+                <article className="message-row outgoing">
+                  <div className="bubble agent typing-bubble">
+                    <span className="typing-dots"><span /><span /><span /></span>
+                  </div>
+                </article>
+              )}
+              <div ref={feedEndRef} />
             </div>
 
+            {attachment && (
+              <div className="composer-attachment">
+                {attachment.mimeType.startsWith("image/") ? (
+                  <img src={attachment.previewUrl} alt={attachment.fileName} />
+                ) : attachment.mimeType.startsWith("audio/") ? (
+                  <audio controls src={attachment.previewUrl} />
+                ) : (
+                  <span className="composer-attachment-file"><FileText size={16} /> {attachment.fileName}</span>
+                )}
+                <button type="button" onClick={() => setAttachment(null)} aria-label="Quitar adjunto">
+                  <X size={16} />
+                </button>
+              </div>
+            )}
+
             <form className="composer" onSubmit={sendMessage}>
-              <input value={draft} onChange={(event) => setDraft(event.target.value)} placeholder="Responder por WhatsApp..." />
-              <button aria-label="Enviar mensaje">
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/*,audio/*,video/*,application/pdf,.doc,.docx,.xls,.xlsx"
+                style={{ display: "none" }}
+                onChange={handlePickFile}
+              />
+              <button
+                type="button"
+                className="composer-icon"
+                onClick={() => fileInputRef.current?.click()}
+                aria-label="Adjuntar archivo"
+                title="Adjuntar archivo"
+              >
+                <Paperclip size={18} />
+              </button>
+              <button
+                type="button"
+                className={recording ? "composer-icon recording" : "composer-icon"}
+                onClick={toggleRecording}
+                aria-label={recording ? "Detener grabación" : "Grabar audio"}
+                title={recording ? "Detener grabación" : "Grabar audio"}
+              >
+                <Mic size={18} />
+              </button>
+              <input
+                value={draft}
+                onChange={(event) => setDraft(event.target.value)}
+                placeholder={recording ? "Grabando audio..." : "Responder por WhatsApp..."}
+                disabled={sending || recording}
+              />
+              <button aria-label="Enviar mensaje" disabled={sending || recording}>
                 <Send size={18} />
               </button>
             </form>
@@ -218,15 +497,6 @@ export default function ConversationsPage() {
             <CheckCircle2 size={16} />
             Cliente identificado
           </div>
-        </div>
-
-        <div className="side-card">
-          <h4>Resumen IA</h4>
-          <p className="muted">
-            {messages[0]?.content
-              ? "El cliente esta conversando sobre productos de limpieza y pedidos por WhatsApp."
-              : "Aun no hay suficientes mensajes para generar un resumen."}
-          </p>
         </div>
 
         <div className="side-card">
@@ -275,6 +545,13 @@ export default function ConversationsPage() {
           </div>
         </div>
       </aside>
+
+      {lightboxUrl && (
+        <div className="lightbox-overlay" onClick={() => setLightboxUrl(null)}>
+          <button className="lightbox-close" aria-label="Cerrar"><X size={22} /></button>
+          <img src={lightboxUrl} alt="vista previa" onClick={(e) => e.stopPropagation()} />
+        </div>
+      )}
     </div>
   );
 }

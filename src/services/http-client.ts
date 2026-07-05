@@ -75,3 +75,15 @@ class HttpClient {
 }
 
 export const httpClient = new HttpClient();
+
+/** Extrae el mensaje real del backend ({ error: { message } }) o usa el fallback. */
+export function getApiErrorMessage(error: unknown, fallback: string): string {
+  if (axios.isAxiosError(error)) {
+    const data = error.response?.data as
+      | { error?: { message?: string }; message?: string }
+      | undefined;
+    const message = data?.error?.message || data?.message;
+    if (message) return message;
+  }
+  return fallback;
+}

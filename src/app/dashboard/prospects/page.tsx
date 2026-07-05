@@ -2,11 +2,26 @@
 
 import { FormEvent, useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Button, TextField } from "@mui/material";
+import {
+  Button,
+  TextField,
+  MenuItem,
+  Select,
+  FormControl,
+  InputLabel,
+  Skeleton,
+} from "@mui/material";
+import { Sparkles, Users, PhoneCall, AlertTriangle } from "lucide-react";
 import { DataTable } from "@/components/ui/DataTable";
-import { httpClient } from "@/services/http-client";
+import { ProspectStatusPill } from "@/components/prospects/prospect-status";
+import { httpClient, getApiErrorMessage } from "@/services/http-client";
+import { useDebounce } from "@/hooks/useDebounce";
+import { formatMxPhone } from "@/utils/format-phone";
 import { PROSPECT_STATUS } from "@glamouroso/shared/constants";
-import type { ProspectImportResponse } from "@glamouroso/shared/schemas/campaign";
+import type {
+  ProspectImportResponse,
+  ProspectMetricsResponse,
+} from "@glamouroso/shared/schemas/campaign";
 import { ListResponse } from "@/types";
 import { toast } from "sonner";
 
@@ -29,34 +44,62 @@ const PROMPT_SUGGESTIONS = [
   "Busca tortillerias en Zapopan",
 ];
 
+const SOURCE_LABELS: Record<string, string> = {
+  google_places: "Google Places",
+  google_places_mock: "Google Places",
+  manual: "Manual",
+};
+
+const emptyMetrics: ProspectMetricsResponse = {
+  total: 0,
+  byStatus: { new: 0, contacted_whatsapp: 0, contacted_voice: 0, failed: 0 },
+  contactedToday: 0,
+};
+
 export default function ProspectsPage() {
   const router = useRouter();
   const [query, setQuery] = useState("");
+  const [maxResults, setMaxResults] = useState(60);
   const [loading, setLoading] = useState(false);
   const [listLoading, setListLoading] = useState(true);
   const [searchText, setSearchText] = useState("");
+  const debouncedSearch = useDebounce(searchText, 300);
   const [lastResult, setLastResult] = useState<ProspectImportResponse | null>(null);
   const [prospects, setProspects] = useState<ProspectRow[]>([]);
   const [lastImportedIds, setLastImportedIds] = useState<string[]>([]);
+  const [metrics, setMetrics] = useState<ProspectMetricsResponse>(emptyMetrics);
+
+  const loadMetrics = useCallback(async () => {
+    try {
+      const data = await httpClient.get<ProspectMetricsResponse>("/prospects/metrics");
+      setMetrics(data);
+    } catch {
+      // métricas son secundarias: si fallan, se quedan en cero
+    }
+  }, []);
 
   const loadProspects = useCallback(async () => {
     setListLoading(true);
     try {
       const response = await httpClient.get<ListResponse<ProspectRow>>("/prospects", {
-        search: searchText,
+        search: debouncedSearch,
         limit: 100,
       });
       setProspects(response.items);
-    } catch {
-      toast.error("Error al cargar prospectos");
+    } catch (error) {
+      toast.error(getApiErrorMessage(error, "Error al cargar prospectos"));
     } finally {
       setListLoading(false);
     }
-  }, [searchText]);
+  }, [debouncedSearch]);
 
   useEffect(() => {
     loadProspects().catch(() => undefined);
   }, [loadProspects]);
+
+  useEffect(() => {
+    loadMetrics().catch(() => undefined);
+  }, [loadMetrics]);
 
   useEffect(() => {
     try {
@@ -67,7 +110,7 @@ export default function ProspectsPage() {
     }
   }, []);
 
-  const newCount = prospects.filter((p) => p.status === PROSPECT_STATUS.NEW).length;
+  const contactedTotal = metrics.byStatus.contacted_whatsapp + metrics.byStatus.contacted_voice;
 
   async function handleImport(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -81,19 +124,19 @@ export default function ProspectsPage() {
     try {
       const result = await httpClient.post<ProspectImportResponse>("/prospects/ai-import", {
         query: query.trim(),
-        maxResults: 60,
+        maxResults,
       });
       setLastResult(result);
       const ids = result.imported.map((row) => String(row.id));
       setLastImportedIds(ids);
       sessionStorage.setItem(LAST_IMPORTED_KEY, JSON.stringify(ids));
-      await loadProspects();
+      await Promise.all([loadProspects(), loadMetrics()]);
       toast.success(
         `${result.imported.length} importados · ${result.skipped.noPhone} sin telefono · ${result.skipped.duplicate} duplicados`,
         { id: toastId }
       );
-    } catch {
-      toast.error("Error al buscar prospectos", { id: toastId });
+    } catch (error) {
+      toast.error(getApiErrorMessage(error, "Error al buscar prospectos"), { id: toastId });
     } finally {
       setLoading(false);
     }
@@ -115,12 +158,47 @@ export default function ProspectsPage() {
             Despues contacta desde Outreach.
           </p>
         </div>
-        {newCount > 0 && (
+        {metrics.byStatus.new > 0 && (
           <Button variant="contained" onClick={goToOutreach}>
-            Contactar {newCount} nuevos
+            Contactar {metrics.byStatus.new} nuevos
           </Button>
         )}
       </div>
+
+      <section className="grid grid-4">
+        <div className="card metric">
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+            <span>Total prospectos</span>
+            <Users size={18} style={{ color: "var(--glam-blue)" }} />
+          </div>
+          <strong>{metrics.total}</strong>
+          <small>En tu base de captacion</small>
+        </div>
+        <div className="card metric">
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+            <span>Nuevos</span>
+            <Sparkles size={18} style={{ color: "var(--glam-blue)" }} />
+          </div>
+          <strong>{metrics.byStatus.new}</strong>
+          <small>Listos para contactar</small>
+        </div>
+        <div className="card metric">
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+            <span>Contactados</span>
+            <PhoneCall size={18} style={{ color: "var(--glam-blue)" }} />
+          </div>
+          <strong>{contactedTotal}</strong>
+          <small>{metrics.contactedToday} hoy</small>
+        </div>
+        <div className="card metric">
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+            <span>Fallidos</span>
+            <AlertTriangle size={18} style={{ color: "var(--glam-blue)" }} />
+          </div>
+          <strong>{metrics.byStatus.failed}</strong>
+          <small>Revisa telefono o reintenta</small>
+        </div>
+      </section>
 
       <section className="panel p-4">
         <form onSubmit={handleImport} className="grid gap-4">
@@ -148,7 +226,20 @@ export default function ProspectsPage() {
             ))}
           </div>
 
-          <div className="flex flex-wrap gap-2">
+          <div className="flex flex-wrap items-center gap-3">
+            <FormControl size="small" sx={{ minWidth: 160 }}>
+              <InputLabel id="max-results-label">Resultados</InputLabel>
+              <Select
+                labelId="max-results-label"
+                label="Resultados"
+                value={maxResults}
+                onChange={(e) => setMaxResults(Number(e.target.value))}
+              >
+                <MenuItem value={20}>Hasta 20</MenuItem>
+                <MenuItem value={40}>Hasta 40</MenuItem>
+                <MenuItem value={60}>Hasta 60</MenuItem>
+              </Select>
+            </FormControl>
             <Button type="submit" variant="contained" disabled={loading}>
               {loading ? "Importando..." : "Buscar e importar"}
             </Button>
@@ -158,27 +249,20 @@ export default function ProspectsPage() {
               </Button>
             )}
           </div>
+
+          {lastResult && (
+            <div className="flex flex-wrap items-center gap-2 border-t pt-3" style={{ borderColor: "var(--border)" }}>
+              <span className="page-kicker" style={{ margin: 0 }}>
+                Ultima busqueda: {lastResult.parsed.businessType} en {lastResult.parsed.city}
+                {lastResult.parsed.zone ? ` · ${lastResult.parsed.zone}` : ""}
+              </span>
+              <span className="pill-success">{lastResult.imported.length} importados</span>
+              <span className="pill warning">{lastResult.skipped.noPhone} sin telefono</span>
+              <span className="pill-muted">{lastResult.skipped.duplicate} duplicados</span>
+            </div>
+          )}
         </form>
       </section>
-
-      {lastResult && (
-        <section className="panel p-4">
-          <div className="mb-4 flex flex-wrap items-end justify-between gap-3">
-            <div>
-              <h2>Ultima busqueda</h2>
-              <p className="page-kicker">
-                {lastResult.parsed.businessType} en {lastResult.parsed.city}
-                {lastResult.parsed.zone ? ` · ${lastResult.parsed.zone}` : ""}
-              </p>
-            </div>
-            <div className="flex flex-wrap gap-2">
-              <span className="pill">{lastResult.imported.length} importados</span>
-              <span className="pill warning">{lastResult.skipped.noPhone} sin telefono</span>
-              <span className="pill">{lastResult.skipped.duplicate} duplicados</span>
-            </div>
-          </div>
-        </section>
-      )}
 
       <section className="panel p-4">
         <div className="mb-4 flex flex-wrap items-end justify-between gap-3">
@@ -186,39 +270,51 @@ export default function ProspectsPage() {
             <h2>Prospectos guardados</h2>
             <p className="page-kicker">Listos para contactar en Outreach.</p>
           </div>
-          <span className="pill">{prospects.length} registros · {newCount} nuevos</span>
+          <span className="pill">
+            {prospects.length} registros · {metrics.byStatus.new} nuevos
+          </span>
         </div>
-        <div className="mb-4 grid gap-3 md:grid-cols-[minmax(220px,1fr)_auto]">
+        <div className="mb-4">
           <input
             className="input"
             placeholder="Buscar negocio, telefono o ciudad"
             value={searchText}
             onChange={(e) => setSearchText(e.target.value)}
           />
-          <Button variant="outlined" onClick={loadProspects} disabled={listLoading}>
-            Filtrar
-          </Button>
         </div>
-        <DataTable
-          rows={prospects}
-          getKey={(row) => row.id}
-          columns={[
-            { key: "name", label: "Negocio" },
-            { key: "phone", label: "Telefono" },
-            { key: "city", label: "Ciudad" },
-            { key: "source", label: "Origen" },
-            {
-              key: "status",
-              label: "Estado",
-              render: (row) => (
-                <span className="pill">
-                  {row.status || PROSPECT_STATUS.NEW}
-                  {lastImportedSet.has(row.id) ? " · reciente" : ""}
-                </span>
-              ),
-            },
-          ]}
-        />
+        {listLoading ? (
+          <div className="grid gap-2">
+            {Array.from({ length: 5 }).map((_, i) => (
+              <Skeleton key={i} variant="rounded" height={48} animation="wave" />
+            ))}
+          </div>
+        ) : (
+          <DataTable
+            rows={prospects}
+            getKey={(row) => row.id}
+            columns={[
+              { key: "name", label: "Negocio" },
+              { key: "phone", label: "Telefono", render: (row) => formatMxPhone(row.phone) },
+              { key: "city", label: "Ciudad", render: (row) => row.city || "-" },
+              { key: "address", label: "Direccion", render: (row) => row.address || "-" },
+              {
+                key: "source",
+                label: "Origen",
+                render: (row) => SOURCE_LABELS[row.source || ""] || row.source || "-",
+              },
+              {
+                key: "status",
+                label: "Estado",
+                render: (row) => (
+                  <span className="flex items-center gap-2">
+                    <ProspectStatusPill status={row.status || PROSPECT_STATUS.NEW} />
+                    {lastImportedSet.has(row.id) && <span className="pill warning">reciente</span>}
+                  </span>
+                ),
+              },
+            ]}
+          />
+        )}
       </section>
     </div>
   );

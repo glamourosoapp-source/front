@@ -217,7 +217,7 @@ export default function NewOrderPage() {
             <Typography variant="caption" sx={{ color: "var(--muted)", display: "block" }}>
               {itemCount} {itemCount === 1 ? "artículo" : "artículos"}
             </Typography>
-            <Typography variant="h6" sx={{ color: "var(--glam-navy)", fontWeight: 800, lineHeight: 1.15 }}>
+            <Typography variant="h6" sx={{ color: "var(--glam-navy)", fontWeight: 700, lineHeight: 1.15 }}>
               ${subtotal.toFixed(2)}
             </Typography>
           </Box>
@@ -354,7 +354,7 @@ export default function NewOrderPage() {
                   <TableCell colSpan={4} align="right" sx={{ color: "var(--muted)" }}>
                     Total
                   </TableCell>
-                  <TableCell align="right" sx={{ fontWeight: 800 }}>
+                  <TableCell align="right" sx={{ fontWeight: 700 }}>
                     ${subtotal.toFixed(2)}
                   </TableCell>
                   <TableCell />

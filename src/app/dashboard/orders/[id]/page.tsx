@@ -233,7 +233,7 @@ export default function OrderDetailPage() {
               Descuento: -{money(order.discount)}
             </Typography>
           ) : null}
-          <Typography variant="h6" sx={{ color: "var(--glam-navy)", fontWeight: 800, mt: 0.5 }}>
+          <Typography variant="h6" sx={{ color: "var(--glam-navy)", fontWeight: 700, mt: 0.5 }}>
             Total: {money(order.total)}
           </Typography>
         </Box>

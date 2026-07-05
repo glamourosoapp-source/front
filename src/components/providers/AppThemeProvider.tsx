@@ -5,6 +5,7 @@ import { CssBaseline, ThemeProvider, createTheme } from "@mui/material";
 import { LocalizationProvider } from "@mui/x-date-pickers/LocalizationProvider";
 import { AdapterDateFns } from "@mui/x-date-pickers/AdapterDateFns";
 import { es } from "date-fns/locale";
+import { FONT_BODY, displayFontStyle, readingFontStyle, boldFontStyle } from "@/lib/brand-fonts";
 
 const theme = createTheme({
   palette: {
@@ -35,9 +36,21 @@ const theme = createTheme({
     borderRadius: 8,
   },
   typography: {
-    fontFamily: 'Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
+    fontFamily: FONT_BODY,
+    // Encabezado líder: Flama Bold Italic
+    h1: displayFontStyle,
+    h2: displayFontStyle,
+    h3: displayFontStyle,
+    h4: displayFontStyle,
+    h5: displayFontStyle,
+    h6: displayFontStyle,
+    // Secuencia de lectura: Flama Medium
+    subtitle1: readingFontStyle,
+    subtitle2: readingFontStyle,
+    overline: readingFontStyle,
+    // Secuencia de lectura (énfasis): Flama Bold
     button: {
-      fontWeight: 800,
+      ...boldFontStyle,
       textTransform: "none",
     },
   },
@@ -54,7 +67,7 @@ const theme = createTheme({
       styleOverrides: {
         root: {
           borderRadius: 999,
-          fontWeight: 800,
+          ...boldFontStyle,
         },
       },
     },
@@ -70,7 +83,7 @@ const theme = createTheme({
         head: {
           color: "#687084",
           fontSize: 12,
-          fontWeight: 900,
+          ...readingFontStyle,
           letterSpacing: 0,
           textTransform: "uppercase",
           background: "#f8fafc",

@@ -1,8 +1,12 @@
 export const ROLES = {
   ASSISTANT: "assistant",
+  ADMIN: "admin",
   ORG_ADMIN: "org_admin",
   SYSTEM_ADMIN: "system_admin",
 } as const;
+
+/** Roles con acceso a configuracion del sistema (Kapso, webhook, IA). */
+export const ADMIN_ROLES: string[] = [ROLES.ADMIN, ROLES.ORG_ADMIN, ROLES.SYSTEM_ADMIN];
 
 export const ORDER_STATUS = {
   NEW: "new",
@@ -73,6 +77,9 @@ export const PRICING_TIERS = {
   RETAIL: "retail",
   WHOLESALE: "wholesale",
 } as const;
+
+/** Máximo de ubicaciones de entrega guardadas por cliente. */
+export const MAX_CUSTOMER_LOCATIONS = 3;
 
 export type Role = (typeof ROLES)[keyof typeof ROLES];
 export type OrderStatus = (typeof ORDER_STATUS)[keyof typeof ORDER_STATUS];

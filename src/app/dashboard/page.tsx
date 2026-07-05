@@ -15,7 +15,8 @@ import {
   Bar,
   Legend,
 } from "recharts";
-import { ShoppingBag, TrendingUp, DollarSign, Activity } from "lucide-react";
+import { ShoppingBag, TrendingUp, DollarSign, Activity, Sparkles } from "lucide-react";
+import { useAuthStore } from "@/stores/auth.store";
 
 // Mock data for executive weekly trend visual
 const weeklySalesData = [
@@ -31,6 +32,7 @@ const weeklySalesData = [
 export default function DashboardPage() {
   const [data, setData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+  const user = useAuthStore((s) => s.user);
 
   useEffect(() => {
     setLoading(true);
@@ -51,48 +53,90 @@ export default function DashboardPage() {
     cantidad: Number(p.quantity || 0),
   }));
 
+  const firstName = user?.name?.trim().split(/\s+/)[0] || "equipo";
+
   return (
     <div className="page-stack">
-      <div className="mb-2">
-        <h1 className="page-title">Overview Ejecutivo</h1>
-        <p className="page-kicker">
-          Análisis en tiempo real de facturación, volumen de pedidos y métricas clave del CRM.
-        </p>
-      </div>
+      <section className="dashboard-welcome" aria-label="Bienvenida al dashboard">
+        <div className="dashboard-welcome-bg" aria-hidden="true">
+          <span className="dashboard-welcome-bubble dashboard-welcome-bubble-1" />
+          <span className="dashboard-welcome-bubble dashboard-welcome-bubble-2" />
+          <span className="dashboard-welcome-bubble dashboard-welcome-bubble-3" />
+          <span className="dashboard-welcome-glow" />
+        </div>
+
+        <div className="dashboard-welcome-copy">
+          <span className="dashboard-welcome-badge">
+            <Sparkles size={14} />
+            Operación en tiempo real
+          </span>
+          <p className="dashboard-welcome-greeting">
+            Hola, <strong>{firstName}</strong>
+          </p>
+          <h1 className="page-title dashboard-welcome-title">Overview Ejecutivo</h1>
+          <p className="page-kicker dashboard-welcome-kicker">
+            Análisis de facturación, volumen de pedidos y métricas clave del CRM.
+          </p>
+          {!loading && (
+            <div className="dashboard-welcome-chips">
+              <span className="pill warning">{totals.orders_today || 0} pedidos hoy</span>
+              <span className="pill">{totals.new_orders || 0} por atender</span>
+            </div>
+          )}
+        </div>
+
+        <figure className="dashboard-welcome-mascot">
+          <img
+            src="/branding/don-glamouroso.svg"
+            alt=""
+            aria-hidden="true"
+            width={119}
+            height={198}
+          />
+        </figure>
+      </section>
 
       {/* Grid de Tarjetas Métricas */}
       <section className="grid grid-4">
         <div className="card metric">
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+          <div className="metric-head">
             <span>Pedidos Hoy</span>
-            <Activity size={18} style={{ color: "var(--glam-blue)" }} />
+            <div className="metric-icon">
+              <Activity size={22} />
+            </div>
           </div>
           <strong>{totals.orders_today || 0}</strong>
           <small>Flujo diario activo</small>
         </div>
 
         <div className="card metric">
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+          <div className="metric-head">
             <span>Pedidos Nuevos</span>
-            <ShoppingBag size={18} style={{ color: "var(--glam-blue)" }} />
+            <div className="metric-icon">
+              <ShoppingBag size={22} />
+            </div>
           </div>
           <strong>{totals.new_orders || 0}</strong>
           <small>Por atender en cola</small>
         </div>
 
         <div className="card metric">
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+          <div className="metric-head">
             <span>Pedidos Totales</span>
-            <TrendingUp size={18} style={{ color: "var(--glam-blue)" }} />
+            <div className="metric-icon">
+              <TrendingUp size={22} />
+            </div>
           </div>
           <strong>{totals.total_orders || 0}</strong>
           <small>Historial acumulado</small>
         </div>
 
         <div className="card metric">
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+          <div className="metric-head">
             <span>Ventas Totales</span>
-            <DollarSign size={18} style={{ color: "var(--glam-blue)" }} />
+            <div className="metric-icon">
+              <DollarSign size={22} />
+            </div>
           </div>
           <strong>${Number(totals.total_sales || 0).toLocaleString("es-MX", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong>
           <small>Facturación total</small>
@@ -104,7 +148,7 @@ export default function DashboardPage() {
         {/* Gráfico 1: Tendencia de Ventas Semanales */}
         <div className="panel p-5" style={{ height: "340px", display: "flex", flexDirection: "column" }}>
           <div style={{ marginBottom: "16px" }}>
-            <h2 style={{ fontSize: "16px", fontWeight: 800, color: "var(--glam-navy)" }}>Facturación Semanal</h2>
+            <h2 style={{ fontSize: "16px", fontWeight: 700, color: "var(--glam-navy)" }}>Facturación Semanal</h2>
             <p className="page-kicker">Histórico de ingresos monetarios por ventas acumuladas en los últimos 7 días.</p>
           </div>
           <div style={{ flex: 1, minHeight: 0 }}>
@@ -122,7 +166,7 @@ export default function DashboardPage() {
                     boxShadow: "0 10px 25px rgba(0,0,0,0.15)",
                   }}
                   itemStyle={{ color: "var(--glam-blue)" }}
-                  labelStyle={{ color: "#9aa3b5", fontWeight: 800 }}
+                  labelStyle={{ color: "#9aa3b5", fontWeight: 700 }}
                   formatter={(value) => [`$${value}`, "Ventas"]}
                 />
                 <Area type="monotone" dataKey="ventas" stroke="var(--glam-blue)" strokeWidth={3} fillOpacity={1} fill="rgba(6, 166, 224, 0.08)" />
@@ -134,7 +178,7 @@ export default function DashboardPage() {
         {/* Gráfico 2: Ventas por Producto Popular */}
         <div className="panel p-5" style={{ height: "340px", display: "flex", flexDirection: "column" }}>
           <div style={{ marginBottom: "16px" }}>
-            <h2 style={{ fontSize: "16px", fontWeight: 800, color: "var(--glam-navy)" }}>Ingresos por Producto Popular</h2>
+            <h2 style={{ fontSize: "16px", fontWeight: 700, color: "var(--glam-navy)" }}>Ingresos por Producto Popular</h2>
             <p className="page-kicker">Distribución de ingresos generados por los productos más comercializados.</p>
           </div>
           <div style={{ flex: 1, minHeight: 0 }}>
@@ -170,7 +214,7 @@ export default function DashboardPage() {
       <section className="panel p-4">
         <div className="mb-4 flex flex-wrap items-end justify-between gap-3">
           <div>
-            <h2 style={{ fontSize: "16px", fontWeight: 800, color: "var(--glam-navy)" }}>Catálogo de Artículos más Demandados</h2>
+            <h2 style={{ fontSize: "16px", fontWeight: 700, color: "var(--glam-navy)" }}>Catálogo de Artículos más Demandados</h2>
             <p className="page-kicker">Desglose completo de unidades vendidas e importe monetario acumulado.</p>
           </div>
           <span className="pill warning">{products.length} productos populares</span>

@@ -1,11 +1,24 @@
 "use client";
 
-import { FormEvent, useEffect, useState } from "react";
-import { Button, Dialog, DialogActions, DialogContent, DialogTitle, TextField } from "@mui/material";
+import { FormEvent, useCallback, useEffect, useState } from "react";
+import {
+  Accordion,
+  AccordionDetails,
+  AccordionSummary,
+  Button,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogTitle,
+  TextField,
+} from "@mui/material";
+import { ChevronDown, Megaphone, Sparkles, PhoneCall, AlertTriangle } from "lucide-react";
 import { DataTable } from "@/components/ui/DataTable";
 import { ProspectOutreachPanel } from "@/components/prospects/ProspectOutreachPanel";
 import { httpClient } from "@/services/http-client";
+import { useDebounce } from "@/hooks/useDebounce";
 import { PROSPECT_STATUS } from "@glamouroso/shared/constants";
+import type { ProspectMetricsResponse } from "@glamouroso/shared/schemas/campaign";
 import { ListResponse } from "@/types";
 import { toast } from "sonner";
 
@@ -22,29 +35,45 @@ interface ProspectRow {
   status?: string;
 }
 
+const emptyMetrics: ProspectMetricsResponse = {
+  total: 0,
+  byStatus: { new: 0, contacted_whatsapp: 0, contacted_voice: 0, failed: 0 },
+  contactedToday: 0,
+};
+
 export default function OutreachPage() {
   const [campaigns, setCampaigns] = useState<Campaign[]>([]);
   const [campaignSearch, setCampaignSearch] = useState("");
+  const debouncedCampaignSearch = useDebounce(campaignSearch, 300);
   const [campaignOpen, setCampaignOpen] = useState(false);
   const [editingCampaign, setEditingCampaign] = useState<Campaign | null>(null);
   const [selectedProspectIds, setSelectedProspectIds] = useState<string[]>([]);
-  const [newProspectCount, setNewProspectCount] = useState(0);
+  const [metrics, setMetrics] = useState<ProspectMetricsResponse>(emptyMetrics);
 
-  const load = async () => {
-    const [campaignRows, prospectRows] = await Promise.all([
-      httpClient.get<ListResponse<Campaign>>("/campaigns", { search: campaignSearch, limit: 100 }),
-      httpClient.get<ListResponse<ProspectRow>>("/prospects", {
-        status: PROSPECT_STATUS.NEW,
+  const loadMetrics = useCallback(async () => {
+    try {
+      setMetrics(await httpClient.get<ProspectMetricsResponse>("/prospects/metrics"));
+    } catch {
+      // métricas secundarias
+    }
+  }, []);
+
+  const load = useCallback(async () => {
+    try {
+      const campaignRows = await httpClient.get<ListResponse<Campaign>>("/campaigns", {
+        search: debouncedCampaignSearch,
         limit: 100,
-      }),
-    ]);
-    setCampaigns(campaignRows.items);
-    setNewProspectCount(prospectRows.items.length);
-  };
+      });
+      setCampaigns(campaignRows.items);
+    } catch {
+      toast.error("Error al cargar las campanas");
+    }
+    await loadMetrics();
+  }, [debouncedCampaignSearch, loadMetrics]);
 
   useEffect(() => {
     load().catch(() => undefined);
-  }, []);
+  }, [load]);
 
   function openCampaignCreate() {
     setEditingCampaign(null);
@@ -66,9 +95,7 @@ export default function OutreachPage() {
     };
 
     const recipientIds =
-      selectedProspectIds.length > 0
-        ? selectedProspectIds.slice(0, 60)
-        : undefined;
+      selectedProspectIds.length > 0 ? selectedProspectIds.slice(0, 60) : undefined;
 
     try {
       if (editingCampaign) {
@@ -124,62 +151,110 @@ export default function OutreachPage() {
         <div>
           <h1 className="page-title">Outreach</h1>
           <p className="page-kicker">
-            Paso 2: contacta prospectos por WhatsApp o llamada. Campanas Kapso para envios masivos con plantilla.
+            Paso 2: contacta prospectos por WhatsApp o llamada. Para envios masivos con plantilla, usa campanas Kapso.
           </p>
         </div>
-        <Button variant="outlined" onClick={openCampaignCreate}>
-          Nueva campana Kapso
-        </Button>
       </div>
 
-      <ProspectOutreachPanel onSelectionChange={setSelectedProspectIds} />
-
-      <section className="panel p-4">
-        <div className="mb-4 flex flex-wrap items-end justify-between gap-3">
-          <div>
-            <h2>Campanas Kapso</h2>
-            <p className="page-kicker">
-              Secuencias con plantilla Meta. {newProspectCount} prospectos nuevos disponibles.
-            </p>
+      <section className="grid grid-4">
+        <div className="card metric">
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+            <span>Nuevos disponibles</span>
+            <Sparkles size={18} style={{ color: "var(--glam-blue)" }} />
           </div>
-          <span className="pill warning">{campaigns.length} campanas</span>
+          <strong>{metrics.byStatus.new}</strong>
+          <small>Sin contactar todavia</small>
         </div>
-        <div className="mb-4 grid gap-3 md:grid-cols-[minmax(220px,1fr)_auto]">
-          <input
-            className="input"
-            placeholder="Buscar nombre o template"
-            value={campaignSearch}
-            onChange={(e) => setCampaignSearch(e.target.value)}
-          />
-          <Button variant="outlined" onClick={load}>
-            Filtrar
-          </Button>
+        <div className="card metric">
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+            <span>Contactados hoy</span>
+            <PhoneCall size={18} style={{ color: "var(--glam-blue)" }} />
+          </div>
+          <strong>{metrics.contactedToday}</strong>
+          <small>Envios realizados hoy</small>
         </div>
-        <DataTable
-          rows={campaigns}
-          getKey={(r) => r.id}
-          getDeleteLabel={(row) => row.name}
-          onEdit={openCampaignEdit}
-          onDelete={removeCampaign}
-          columns={[
-            { key: "name", label: "Nombre" },
-            { key: "templateName", label: "Template" },
-            { key: "status", label: "Estado", render: (row) => <span className="pill">{row.status}</span> },
-            {
-              key: "send",
-              label: "Envio",
-              render: (row) =>
-                row.status === "draft" || row.status === "scheduled" ? (
-                  <Button size="small" variant="outlined" onClick={() => sendCampaign(row)}>
-                    Enviar
-                  </Button>
-                ) : (
-                  "-"
-                ),
-            },
-          ]}
-        />
+        <div className="card metric">
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+            <span>Fallidos</span>
+            <AlertTriangle size={18} style={{ color: "var(--glam-blue)" }} />
+          </div>
+          <strong>{metrics.byStatus.failed}</strong>
+          <small>Para reintentar</small>
+        </div>
+        <div className="card metric">
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+            <span>Campanas</span>
+            <Megaphone size={18} style={{ color: "var(--glam-blue)" }} />
+          </div>
+          <strong>{campaigns.length}</strong>
+          <small>Secuencias Kapso</small>
+        </div>
       </section>
+
+      <ProspectOutreachPanel onSelectionChange={setSelectedProspectIds} onContacted={loadMetrics} />
+
+      <Accordion
+        disableGutters
+        elevation={0}
+        sx={{
+          background: "transparent",
+          border: "1px solid var(--border)",
+          borderRadius: "12px !important",
+          "&:before": { display: "none" },
+          overflow: "hidden",
+        }}
+      >
+        <AccordionSummary expandIcon={<ChevronDown size={18} />}>
+          <div className="flex items-center gap-2">
+            <Megaphone size={18} style={{ color: "var(--glam-blue)" }} />
+            <div>
+              <h2 style={{ margin: 0 }}>Envios masivos con plantilla (Kapso)</h2>
+              <p className="page-kicker" style={{ margin: 0 }}>
+                {campaigns.length} campanas · {metrics.byStatus.new} prospectos nuevos disponibles
+              </p>
+            </div>
+          </div>
+        </AccordionSummary>
+        <AccordionDetails>
+          <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+            <div className="grid gap-2 md:grid-cols-[minmax(220px,1fr)_auto]" style={{ flex: 1 }}>
+              <input
+                className="input"
+                placeholder="Buscar nombre o template"
+                value={campaignSearch}
+                onChange={(e) => setCampaignSearch(e.target.value)}
+              />
+            </div>
+            <Button variant="outlined" onClick={openCampaignCreate}>
+              Nueva campana
+            </Button>
+          </div>
+          <DataTable
+            rows={campaigns}
+            getKey={(r) => r.id}
+            getDeleteLabel={(row) => row.name}
+            onEdit={openCampaignEdit}
+            onDelete={removeCampaign}
+            columns={[
+              { key: "name", label: "Nombre" },
+              { key: "templateName", label: "Template" },
+              { key: "status", label: "Estado", render: (row) => <span className="pill">{row.status}</span> },
+              {
+                key: "send",
+                label: "Envio",
+                render: (row) =>
+                  row.status === "draft" || row.status === "scheduled" ? (
+                    <Button size="small" variant="outlined" onClick={() => sendCampaign(row)}>
+                      Enviar
+                    </Button>
+                  ) : (
+                    "-"
+                  ),
+              },
+            ]}
+          />
+        </AccordionDetails>
+      </Accordion>
 
       <Dialog open={campaignOpen} onClose={() => setCampaignOpen(false)} fullWidth maxWidth="sm">
         <form onSubmit={saveCampaign}>
@@ -189,8 +264,8 @@ export default function OutreachPage() {
               <p className="page-kicker">
                 Destinatarios:{" "}
                 {selectedProspectIds.length > 0
-                  ? `${selectedProspectIds.length} seleccionados arriba`
-                  : `primeros ${Math.min(newProspectCount, 20)} prospectos nuevos`}
+                  ? `${selectedProspectIds.length} seleccionados en el panel`
+                  : `primeros ${Math.min(metrics.byStatus.new, 20)} prospectos nuevos`}
               </p>
             )}
             <TextField name="name" label="Nombre" defaultValue={editingCampaign?.name || ""} fullWidth required />
@@ -198,6 +273,7 @@ export default function OutreachPage() {
               name="templateName"
               label="Template Meta aprobado"
               defaultValue={editingCampaign?.templateName || ""}
+              helperText="Nombre exacto de la plantilla aprobada en Meta (Kapso)"
               fullWidth
               required
             />

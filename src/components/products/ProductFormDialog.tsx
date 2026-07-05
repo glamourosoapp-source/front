@@ -25,7 +25,7 @@ export function ProductFormDialog({ open, editing, categories, onClose, onSubmit
   return (
     <Dialog open={open} onClose={onClose} fullWidth maxWidth="md" key={editing?.id ?? "new"}>
       <form onSubmit={onSubmit}>
-        <DialogTitle sx={{ fontWeight: 800, color: "var(--glam-navy)" }}>
+        <DialogTitle sx={{ fontWeight: 700, color: "var(--glam-navy)" }}>
           {editing ? "Editar producto" : "Nuevo producto"}
         </DialogTitle>
         <DialogContent className="form-grid" dividers sx={{ pt: 2 }}>

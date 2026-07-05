@@ -25,6 +25,25 @@ export interface Customer {
   totalOrders?: number;
   totalSpent?: string | number;
   tags?: Array<{ id: string; name: string; color: string }>;
+  locations?: CustomerLocation[];
+}
+
+export interface CustomerLocation {
+  id: string;
+  customerId: string;
+  label?: string | null;
+  street?: string | null;
+  colony?: string | null;
+  postalCode?: string | null;
+  city?: string | null;
+  zone?: string | null;
+  reference?: string | null;
+  googleMapsUrl?: string | null;
+  latitude?: string | number | null;
+  longitude?: string | number | null;
+  isDefault: boolean;
+  sortOrder: number;
+  formattedAddress?: string;
 }
 
 export interface Product {
@@ -79,6 +98,25 @@ export interface FAQ {
   score?: number;
 }
 
+export type MediaType = "image" | "audio" | "document" | "video" | "sticker";
+
+export interface MessageMedia {
+  type: MediaType;
+  url: string;
+  mimeType?: string;
+  fileName?: string;
+  byteSize?: number;
+  caption?: string;
+}
+
+export interface ConversationMessage {
+  id: string;
+  role: string;
+  content: string;
+  createdAt: string;
+  metadata?: { media?: MessageMedia } & Record<string, unknown>;
+}
+
 export interface Conversation {
   id: string;
   contactName?: string;
@@ -88,8 +126,12 @@ export interface Conversation {
   needsHumanReview: boolean;
   lastMessageAt?: string;
   customer?: Customer;
-  messages?: Array<{ id: string; role: string; content: string; createdAt: string }>;
+  messages?: ConversationMessage[];
 }
+
+export type ConversationStreamEvent =
+  | { type: "message_created"; conversationId: string; message: ConversationMessage }
+  | { type: "agent_typing"; conversationId: string; on: boolean };
 
 export interface Notification {
   id: string;

@@ -1,6 +1,7 @@
 export * from "./common";
 export * from "./auth";
 export * from "./customer";
+export * from "./customer-location";
 export * from "./order";
 export * from "./product";
 export * from "./faq";

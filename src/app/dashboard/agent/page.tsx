@@ -175,7 +175,7 @@ export default function AgentMetricsPage() {
           <section className="grid grid-2" style={{ gap: "20px" }}>
             <div className="panel p-5" style={{ height: "340px", display: "flex", flexDirection: "column" }}>
               <div style={{ marginBottom: "16px" }}>
-                <h2 style={{ fontSize: "16px", fontWeight: 800, color: "var(--glam-navy)" }}>Conversaciones por día</h2>
+                <h2 style={{ fontSize: "16px", fontWeight: 700, color: "var(--glam-navy)" }}>Conversaciones por día</h2>
                 <p className="page-kicker">Volumen diario de conversaciones atendidas por el agente.</p>
               </div>
               <div style={{ flex: 1, minHeight: 0 }}>
@@ -192,7 +192,7 @@ export default function AgentMetricsPage() {
                       <ChartTooltip
                         contentStyle={{ background: "rgba(23, 32, 51, 0.95)", border: "0", borderRadius: "8px", color: "white" }}
                         itemStyle={{ color: "var(--glam-blue)" }}
-                        labelStyle={{ color: "#9aa3b5", fontWeight: 800 }}
+                        labelStyle={{ color: "#9aa3b5", fontWeight: 700 }}
                       />
                       <Area type="monotone" dataKey="conversaciones" stroke="var(--glam-blue)" strokeWidth={3} fillOpacity={1} fill="rgba(6, 166, 224, 0.08)" />
                     </AreaChart>
@@ -203,7 +203,7 @@ export default function AgentMetricsPage() {
 
             <div className="panel p-5" style={{ height: "340px", display: "flex", flexDirection: "column" }}>
               <div style={{ marginBottom: "16px" }}>
-                <h2 style={{ fontSize: "16px", fontWeight: 800, color: "var(--glam-navy)" }}>Herramientas más usadas</h2>
+                <h2 style={{ fontSize: "16px", fontWeight: 700, color: "var(--glam-navy)" }}>Herramientas más usadas</h2>
                 <p className="page-kicker">Tools de function calling ejecutadas por el agente.</p>
               </div>
               <div style={{ flex: 1, minHeight: 0 }}>

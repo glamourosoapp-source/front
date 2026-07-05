@@ -136,6 +136,38 @@ export const prospectOutreachResponseSchema = z.object({
 
 export const queryCampaignSchema = paginationSchema;
 
+export const prospectMetricsResponseSchema = z.object({
+  total: z.number().int(),
+  byStatus: z.object({
+    new: z.number().int(),
+    contacted_whatsapp: z.number().int(),
+    contacted_voice: z.number().int(),
+    failed: z.number().int(),
+  }),
+  contactedToday: z.number().int(),
+});
+
+export const prospectOutreachAttemptSchema = z.object({
+  id: z.string().uuid(),
+  prospectId: z.string().uuid(),
+  prospectName: z.string(),
+  prospectPhone: z.string().nullable(),
+  channel: z.string(),
+  status: z.string(),
+  error: z.string().nullable(),
+  createdAt: z.string(),
+});
+
+export const prospectOutreachAttemptsResponseSchema = z.object({
+  items: z.array(prospectOutreachAttemptSchema),
+});
+
+export type ProspectMetricsResponse = z.infer<typeof prospectMetricsResponseSchema>;
+export type ProspectOutreachAttempt = z.infer<typeof prospectOutreachAttemptSchema>;
+export type ProspectOutreachAttemptsResponse = z.infer<
+  typeof prospectOutreachAttemptsResponseSchema
+>;
+
 export type ParsedProspectQuery = z.infer<typeof parsedProspectQuerySchema>;
 export type ProspectAiImportInput = z.infer<typeof prospectAiImportSchema>;
 export type ProspectOutreachInput = z.infer<typeof prospectOutreachSchema>;

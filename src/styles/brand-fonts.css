@@ -1,0 +1,84 @@
+/* Tipografía de marca Glamouroso (manual de marca):
+   - Título (cubierta):    Flama Medium (500)
+   - Cuerpo de texto:      Flama Book (400)
+   - Cita:                 Flama Book Italic (400 italic)
+   - Secuencia de lectura: Flama Medium (500) / Flama Bold (700)
+   - Encabezado líder:     Flama Bold Italic (700 italic)
+   - Encabezado 2do:       Neue Extra Bold (sin archivo; fallback a Flama Bold)
+
+   Coloca los archivos en Front/public/fonts/:
+   - Flama-Book.woff2
+   - Flama-BookItalic.woff2
+   - Flama-Medium.woff2
+   - Flama-Bold.woff2
+   - Flama-BoldItalic.woff2
+*/
+
+@font-face {
+  font-family: "Flama";
+  src:
+    url("/fonts/Flama-Book.woff2") format("woff2"),
+    url("/fonts/Flama-Book.woff") format("woff");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Flama";
+  src:
+    url("/fonts/Flama-BookItalic.woff2") format("woff2"),
+    url("/fonts/Flama-BookItalic.woff") format("woff");
+  font-weight: 400;
+  font-style: italic;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Flama";
+  src:
+    url("/fonts/Flama-Medium.woff2") format("woff2"),
+    url("/fonts/Flama-Medium.woff") format("woff");
+  font-weight: 500;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Flama";
+  src:
+    url("/fonts/Flama-Bold.woff2") format("woff2"),
+    url("/fonts/Flama-Bold.woff") format("woff");
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Flama";
+  src:
+    url("/fonts/Flama-BoldItalic.woff2") format("woff2"),
+    url("/fonts/Flama-BoldItalic.woff") format("woff");
+  font-weight: 700;
+  font-style: italic;
+  font-display: swap;
+}
+
+:root {
+  --font-body: "Flama", ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --font-display: "Flama", ui-sans-serif, system-ui, -apple-system, sans-serif;
+}
+
+/* Encabezado líder: Flama Bold Italic */
+.font-display {
+  font-family: var(--font-display);
+  font-style: italic;
+  font-weight: 700;
+}
+
+/* Cita: Flama Book Italic */
+.font-quote {
+  font-family: var(--font-body);
+  font-style: italic;
+  font-weight: 400;
+}

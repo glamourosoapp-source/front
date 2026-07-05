@@ -1,3 +1,4 @@
+@import "../styles/brand-fonts.css";
 @import "tailwindcss";
 
 @theme {
@@ -29,7 +30,7 @@ body {
   margin: 0;
   background: var(--bg);
   color: var(--text);
-  font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-family: var(--font-body);
 }
 
 a {
@@ -44,10 +45,14 @@ textarea {
   font: inherit;
 }
 
+/* Encabezado líder: Flama Bold Italic */
 .page-title {
   margin: 0;
   color: var(--glam-navy);
+  font-family: var(--font-display);
   font-size: 26px;
+  font-style: italic;
+  font-weight: 700;
   line-height: 1.15;
   letter-spacing: 0;
 }
@@ -56,6 +61,185 @@ textarea {
   margin: 6px 0 0;
   color: var(--muted);
   font-size: 13px;
+}
+
+.dashboard-welcome {
+  position: relative;
+  overflow: visible;
+  min-height: 178px;
+  margin-top: 92px;
+  padding: 24px 250px 22px 26px;
+  border-radius: 16px;
+  background: var(--glam-navy);
+  box-shadow: 0 18px 40px rgba(38, 45, 96, 0.22);
+}
+
+.dashboard-welcome-bg {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  border-radius: inherit;
+  pointer-events: none;
+}
+
+.dashboard-welcome-glow {
+  position: absolute;
+  right: 24px;
+  bottom: -52px;
+  width: 280px;
+  height: 280px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(6, 166, 224, 0.35) 0%, rgba(6, 166, 224, 0) 70%);
+}
+
+.dashboard-welcome-bubble {
+  position: absolute;
+  border-radius: 50%;
+  border: 1.5px solid rgba(255, 255, 255, 0.35);
+  background: rgba(255, 255, 255, 0.14);
+  animation: welcome-bubble-float 5s ease-in-out infinite;
+}
+
+.dashboard-welcome-bubble-1 {
+  top: 22px;
+  right: 188px;
+  width: 18px;
+  height: 18px;
+}
+
+.dashboard-welcome-bubble-2 {
+  top: 52px;
+  right: 156px;
+  width: 10px;
+  height: 10px;
+  animation-delay: 1.4s;
+}
+
+.dashboard-welcome-bubble-3 {
+  top: 30px;
+  right: 222px;
+  width: 8px;
+  height: 8px;
+  animation-delay: 2.6s;
+}
+
+@keyframes welcome-bubble-float {
+  0%,
+  100% {
+    transform: translateY(0);
+    opacity: 1;
+  }
+  50% {
+    transform: translateY(-7px);
+    opacity: 0.6;
+  }
+}
+
+.dashboard-welcome-copy {
+  position: relative;
+  z-index: 1;
+}
+
+.dashboard-welcome-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 10px;
+  padding: 5px 10px;
+  border-radius: 999px;
+  background: rgba(6, 166, 224, 0.28);
+  color: #8edcff;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+
+.dashboard-welcome-greeting {
+  margin: 0 0 4px;
+  color: rgba(255, 255, 255, 0.68);
+  font-size: 13px;
+}
+
+.dashboard-welcome-greeting strong {
+  color: #ffffff;
+  font-weight: 700;
+}
+
+.dashboard-welcome-title {
+  margin-bottom: 2px;
+  color: #ffffff;
+}
+
+.dashboard-welcome-kicker {
+  max-width: 52ch;
+  color: rgba(255, 255, 255, 0.62);
+}
+
+.dashboard-welcome-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 14px;
+}
+
+.dashboard-welcome-chips .pill {
+  background: rgba(255, 255, 255, 0.12);
+  color: #ffffff;
+}
+
+.dashboard-welcome-chips .pill.warning {
+  background: rgba(6, 166, 224, 0.32);
+  color: #aee7ff;
+}
+
+.dashboard-welcome-mascot {
+  position: absolute;
+  right: 44px;
+  bottom: 0;
+  z-index: 2;
+  margin: 0;
+}
+
+.dashboard-welcome-mascot img {
+  display: block;
+  width: auto;
+  height: clamp(230px, 26vw, 286px);
+  object-fit: contain;
+  object-position: bottom right;
+  filter: drop-shadow(0 16px 26px rgba(13, 18, 48, 0.35));
+  transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.dashboard-welcome:hover .dashboard-welcome-mascot img {
+  transform: translateY(-4px);
+}
+
+@media (max-width: 720px) {
+  .dashboard-welcome {
+    min-height: 0;
+    margin-top: 64px;
+    padding: 18px 150px 18px 18px;
+  }
+
+  .dashboard-welcome-mascot {
+    right: 10px;
+  }
+
+  .dashboard-welcome-mascot img {
+    height: 196px;
+  }
+
+  .dashboard-welcome-glow {
+    right: 12px;
+    bottom: -48px;
+    width: 200px;
+    height: 200px;
+  }
+
+  .dashboard-welcome-bubble {
+    display: none;
+  }
 }
 
 .page-section {
@@ -109,9 +293,11 @@ textarea {
 .panel h2 {
   margin: 0;
   color: var(--glam-navy);
+  font-family: var(--font-display);
   font-size: 18px;
+  font-style: italic;
+  font-weight: 700;
   line-height: 1.25;
-  font-weight: 800;
 }
 
 .card p {
@@ -130,27 +316,57 @@ textarea {
   border-color: rgba(230, 235, 243, 0.8);
 }
 
+.metric-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+}
+
+.metric-icon {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  flex-shrink: 0;
+  border-radius: 12px;
+  background: var(--soft-blue);
+  color: var(--glam-blue);
+  transition: background 0.25s ease, color 0.25s ease, transform 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.card.metric:hover .metric-icon {
+  background: var(--glam-blue);
+  color: #ffffff;
+  transform: scale(1.06);
+  box-shadow: 0 8px 16px rgba(6, 166, 224, 0.28);
+}
+
+/* Secuencia de lectura: Flama Medium / Bold */
 .metric span {
   color: var(--muted);
+  font-family: var(--font-body);
   font-size: 12px;
-  font-weight: 800;
+  font-weight: 500;
   text-transform: uppercase;
   letter-spacing: 0.05em;
 }
 
 .metric strong {
   color: var(--glam-navy);
+  font-family: var(--font-body);
   font-size: 32px;
   line-height: 1;
-  font-weight: 900;
+  font-weight: 700;
   letter-spacing: -0.02em;
   z-index: 2;
 }
 
 .metric small {
   color: var(--glam-blue);
+  font-family: var(--font-body);
   font-size: 12px;
-  font-weight: 800;
+  font-weight: 500;
   z-index: 2;
 }
 
@@ -182,8 +398,9 @@ textarea {
 }
 
 .table-head-cell {
+  font-family: var(--font-body) !important;
   font-size: 11px !important;
-  font-weight: 900 !important;
+  font-weight: 500 !important;
   letter-spacing: 0.05em !important;
   color: var(--glam-muted) !important;
   background-color: #f8fafc !important;
@@ -297,8 +514,25 @@ textarea.input {
 }
 
 .pill-success {
-  background: rgba(6, 166, 224, 0.12);
-  color: var(--glam-blue);
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  padding: 5px 9px;
+  font-size: 12px;
+  font-weight: 700;
+  background: rgba(34, 197, 94, 0.12);
+  color: #15803d;
+}
+
+.pill-danger {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  padding: 5px 9px;
+  font-size: 12px;
+  font-weight: 700;
+  background: rgba(239, 68, 68, 0.1);
+  color: #b91c1c;
 }
 
 .product-detail-section {
@@ -323,7 +557,7 @@ textarea.input {
 .product-detail-label {
   display: block;
   font-size: 11px;
-  font-weight: 800;
+  font-weight: 700;
   letter-spacing: 0.08em;
   text-transform: uppercase;
   color: var(--glam-muted);
@@ -353,7 +587,7 @@ textarea.input {
 
 .product-price-card span {
   font-size: 11px;
-  font-weight: 800;
+  font-weight: 700;
   letter-spacing: 0.08em;
   text-transform: uppercase;
   color: var(--glam-muted);
@@ -400,7 +634,7 @@ textarea.input {
   grid-column: 1 / -1;
   margin-top: 4px;
   font-size: 12px;
-  font-weight: 800;
+  font-weight: 700;
   letter-spacing: 0.08em;
   text-transform: uppercase;
   color: var(--glam-muted);
@@ -460,9 +694,10 @@ textarea.input {
 }
 
 .MuiDialogTitle-root {
-  font-family: Inter, ui-sans-serif, system-ui, -apple-system, sans-serif !important;
+  font-family: var(--font-display) !important;
   font-size: 20px !important;
-  font-weight: 800 !important;
+  font-style: italic !important;
+  font-weight: 700 !important;
   color: var(--glam-navy) !important;
   padding: 24px 28px 18px !important;
   border-bottom: 1px solid rgba(230, 235, 243, 0.6) !important;
@@ -492,7 +727,7 @@ textarea.input {
 
 /* MUI buttons custom global premium styles inside DialogActions */
 .MuiDialogActions-root button {
-  font-family: Inter, ui-sans-serif, system-ui, -apple-system, sans-serif !important;
+  font-family: var(--font-body) !important;
 }
 
 .MuiDialogActions-root button:not(.MuiButton-contained) {
@@ -578,7 +813,7 @@ textarea.input {
 .MuiDialog-paper .MuiInputLabel-root {
   font-size: 13.5px !important;
   color: var(--muted) !important;
-  font-family: Inter, ui-sans-serif, system-ui, -apple-system, sans-serif !important;
+  font-family: var(--font-body) !important;
   font-weight: 500 !important;
 }
 
@@ -591,7 +826,7 @@ textarea.input {
   font-size: 13.5px !important;
   color: var(--text) !important;
   padding: 13px 15px !important;
-  font-family: Inter, ui-sans-serif, system-ui, -apple-system, sans-serif !important;
+  font-family: var(--font-body) !important;
 }
 
 /* Premium styled Select dropdown menus */
@@ -604,7 +839,7 @@ textarea.input {
 
 .MuiMenuItem-root {
   font-size: 13.5px !important;
-  font-family: Inter, ui-sans-serif, system-ui, -apple-system, sans-serif !important;
+  font-family: var(--font-body) !important;
   color: var(--text) !important;
   border-radius: 6px !important;
   padding: 8px 12px !important;

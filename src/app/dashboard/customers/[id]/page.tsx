@@ -10,7 +10,7 @@ import { DataTable } from "@/components/ui/DataTable";
 import { DateFilterField } from "@/components/ui/DateFilterField";
 import { PAYMENT_STATUS_OPTIONS, paymentStatusLabel } from "@/constants/orders";
 import { httpClient } from "@/services/http-client";
-import { Customer, ListResponse, Order } from "@/types";
+import { Customer, ListResponse, Order, CustomerLocation } from "@/types";
 import { formatCustomerDeliveryAddress } from "@glamouroso/shared";
 import { toast } from "sonner";
 
@@ -126,6 +126,7 @@ export default function CustomerDetailPage() {
 
   const hasFilters = Boolean(appliedSearch || status || paymentStatus || dateFrom || dateTo || undelivered);
   const deliveryAddress = customer ? formatCustomerDeliveryAddress(customer) : "";
+  const locations = customer?.locations ?? [];
 
   if (loadingCustomer) {
     return (
@@ -176,10 +177,33 @@ export default function CustomerDetailPage() {
           <DetailField label="Colonia" value={customer.colony || "—"} />
           <DetailField label="Código postal" value={customer.postalCode || "—"} />
           <DetailField label="Ciudad" value={customer.city || "—"} />
-          <DetailField label="Domicilio" value={deliveryAddress || "—"} />
+          <DetailField label="Domicilio predeterminado" value={deliveryAddress || "—"} />
           <DetailField label="Pedidos" value={String(customer.totalOrders ?? 0)} />
           <DetailField label="Compra acumulada" value={money(customer.totalSpent)} />
         </div>
+        {locations.length > 0 ? (
+          <div className="mt-4 grid gap-3">
+            <Typography variant="subtitle2">Ubicaciones guardadas</Typography>
+            {locations.map((location: CustomerLocation) => (
+              <div key={location.id} className="rounded-xl border border-[var(--border)] p-3">
+                <Typography sx={{ fontWeight: 700, color: "var(--glam-navy)" }}>
+                  {location.label || "Ubicación"}
+                  {location.isDefault ? " (predeterminada)" : ""}
+                </Typography>
+                <Typography variant="body2" sx={{ mt: 0.5 }}>
+                  {location.formattedAddress || formatCustomerDeliveryAddress(location)}
+                </Typography>
+                {location.googleMapsUrl ? (
+                  <Typography variant="body2" sx={{ mt: 0.5 }}>
+                    <a href={location.googleMapsUrl} target="_blank" rel="noreferrer">
+                      Ver en Google Maps
+                    </a>
+                  </Typography>
+                ) : null}
+              </div>
+            ))}
+          </div>
+        ) : null}
         {customer.notes ? (
           <div className="mt-4">
             <DetailField label="Notas" value={customer.notes} />

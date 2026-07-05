@@ -2,6 +2,7 @@
 
 import { FormEvent } from "react";
 import {
+  Box,
   Button,
   Dialog,
   DialogActions,
@@ -14,6 +15,7 @@ import {
 import { httpClient } from "@/services/http-client";
 import { Customer } from "@/types";
 import { toast } from "sonner";
+import { CustomerLocationsEditor } from "@/components/customers/CustomerLocationsEditor";
 
 interface CustomerFormDialogProps {
   open: boolean;
@@ -32,14 +34,18 @@ export function CustomerFormDialog({ open, customer, onClose, onSaved }: Custome
       name: String(form.get("name")),
       phone: String(form.get("phone")),
       email: String(form.get("email") || ""),
-      street: String(form.get("street") || ""),
-      colony: String(form.get("colony") || ""),
-      postalCode: String(form.get("postalCode") || ""),
-      city: String(form.get("city") || ""),
-      zone: String(form.get("zone") || ""),
-      address: String(form.get("address") || ""),
       notes: String(form.get("notes") || ""),
       pricingTier: String(form.get("pricingTier") || "retail"),
+      ...(isEdit
+        ? {}
+        : {
+            street: String(form.get("street") || ""),
+            colony: String(form.get("colony") || ""),
+            postalCode: String(form.get("postalCode") || ""),
+            city: String(form.get("city") || ""),
+            zone: String(form.get("zone") || ""),
+            address: String(form.get("address") || ""),
+          }),
     };
     try {
       if (isEdit && customer) {
@@ -48,6 +54,20 @@ export function CustomerFormDialog({ open, customer, onClose, onSaved }: Custome
         onSaved(updated);
       } else {
         const created = await httpClient.post<Customer>("/customers", payload);
+        const hasLocation =
+          payload.street || payload.colony || payload.city || payload.address || payload.zone;
+        if (hasLocation) {
+          await httpClient.post(`/customers/${created.id}/locations`, {
+            label: "Principal",
+            street: payload.street,
+            colony: payload.colony,
+            postalCode: payload.postalCode,
+            city: payload.city,
+            zone: payload.zone,
+            reference: payload.address,
+            isDefault: true,
+          });
+        }
         toast.success("Cliente creado con éxito");
         onSaved(created);
       }
@@ -67,19 +87,32 @@ export function CustomerFormDialog({ open, customer, onClose, onSaved }: Custome
           <TextField name="email" label="Correo" type="email" defaultValue={customer?.email || ""} fullWidth />
 
           <Typography variant="subtitle2" sx={{ gridColumn: "1 / -1", mt: 1 }}>
-            Domicilio de entrega
+            {isEdit ? "Datos de contacto" : "Domicilio de entrega"}
           </Typography>
-          <TextField name="street" label="Calle y número" defaultValue={customer?.street || ""} fullWidth />
-          <TextField name="colony" label="Colonia" defaultValue={customer?.colony || ""} fullWidth />
-          <TextField
-            name="postalCode"
-            label="Código postal"
-            defaultValue={customer?.postalCode || ""}
-            fullWidth
-            inputProps={{ maxLength: 10 }}
-          />
-          <TextField name="city" label="Ciudad" defaultValue={customer?.city || ""} fullWidth />
-          <TextField name="zone" label="Zona" defaultValue={customer?.zone || ""} fullWidth />
+          {!isEdit ? (
+            <>
+              <TextField name="street" label="Calle y número" defaultValue={customer?.street || ""} fullWidth />
+              <TextField name="colony" label="Colonia" defaultValue={customer?.colony || ""} fullWidth />
+              <TextField
+                name="postalCode"
+                label="Código postal"
+                defaultValue={customer?.postalCode || ""}
+                fullWidth
+                inputProps={{ maxLength: 10 }}
+              />
+              <TextField name="city" label="Ciudad" defaultValue={customer?.city || ""} fullWidth />
+              <TextField name="zone" label="Zona" defaultValue={customer?.zone || ""} fullWidth />
+              <TextField
+                name="address"
+                label="Referencias de entrega"
+                defaultValue={customer?.address || ""}
+                fullWidth
+                multiline
+                minRows={2}
+                placeholder="Portón, entre calles, etc."
+              />
+            </>
+          ) : null}
           <TextField
             select
             name="pricingTier"
@@ -90,15 +123,11 @@ export function CustomerFormDialog({ open, customer, onClose, onSaved }: Custome
             <MenuItem value="retail">Menudeo</MenuItem>
             <MenuItem value="wholesale">Mayoreo</MenuItem>
           </TextField>
-          <TextField
-            name="address"
-            label="Referencias de entrega"
-            defaultValue={customer?.address || ""}
-            fullWidth
-            multiline
-            minRows={2}
-            placeholder="Portón, entre calles, etc."
-          />
+          {isEdit && customer ? (
+            <Box sx={{ gridColumn: "1 / -1" }}>
+              <CustomerLocationsEditor customerId={customer.id} />
+            </Box>
+          ) : null}
 
           <TextField name="notes" label="Notas" defaultValue={customer?.notes || ""} fullWidth multiline minRows={2} />
         </DialogContent>

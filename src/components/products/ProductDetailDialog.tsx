@@ -34,7 +34,7 @@ function DetailField({ label, value }: { label: string; value: React.ReactNode }
 function DetailSection({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <section className="product-detail-section">
-      <Typography variant="overline" sx={{ color: "var(--glam-muted)", fontWeight: 800, letterSpacing: 1.2 }}>
+      <Typography variant="overline" sx={{ color: "var(--glam-muted)", fontWeight: 700, letterSpacing: 1.2 }}>
         {title}
       </Typography>
       <div className="product-detail-section-grid">{children}</div>
@@ -77,7 +77,7 @@ export function ProductDetailDialog({ product, loading, open, onClose, onEdit }:
     >
       <DialogTitle sx={{ px: 3, pt: 2.5, pb: 1.5 }}>
         <Stack spacing={1}>
-          <Typography variant="h5" sx={{ fontWeight: 800, color: "var(--glam-navy)", lineHeight: 1.2 }}>
+          <Typography variant="h5" sx={{ fontWeight: 700, color: "var(--glam-navy)", lineHeight: 1.2 }}>
             {loading ? "Cargando producto..." : product?.name || "Producto"}
           </Typography>
           {product && !loading ? (
@@ -125,7 +125,7 @@ export function ProductDetailDialog({ product, loading, open, onClose, onEdit }:
             ) : null}
 
             <section className="product-detail-section product-detail-description">
-              <Typography variant="overline" sx={{ color: "var(--glam-muted)", fontWeight: 800, letterSpacing: 1.2 }}>
+              <Typography variant="overline" sx={{ color: "var(--glam-muted)", fontWeight: 700, letterSpacing: 1.2 }}>
                 Descripcion
               </Typography>
               <p>{product.description?.trim() || "Sin descripcion."}</p>

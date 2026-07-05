@@ -183,7 +183,7 @@ export function DataTable({
           },
         }}
       >
-        <DialogTitle id="confirm-delete-title" sx={{ fontWeight: 800, color: "var(--glam-navy)" }}>
+        <DialogTitle id="confirm-delete-title" sx={{ fontWeight: 700, color: "var(--glam-navy)" }}>
           ¿Confirmar eliminación?
         </DialogTitle>
         <DialogContent>
