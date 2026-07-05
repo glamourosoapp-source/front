@@ -13,7 +13,7 @@
   flex-direction: column;
   justify-content: center;
   padding: 64px 64px 0;
-  background: var(--glam-navy);
+  background: var(--glam-blue);
 }
 
 .login-showcase-bg {
@@ -21,16 +21,6 @@
   inset: 0;
   overflow: hidden;
   pointer-events: none;
-}
-
-.login-showcase-glow {
-  position: absolute;
-  right: -60px;
-  bottom: -140px;
-  width: 440px;
-  height: 440px;
-  border-radius: 50%;
-  background: radial-gradient(circle, rgba(6, 166, 224, 0.35) 0%, rgba(6, 166, 224, 0) 70%);
 }
 
 .login-showcase-bubble {
@@ -89,8 +79,8 @@
   margin-bottom: 16px;
   padding: 5px 12px;
   border-radius: 999px;
-  background: rgba(6, 166, 224, 0.28);
-  color: #8edcff;
+  background: rgba(255, 255, 255, 0.18);
+  color: #ffffff;
   font-size: 11px;
   font-weight: 700;
   letter-spacing: 0.02em;

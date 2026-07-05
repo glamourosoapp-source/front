@@ -9,8 +9,6 @@ import "./login.css";
 export default function LoginPage() {
   const router = useRouter();
   const login = useAuthStore((s) => s.login);
-  const register = useAuthStore((s) => s.register);
-  const [mode, setMode] = useState<"login" | "register">("login");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
@@ -20,16 +18,7 @@ export default function LoginPage() {
     setLoading(true);
     const form = new FormData(event.currentTarget);
     try {
-      if (mode === "login") {
-        await login(String(form.get("email")), String(form.get("password")));
-      } else {
-        await register({
-          organizationName: "Glamouroso",
-          name: String(form.get("name")),
-          email: String(form.get("email")),
-          password: String(form.get("password")),
-        });
-      }
+      await login(String(form.get("email")), String(form.get("password")));
       router.push("/dashboard");
     } catch (err) {
       setError(err instanceof Error ? err.message : "No se pudo iniciar sesion");
@@ -44,7 +33,6 @@ export default function LoginPage() {
           <span className="login-showcase-bubble login-showcase-bubble-1" />
           <span className="login-showcase-bubble login-showcase-bubble-2" />
           <span className="login-showcase-bubble login-showcase-bubble-3" />
-          <span className="login-showcase-glow" />
         </div>
 
         <div className="login-showcase-copy">
@@ -75,19 +63,10 @@ export default function LoginPage() {
             alt="Glamouroso"
           />
           <div>
-            <h2 className="page-title login-card-title">
-              {mode === "login" ? "Bienvenido de nuevo" : "Crea tu cuenta"}
-            </h2>
-            <p className="page-kicker">
-              {mode === "login"
-                ? "Ingresa a tu panel de pedidos, clientes y WhatsApp IA."
-                : "Configura el primer acceso admin de Glamouroso."}
-            </p>
+            <h2 className="page-title login-card-title">Bienvenido de nuevo</h2>
+            <p className="page-kicker">Ingresa a tu panel de pedidos, clientes y WhatsApp IA.</p>
           </div>
 
-          {mode === "register" && (
-            <input className="input" name="name" placeholder="Nombre" required />
-          )}
           <input className="input" name="email" placeholder="Correo" type="email" required />
           <input
             className="input"
@@ -101,14 +80,7 @@ export default function LoginPage() {
           {error && <span className="login-error">{error}</span>}
 
           <button className="button" type="submit" disabled={loading}>
-            {loading ? "Ingresando..." : mode === "login" ? "Entrar" : "Crear cuenta"}
-          </button>
-          <button
-            className="link-button"
-            type="button"
-            onClick={() => setMode(mode === "login" ? "register" : "login")}
-          >
-            {mode === "login" ? "Crear primer admin" : "Ya tengo cuenta"}
+            {loading ? "Ingresando..." : "Entrar"}
           </button>
         </form>
       </section>
