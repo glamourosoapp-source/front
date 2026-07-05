@@ -13,7 +13,7 @@
   flex-direction: column;
   justify-content: center;
   padding: 64px 64px 0;
-  background: var(--glam-blue);
+  background: var(--glam-navy);
 }
 
 .login-showcase-bg {
@@ -79,8 +79,8 @@
   margin-bottom: 16px;
   padding: 5px 12px;
   border-radius: 999px;
-  background: rgba(255, 255, 255, 0.18);
-  color: #ffffff;
+  background: rgba(6, 166, 224, 0.28);
+  color: #8edcff;
   font-size: 11px;
   font-weight: 700;
   letter-spacing: 0.02em;
