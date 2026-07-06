@@ -67,6 +67,7 @@ export default function ProspectsPage() {
   const [lastResult, setLastResult] = useState<ProspectImportResponse | null>(null);
   const [prospects, setProspects] = useState<ProspectRow[]>([]);
   const [lastImportedIds, setLastImportedIds] = useState<string[]>([]);
+  const [showOnlyLastImport, setShowOnlyLastImport] = useState(false);
   const [metrics, setMetrics] = useState<ProspectMetricsResponse>(emptyMetrics);
 
   const loadMetrics = useCallback(async () => {
@@ -129,6 +130,7 @@ export default function ProspectsPage() {
       setLastResult(result);
       const ids = result.imported.map((row) => String(row.id));
       setLastImportedIds(ids);
+      setShowOnlyLastImport(ids.length > 0);
       sessionStorage.setItem(LAST_IMPORTED_KEY, JSON.stringify(ids));
       await Promise.all([loadProspects(), loadMetrics()]);
       toast.success(
@@ -147,6 +149,9 @@ export default function ProspectsPage() {
   }
 
   const lastImportedSet = new Set(lastImportedIds);
+  const visibleProspects = showOnlyLastImport
+    ? prospects.filter((row) => lastImportedSet.has(row.id))
+    : prospects;
 
   return (
     <div className="page-stack">
@@ -268,11 +273,22 @@ export default function ProspectsPage() {
         <div className="mb-4 flex flex-wrap items-end justify-between gap-3">
           <div>
             <h2>Prospectos guardados</h2>
-            <p className="page-kicker">Listos para contactar en Outreach.</p>
+            <p className="page-kicker">
+              {showOnlyLastImport
+                ? "Mostrando solo la ultima busqueda."
+                : "Listos para contactar en Outreach."}
+            </p>
           </div>
-          <span className="pill">
-            {prospects.length} registros · {metrics.byStatus.new} nuevos
-          </span>
+          <div className="flex items-center gap-2">
+            {showOnlyLastImport && (
+              <Button size="small" variant="text" onClick={() => setShowOnlyLastImport(false)}>
+                Ver todos ({prospects.length})
+              </Button>
+            )}
+            <span className="pill">
+              {visibleProspects.length} registros · {metrics.byStatus.new} nuevos
+            </span>
+          </div>
         </div>
         <div className="mb-4">
           <input
@@ -290,7 +306,7 @@ export default function ProspectsPage() {
           </div>
         ) : (
           <DataTable
-            rows={prospects}
+            rows={visibleProspects}
             getKey={(row) => row.id}
             columns={[
               { key: "name", label: "Negocio" },
