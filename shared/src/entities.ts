@@ -1,4 +1,15 @@
 import type { Role } from "./constants";
+import type { PermissionMap } from "./permissions";
+
+export interface Profile {
+  id: string;
+  organizationId?: string;
+  name: string;
+  description?: string | null;
+  permissions: PermissionMap;
+  createdAt?: string;
+  updatedAt?: string;
+}
 
 export interface User {
   id: string;
@@ -6,6 +17,9 @@ export interface User {
   email: string;
   role: Role | string;
   organizationId?: string;
+  isActive?: boolean;
+  profileId?: string | null;
+  profile?: Profile | null;
 }
 
 export interface Customer {

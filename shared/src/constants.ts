@@ -81,6 +81,35 @@ export const PRICING_TIERS = {
 /** Máximo de ubicaciones de entrega guardadas por cliente. */
 export const MAX_CUSTOMER_LOCATIONS = 3;
 
+/** Acciones disponibles por módulo para perfiles de permisos. */
+export const PERMISSION_ACTIONS = ["view", "create", "update", "delete"] as const;
+
+/** Alcance de lectura/edición de pedidos: todos los de la org o solo los creados por el usuario. */
+export const ORDER_SCOPES = {
+  ALL: "all",
+  OWN: "own",
+} as const;
+
+/** Módulos del Dashboard sobre los que un perfil define permisos. */
+export const PERMISSION_MODULES = [
+  { key: "dashboard", label: "Overview" },
+  { key: "orders", label: "Pedidos" },
+  { key: "customers", label: "Clientes" },
+  { key: "products", label: "Catalogo" },
+  { key: "conversations", label: "Conversaciones" },
+  { key: "prospects", label: "Prospectos IA" },
+  { key: "outreach", label: "Outreach" },
+  { key: "agent", label: "Metricas IA" },
+  { key: "faqs", label: "FAQs IA" },
+  { key: "notifications", label: "Notificaciones" },
+  { key: "settings", label: "Configuracion" },
+  { key: "users", label: "Usuarios" },
+] as const;
+
+export type PermissionAction = (typeof PERMISSION_ACTIONS)[number];
+export type OrderScope = (typeof ORDER_SCOPES)[keyof typeof ORDER_SCOPES];
+export type PermissionModule = (typeof PERMISSION_MODULES)[number]["key"];
+
 export type Role = (typeof ROLES)[keyof typeof ROLES];
 export type OrderStatus = (typeof ORDER_STATUS)[keyof typeof ORDER_STATUS];
 export type PaymentStatus = (typeof PAYMENT_STATUS)[keyof typeof PAYMENT_STATUS];

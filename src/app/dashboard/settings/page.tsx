@@ -5,7 +5,7 @@ import { Button, Dialog, DialogActions, DialogContent, DialogTitle, TextField } 
 import { ShieldAlert } from "lucide-react";
 import { httpClient, getApiErrorMessage } from "@/services/http-client";
 import { useAuthStore } from "@/stores/auth.store";
-import { ADMIN_ROLES } from "@glamouroso/shared/constants";
+import { usePermissions } from "@/lib/permissions";
 import { toast } from "sonner";
 
 interface WhatsAppConfig {
@@ -17,19 +17,20 @@ interface WhatsAppConfig {
 
 export default function SettingsPage() {
   const user = useAuthStore((s) => s.user);
-  const isAdmin = !!user && ADMIN_ROLES.includes(user.role);
+  const { can } = usePermissions();
+  const canSettings = can("settings", "view");
   const [settings, setSettings] = useState<WhatsAppConfig | null>(null);
   const [open, setOpen] = useState(false);
 
   useEffect(() => {
-    if (!isAdmin) return;
+    if (!canSettings) return;
     httpClient
       .get<WhatsAppConfig>("/whatsapp/config")
       .then(setSettings)
       .catch((error) => toast.error(getApiErrorMessage(error, "Error al cargar la configuracion")));
-  }, [isAdmin]);
+  }, [canSettings]);
 
-  if (user && !isAdmin) {
+  if (user && !canSettings) {
     return (
       <div className="page-stack">
         <div className="panel p-5 flex items-center gap-3">

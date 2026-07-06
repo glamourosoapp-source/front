@@ -7,6 +7,7 @@ import { ListPagination } from "@/components/ui/ListPagination";
 import { ProductDetailDialog } from "@/components/products/ProductDetailDialog";
 import { ProductFormDialog } from "@/components/products/ProductFormDialog";
 import { httpClient } from "@/services/http-client";
+import { usePermissions } from "@/lib/permissions";
 import { ListResponse, Product } from "@/types";
 import { toast } from "sonner";
 
@@ -19,6 +20,7 @@ interface ProductCategory {
 const PAGE_SIZE_OPTIONS = [25, 50, 100];
 
 export default function ProductsPage() {
+  const { can } = usePermissions();
   const [products, setProducts] = useState<Product[]>([]);
   const [categories, setCategories] = useState<ProductCategory[]>([]);
   const [search, setSearch] = useState("");
@@ -179,7 +181,9 @@ export default function ProductsPage() {
           <h1 className="page-title">Catalogo</h1>
           <p className="page-kicker">Control de productos, precios, unidades y disponibilidad para ventas.</p>
         </div>
-        <Button variant="contained" onClick={openCreate}>Nuevo producto</Button>
+        {can("products", "create") ? (
+          <Button variant="contained" onClick={openCreate}>Nuevo producto</Button>
+        ) : null}
       </div>
       <section className="panel p-4">
         <div className="mb-4 flex flex-wrap items-end justify-between gap-3">
@@ -211,8 +215,8 @@ export default function ProductsPage() {
           getKey={(row) => row.id}
           getDeleteLabel={(row) => row.name}
           onRowClick={openProductDetail}
-          onEdit={openEdit}
-          onDelete={remove}
+          onEdit={can("products", "update") ? openEdit : undefined}
+          onDelete={can("products", "delete") ? remove : undefined}
           columns={[
             { key: "name", label: "Producto" },
             { key: "category", label: "Categoria", render: (r) => r.category?.name || "—" },

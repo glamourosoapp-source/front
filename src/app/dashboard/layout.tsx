@@ -7,11 +7,13 @@ import { CirclePlus, Search, Sparkles } from "lucide-react";
 import { Sidebar } from "@/components/layout/Sidebar";
 import { NotificationsMenu } from "@/components/notifications/NotificationsMenu";
 import { useAuthStore } from "@/stores/auth.store";
+import { usePermissions } from "@/lib/permissions";
 import "./shell.css";
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const hydrate = useAuthStore((s) => s.hydrate);
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
+  const { can } = usePermissions();
   const router = useRouter();
 
   useEffect(() => {
@@ -33,9 +35,11 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             <input placeholder="Buscar pedidos, clientes o productos..." />
           </label>
           <div className="topbar-actions">
-            <Link className="create-action" href="/dashboard/orders/new" aria-label="Nuevo pedido">
-              <CirclePlus size={21} />
-            </Link>
+            {can("orders", "create") ? (
+              <Link className="create-action" href="/dashboard/orders/new" aria-label="Nuevo pedido">
+                <CirclePlus size={21} />
+              </Link>
+            ) : null}
             <NotificationsMenu />
             <span className="health-chip">
               <Sparkles size={15} />

@@ -18,6 +18,7 @@ import { ArrowLeft, Download, Pencil } from "lucide-react";
 import { OrderEditDialog } from "@/components/orders/OrderEditDialog";
 import { paymentMethodLabel, paymentStatusLabel } from "@/constants/orders";
 import { httpClient } from "@/services/http-client";
+import { usePermissions } from "@/lib/permissions";
 import { exportOrderToXlsx } from "@/lib/export-order-xlsx";
 import { Order } from "@/types";
 import { toast } from "sonner";
@@ -79,6 +80,7 @@ function DetailField({ label, value }: { label: string; value: React.ReactNode }
 export default function OrderDetailPage() {
   const params = useParams<{ id: string }>();
   const router = useRouter();
+  const { can } = usePermissions();
   const [order, setOrder] = useState<OrderDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [editOpen, setEditOpen] = useState(false);
@@ -133,9 +135,11 @@ export default function OrderDetailPage() {
           <p className="page-kicker">Detalle completo del pedido y Productos.</p>
         </div>
         <Box sx={{ display: "flex", gap: 1.5, alignItems: "center", flexWrap: "wrap" }}>
-          <Button variant="outlined" startIcon={<Pencil size={16} />} onClick={() => setEditOpen(true)}>
-            Editar
-          </Button>
+          {can("orders", "update") ? (
+            <Button variant="outlined" startIcon={<Pencil size={16} />} onClick={() => setEditOpen(true)}>
+              Editar
+            </Button>
+          ) : null}
           <Button variant="outlined" startIcon={<Download size={16} />} onClick={handleDownload}>
             Descargar Excel
           </Button>

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import { DataTable } from "@/components/ui/DataTable";
 import { httpClient } from "@/services/http-client";
 import {
@@ -16,7 +17,24 @@ import {
   Legend,
 } from "recharts";
 import { ShoppingBag, TrendingUp, DollarSign, Activity, Sparkles } from "lucide-react";
+import type { PermissionModule } from "@glamouroso/shared";
 import { useAuthStore } from "@/stores/auth.store";
+import { usePermissions } from "@/lib/permissions";
+
+// Primera ruta a la que se redirige a quien no puede ver el Overview (orden del sidebar).
+const NAV_ROUTES: { module: PermissionModule; href: string }[] = [
+  { module: "orders", href: "/dashboard/orders" },
+  { module: "customers", href: "/dashboard/customers" },
+  { module: "products", href: "/dashboard/products" },
+  { module: "conversations", href: "/dashboard/conversations" },
+  { module: "prospects", href: "/dashboard/prospects" },
+  { module: "outreach", href: "/dashboard/outreach" },
+  { module: "agent", href: "/dashboard/agent" },
+  { module: "faqs", href: "/dashboard/faqs" },
+  { module: "notifications", href: "/dashboard/notifications" },
+  { module: "users", href: "/dashboard/users" },
+  { module: "settings", href: "/dashboard/settings" },
+];
 
 // Mock data for executive weekly trend visual
 const weeklySalesData = [
@@ -33,15 +51,27 @@ export default function DashboardPage() {
   const [data, setData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const user = useAuthStore((s) => s.user);
+  const router = useRouter();
+  const { can } = usePermissions();
+  const canSeeOverview = can("dashboard", "view");
 
   useEffect(() => {
+    // Perfiles sin acceso al Overview (ej. vendedor) van a su primera sección permitida.
+    if (user && !canSeeOverview) {
+      const target = NAV_ROUTES.find((route) => can(route.module));
+      router.replace(target?.href ?? "/dashboard/orders");
+    }
+  }, [user, canSeeOverview, can, router]);
+
+  useEffect(() => {
+    if (!canSeeOverview) return;
     setLoading(true);
     httpClient
       .get("/dashboard/overview")
       .then(setData)
       .catch(() => setData(null))
       .finally(() => setLoading(false));
-  }, []);
+  }, [canSeeOverview]);
 
   const totals = data?.totals || {};
   const products = data?.topProducts || [];

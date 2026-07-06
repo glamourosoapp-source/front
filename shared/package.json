@@ -6,6 +6,7 @@
   "exports": {
     ".": "./src/index.ts",
     "./constants": "./src/constants.ts",
+    "./permissions": "./src/permissions.ts",
     "./schemas": "./src/schemas/index.ts"
   },
   "dependencies": {

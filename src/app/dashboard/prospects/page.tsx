@@ -10,6 +10,11 @@ import {
   FormControl,
   InputLabel,
   Skeleton,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogContentText,
+  DialogActions,
 } from "@mui/material";
 import { Sparkles, Users, PhoneCall, AlertTriangle } from "lucide-react";
 import { DataTable } from "@/components/ui/DataTable";
@@ -19,6 +24,7 @@ import { useDebounce } from "@/hooks/useDebounce";
 import { formatMxPhone } from "@/utils/format-phone";
 import { PROSPECT_STATUS } from "@glamouroso/shared/constants";
 import type {
+  ProspectBulkDeleteResponse,
   ProspectImportResponse,
   ProspectMetricsResponse,
 } from "@glamouroso/shared/schemas/campaign";
@@ -68,6 +74,8 @@ export default function ProspectsPage() {
   const [prospects, setProspects] = useState<ProspectRow[]>([]);
   const [lastImportedIds, setLastImportedIds] = useState<string[]>([]);
   const [showOnlyLastImport, setShowOnlyLastImport] = useState(false);
+  const [confirmClearOpen, setConfirmClearOpen] = useState(false);
+  const [clearing, setClearing] = useState(false);
   const [metrics, setMetrics] = useState<ProspectMetricsResponse>(emptyMetrics);
 
   const loadMetrics = useCallback(async () => {
@@ -112,6 +120,7 @@ export default function ProspectsPage() {
   }, []);
 
   const contactedTotal = metrics.byStatus.contacted_whatsapp + metrics.byStatus.contacted_voice;
+  const notContactedCount = metrics.byStatus.new + metrics.byStatus.failed;
 
   async function handleImport(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -141,6 +150,26 @@ export default function ProspectsPage() {
       toast.error(getApiErrorMessage(error, "Error al buscar prospectos"), { id: toastId });
     } finally {
       setLoading(false);
+    }
+  }
+
+  async function handleClearProspects() {
+    setClearing(true);
+    try {
+      const result = await httpClient.post<ProspectBulkDeleteResponse>("/prospects/bulk-delete", {
+        onlyNotContacted: true,
+      });
+      toast.success(`${result.deleted} prospectos eliminados`);
+      setConfirmClearOpen(false);
+      setShowOnlyLastImport(false);
+      setLastImportedIds([]);
+      setLastResult(null);
+      sessionStorage.removeItem(LAST_IMPORTED_KEY);
+      await Promise.all([loadProspects(), loadMetrics()]);
+    } catch (error) {
+      toast.error(getApiErrorMessage(error, "Error al limpiar prospectos"));
+    } finally {
+      setClearing(false);
     }
   }
 
@@ -285,6 +314,16 @@ export default function ProspectsPage() {
                 Ver todos ({prospects.length})
               </Button>
             )}
+            {notContactedCount > 0 && (
+              <Button
+                size="small"
+                color="error"
+                variant="outlined"
+                onClick={() => setConfirmClearOpen(true)}
+              >
+                Limpiar lista
+              </Button>
+            )}
             <span className="pill">
               {visibleProspects.length} registros · {metrics.byStatus.new} nuevos
             </span>
@@ -332,6 +371,25 @@ export default function ProspectsPage() {
           />
         )}
       </section>
+
+      <Dialog open={confirmClearOpen} onClose={() => (clearing ? null : setConfirmClearOpen(false))}>
+        <DialogTitle>Limpiar prospectos</DialogTitle>
+        <DialogContent>
+          <DialogContentText>
+            Se eliminaran {notContactedCount} prospectos no contactados (nuevos y fallidos). Los ya
+            contactados se conservan para no perder el historial de outreach. Esta accion no se
+            puede deshacer.
+          </DialogContentText>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setConfirmClearOpen(false)} disabled={clearing}>
+            Cancelar
+          </Button>
+          <Button color="error" variant="contained" onClick={handleClearProspects} disabled={clearing}>
+            {clearing ? "Eliminando..." : "Eliminar"}
+          </Button>
+        </DialogActions>
+      </Dialog>
     </div>
   );
 }

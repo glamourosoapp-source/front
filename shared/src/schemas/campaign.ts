@@ -62,6 +62,14 @@ export const prospectAiImportSchema = z.object({
   maxResults: z.number().int().min(1).max(60).default(60),
 });
 
+export const prospectBulkDeleteSchema = z.object({
+  onlyNotContacted: z.boolean().default(true),
+});
+
+export const prospectBulkDeleteResponseSchema = z.object({
+  deleted: z.number().int(),
+});
+
 export const prospectOutreachSchema = z
   .object({
     prospectIds: z.array(idSchema).min(1).max(60),
@@ -170,6 +178,8 @@ export type ProspectOutreachAttemptsResponse = z.infer<
 
 export type ParsedProspectQuery = z.infer<typeof parsedProspectQuerySchema>;
 export type ProspectAiImportInput = z.infer<typeof prospectAiImportSchema>;
+export type ProspectBulkDeleteInput = z.infer<typeof prospectBulkDeleteSchema>;
+export type ProspectBulkDeleteResponse = z.infer<typeof prospectBulkDeleteResponseSchema>;
 export type ProspectOutreachInput = z.infer<typeof prospectOutreachSchema>;
 export type ProspectAiSearchInput = z.infer<typeof prospectAiSearchSchema>;
 export type ProspectImportResponse = z.infer<typeof prospectImportResponseSchema>;

@@ -6,11 +6,13 @@ import { Button } from "@mui/material";
 import { CustomerFormDialog } from "@/components/customers/CustomerFormDialog";
 import { DataTable } from "@/components/ui/DataTable";
 import { httpClient } from "@/services/http-client";
+import { usePermissions } from "@/lib/permissions";
 import { Customer, ListResponse } from "@/types";
 import { toast } from "sonner";
 
 export default function CustomersPage() {
   const router = useRouter();
+  const { can } = usePermissions();
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [search, setSearch] = useState("");
   const [zone, setZone] = useState("");
@@ -59,7 +61,9 @@ export default function CustomersPage() {
           <h1 className="page-title">Clientes</h1>
           <p className="page-kicker">Directorio de clientes, historial de pedidos y compras acumuladas.</p>
         </div>
-        <Button variant="contained" onClick={openCreate}>Nuevo cliente</Button>
+        {can("customers", "create") ? (
+          <Button variant="contained" onClick={openCreate}>Nuevo cliente</Button>
+        ) : null}
       </div>
       <section className="panel p-4">
         <div className="mb-4 flex flex-wrap items-end justify-between gap-3">
@@ -79,8 +83,8 @@ export default function CustomersPage() {
           getKey={(row) => row.id}
           getDeleteLabel={(row) => row.name}
           onRowClick={(row) => router.push(`/dashboard/customers/${row.id}`)}
-          onEdit={openEdit}
-          onDelete={remove}
+          onEdit={can("customers", "update") ? openEdit : undefined}
+          onDelete={can("customers", "delete") ? remove : undefined}
           columns={[
             { key: "name", label: "Nombre" },
             { key: "phone", label: "WhatsApp" },

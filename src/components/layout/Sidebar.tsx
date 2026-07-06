@@ -18,17 +18,19 @@ import {
   PackageCheck,
   Settings,
   Sparkles,
+  UserCog,
   Users,
   type LucideIcon,
 } from "lucide-react";
+import type { PermissionModule } from "@glamouroso/shared";
 import { useAuthStore } from "@/stores/auth.store";
-import { ADMIN_ROLES } from "@glamouroso/shared/constants";
+import { usePermissions } from "@/lib/permissions";
 
 type NavLink = {
   href: string;
   label: string;
   icon: LucideIcon;
-  adminOnly?: boolean;
+  module?: PermissionModule;
 };
 
 type NavGroup = {
@@ -50,19 +52,19 @@ const sections: NavSection[] = [
     id: "operacion",
     label: "Operacion",
     links: [
-      { href: "/dashboard", label: "Overview", icon: BarChart3 },
-      { href: "/dashboard/orders", label: "Pedidos", icon: PackageCheck },
-      { href: "/dashboard/customers", label: "Clientes", icon: Users },
-      { href: "/dashboard/products", label: "Catalogo", icon: Boxes },
+      { href: "/dashboard", label: "Overview", icon: BarChart3, module: "dashboard" },
+      { href: "/dashboard/orders", label: "Pedidos", icon: PackageCheck, module: "orders" },
+      { href: "/dashboard/customers", label: "Clientes", icon: Users, module: "customers" },
+      { href: "/dashboard/products", label: "Catalogo", icon: Boxes, module: "products" },
     ],
   },
   {
     id: "whatsapp-ia",
     label: "WhatsApp IA",
     links: [
-      { href: "/dashboard/conversations", label: "Conversaciones", icon: MessageCircle },
-      { href: "/dashboard/prospects", label: "Prospectos IA", icon: Sparkles },
-      { href: "/dashboard/outreach", label: "Outreach", icon: Megaphone },
+      { href: "/dashboard/conversations", label: "Conversaciones", icon: MessageCircle, module: "conversations" },
+      { href: "/dashboard/prospects", label: "Prospectos IA", icon: Sparkles, module: "prospects" },
+      { href: "/dashboard/outreach", label: "Outreach", icon: Megaphone, module: "outreach" },
     ],
     groups: [
       {
@@ -70,8 +72,8 @@ const sections: NavSection[] = [
         label: "Agente IA",
         icon: Bot,
         links: [
-          { href: "/dashboard/agent", label: "Metricas IA", icon: BarChart3 },
-          { href: "/dashboard/faqs", label: "FAQs IA", icon: Bot },
+          { href: "/dashboard/agent", label: "Metricas IA", icon: BarChart3, module: "agent" },
+          { href: "/dashboard/faqs", label: "FAQs IA", icon: Bot, module: "faqs" },
         ],
       },
     ],
@@ -80,8 +82,9 @@ const sections: NavSection[] = [
     id: "sistema",
     label: "Sistema",
     links: [
-      { href: "/dashboard/notifications", label: "Notificaciones", icon: Bell },
-      { href: "/dashboard/settings", label: "Configuracion", icon: Settings, adminOnly: true },
+      { href: "/dashboard/notifications", label: "Notificaciones", icon: Bell, module: "notifications" },
+      { href: "/dashboard/users", label: "Usuarios", icon: UserCog, module: "users" },
+      { href: "/dashboard/settings", label: "Configuracion", icon: Settings, module: "settings" },
       { href: "#", label: "Soporte", icon: Headphones },
     ],
   },
@@ -134,13 +137,21 @@ function getAllNavLinks(sectionList: NavSection[]) {
   return links;
 }
 
-function filterSectionsByRole(role: string | undefined): NavSection[] {
-  const isAdmin = !!role && ADMIN_ROLES.includes(role);
-  if (isAdmin) return sections;
+type CanFn = (module: PermissionModule) => boolean;
+
+/** Un link es visible si no está atado a un módulo (ej. Soporte) o el usuario puede verlo. */
+function isLinkVisible(link: NavLink, can: CanFn): boolean {
+  return !link.module || can(link.module);
+}
+
+function filterSectionsByPermissions(can: CanFn): NavSection[] {
   return sections
     .map((section) => ({
       ...section,
-      links: section.links?.filter((link) => !link.adminOnly),
+      links: section.links?.filter((link) => isLinkVisible(link, can)),
+      groups: section.groups
+        ?.map((group) => ({ ...group, links: group.links.filter((link) => isLinkVisible(link, can)) }))
+        .filter((group) => group.links.length > 0),
     }))
     .filter((section) => (section.links?.length ?? 0) > 0 || (section.groups?.length ?? 0) > 0);
 }
@@ -149,8 +160,8 @@ export function Sidebar() {
   const pathname = usePathname();
   const router = useRouter();
   const logout = useAuthStore((s) => s.logout);
-  const user = useAuthStore((s) => s.user);
-  const visibleSections = filterSectionsByRole(user?.role);
+  const { can } = usePermissions();
+  const visibleSections = filterSectionsByPermissions(can);
   const allNavLinks = getAllNavLinks(visibleSections);
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [openSections, setOpenSections] = useState<Record<string, boolean>>(() =>

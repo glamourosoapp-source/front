@@ -35,7 +35,17 @@ export const useAuthStore = create<AuthState>((set) => ({
   hydrate: () => {
     const token = localStorage.getItem("token");
     const raw = localStorage.getItem("user");
-    if (token && raw) set({ token, user: JSON.parse(raw), isAuthenticated: true });
+    if (token && raw) {
+      set({ token, user: JSON.parse(raw), isAuthenticated: true });
+      // Refresca usuario + perfil/permisos desde el back (por si cambiaron).
+      httpClient
+        .get<User>("/auth/me")
+        .then((fresh) => {
+          localStorage.setItem("user", JSON.stringify(fresh));
+          set({ user: fresh });
+        })
+        .catch(() => undefined);
+    }
   },
   logout: () => {
     localStorage.removeItem("token");

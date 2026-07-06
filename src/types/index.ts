@@ -1,5 +1,6 @@
 export type {
   User,
+  Profile,
   Customer,
   CustomerLocation,
   Product,

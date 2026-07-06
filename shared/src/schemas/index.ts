@@ -11,3 +11,5 @@ export * from "./customer-tag";
 export * from "./settings";
 export * from "./conversation";
 export * from "./notification";
+export * from "./profile";
+export * from "./user";

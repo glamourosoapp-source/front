@@ -9,6 +9,7 @@ import { DataTable } from "@/components/ui/DataTable";
 import { DateFilterField } from "@/components/ui/DateFilterField";
 import { PAYMENT_STATUS_OPTIONS, paymentStatusLabel } from "@/constants/orders";
 import { httpClient } from "@/services/http-client";
+import { usePermissions } from "@/lib/permissions";
 import { ListResponse, Order } from "@/types";
 import { toast } from "sonner";
 
@@ -30,6 +31,7 @@ function formatOrderDate(value: string | Date | undefined) {
 
 export default function OrdersPage() {
   const router = useRouter();
+  const { can } = usePermissions();
   const [orders, setOrders] = useState<Order[]>([]);
   const [total, setTotal] = useState(0);
   const [search, setSearch] = useState("");
@@ -106,9 +108,11 @@ export default function OrdersPage() {
           <h1 className="page-title">Pedidos</h1>
           <p className="page-kicker">Alta rapida y seguimiento de pedidos capturados desde el panel o WhatsApp.</p>
         </div>
-        <Button component={Link} href="/dashboard/orders/new" variant="contained">
-          Nuevo pedido
-        </Button>
+        {can("orders", "create") ? (
+          <Button component={Link} href="/dashboard/orders/new" variant="contained">
+            Nuevo pedido
+          </Button>
+        ) : null}
       </div>
       <section className="panel p-4">
         <div className="mb-4 flex flex-wrap items-end justify-between gap-3">
@@ -183,8 +187,8 @@ export default function OrdersPage() {
           getKey={(row) => row.id}
           getDeleteLabel={(row) => `el pedido ${row.orderNumber}`}
           onRowClick={(row) => router.push(`/dashboard/orders/${row.id}`)}
-          onEdit={openEdit}
-          onDelete={remove}
+          onEdit={can("orders", "update") ? openEdit : undefined}
+          onDelete={can("orders", "delete") ? remove : undefined}
           columns={[
             { key: "orderNumber", label: "Folio" },
             { key: "createdAt", label: "Fecha", render: (r) => formatOrderDate(r.createdAt) },
