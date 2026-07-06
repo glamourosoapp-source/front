@@ -7,6 +7,7 @@ import { DataTable } from "@/components/ui/DataTable";
 import { UserFormDialog } from "@/components/users/UserFormDialog";
 import { ProfileFormDialog } from "@/components/users/ProfileFormDialog";
 import { httpClient, getApiErrorMessage } from "@/services/http-client";
+import { ADMIN_ROLES } from "@glamouroso/shared/constants";
 import { usePermissions } from "@/lib/permissions";
 import { ListResponse, Profile, User } from "@/types";
 import { toast } from "sonner";
@@ -136,6 +137,11 @@ export default function UsersPage() {
             columns={[
               { key: "name", label: "Nombre" },
               { key: "email", label: "Correo" },
+              {
+                key: "role",
+                label: "Rol",
+                render: (r) => (ADMIN_ROLES.includes(r.role) ? "Administrador" : "Usuario"),
+              },
               {
                 key: "profileId",
                 label: "Perfil",

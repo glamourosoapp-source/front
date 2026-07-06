@@ -16,6 +16,7 @@ import { ChevronDown, Megaphone, Sparkles, PhoneCall, AlertTriangle } from "luci
 import { DataTable } from "@/components/ui/DataTable";
 import { ProspectOutreachPanel } from "@/components/prospects/ProspectOutreachPanel";
 import { httpClient } from "@/services/http-client";
+import { usePermissions } from "@/lib/permissions";
 import { useDebounce } from "@/hooks/useDebounce";
 import { PROSPECT_STATUS } from "@glamouroso/shared/constants";
 import type { ProspectMetricsResponse } from "@glamouroso/shared/schemas/campaign";
@@ -42,6 +43,7 @@ const emptyMetrics: ProspectMetricsResponse = {
 };
 
 export default function OutreachPage() {
+  const { can } = usePermissions();
   const [campaigns, setCampaigns] = useState<Campaign[]>([]);
   const [campaignSearch, setCampaignSearch] = useState("");
   const debouncedCampaignSearch = useDebounce(campaignSearch, 300);
@@ -225,16 +227,18 @@ export default function OutreachPage() {
                 onChange={(e) => setCampaignSearch(e.target.value)}
               />
             </div>
-            <Button variant="outlined" onClick={openCampaignCreate}>
-              Nueva campana
-            </Button>
+            {can("outreach", "create") ? (
+              <Button variant="outlined" onClick={openCampaignCreate}>
+                Nueva campana
+              </Button>
+            ) : null}
           </div>
           <DataTable
             rows={campaigns}
             getKey={(r) => r.id}
             getDeleteLabel={(row) => row.name}
-            onEdit={openCampaignEdit}
-            onDelete={removeCampaign}
+            onEdit={can("outreach", "update") ? openCampaignEdit : undefined}
+            onDelete={can("outreach", "delete") ? removeCampaign : undefined}
             columns={[
               { key: "name", label: "Nombre" },
               { key: "templateName", label: "Template" },

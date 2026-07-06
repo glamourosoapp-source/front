@@ -4,6 +4,7 @@ import { FormEvent } from "react";
 import { Button, Dialog, DialogActions, DialogContent, DialogTitle, MenuItem, TextField } from "@mui/material";
 import { PRODUCT_UNITS } from "@glamouroso/shared";
 import { Product } from "@/types";
+import { usePermissions } from "@/lib/permissions";
 
 interface ProductCategory {
   id: string;
@@ -19,6 +20,7 @@ interface ProductFormDialogProps {
 }
 
 export function ProductFormDialog({ open, editing, categories, onClose, onSubmit }: ProductFormDialogProps) {
+  const { isAdmin } = usePermissions();
   const presentation = editing?.variants?.presentacion;
   const productGroupKey = editing?.variants?.productGroupKey;
 
@@ -55,7 +57,9 @@ export function ProductFormDialog({ open, editing, categories, onClose, onSubmit
           <p className="form-section-title">Precios</p>
           <TextField name="price" label="Precio menudeo" type="number" inputProps={{ min: 0, step: "0.01" }} defaultValue={editing?.price ?? ""} fullWidth required />
           <TextField name="wholesalePrice" label="Precio mayoreo" type="number" inputProps={{ min: 0, step: "0.01" }} defaultValue={editing?.wholesalePrice ?? ""} fullWidth />
-          <TextField name="cost" label="Costo" type="number" inputProps={{ min: 0, step: "0.01" }} defaultValue={editing?.cost ?? 0} fullWidth />
+          {isAdmin ? (
+            <TextField name="cost" label="Costo" type="number" inputProps={{ min: 0, step: "0.01" }} defaultValue={editing?.cost ?? 0} fullWidth />
+          ) : null}
 
           <p className="form-section-title">Inventario y unidad</p>
           <TextField select name="unit" label="Unidad de venta" defaultValue={editing?.unit || "pieza"} fullWidth>

@@ -55,3 +55,8 @@ export function getOrderScope(permissions: PermissionMap | null | undefined): Or
 export function getCustomerScope(permissions: PermissionMap | null | undefined): OrderScope {
   return permissions?.customers?.scope === ORDER_SCOPES.OWN ? ORDER_SCOPES.OWN : ORDER_SCOPES.ALL;
 }
+
+/** Indica si el rol del usuario es administrador (acceso total y datos sensibles como costo). */
+export function isAdminRole(role: string | null | undefined): boolean {
+  return Boolean(role && ADMIN_ROLES.includes(role));
+}

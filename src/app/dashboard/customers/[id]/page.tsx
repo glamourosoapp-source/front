@@ -10,6 +10,7 @@ import { DataTable } from "@/components/ui/DataTable";
 import { DateFilterField } from "@/components/ui/DateFilterField";
 import { PAYMENT_STATUS_OPTIONS, paymentStatusLabel } from "@/constants/orders";
 import { httpClient } from "@/services/http-client";
+import { usePermissions } from "@/lib/permissions";
 import { Customer, ListResponse, Order, CustomerLocation } from "@/types";
 import { formatCustomerDeliveryAddress } from "@glamouroso/shared";
 import { toast } from "sonner";
@@ -48,6 +49,7 @@ function DetailField({ label, value }: { label: string; value: React.ReactNode }
 export default function CustomerDetailPage() {
   const params = useParams<{ id: string }>();
   const router = useRouter();
+  const { can } = usePermissions();
   const customerId = params.id;
 
   const [customer, setCustomer] = useState<Customer | null>(null);
@@ -153,9 +155,11 @@ export default function CustomerDetailPage() {
           <p className="page-kicker">Perfil del cliente e historial de pedidos.</p>
         </div>
         <Box sx={{ display: "flex", gap: 1.5, alignItems: "center", flexWrap: "wrap" }}>
-          <Button variant="outlined" startIcon={<Pencil size={16} />} onClick={() => setEditOpen(true)}>
-            Editar información del cliente
-          </Button>
+          {can("customers", "update") ? (
+            <Button variant="outlined" startIcon={<Pencil size={16} />} onClick={() => setEditOpen(true)}>
+              Editar información del cliente
+            </Button>
+          ) : null}
           <Button component={Link} href="/dashboard/orders/new" variant="contained">
             Nuevo pedido
           </Button>

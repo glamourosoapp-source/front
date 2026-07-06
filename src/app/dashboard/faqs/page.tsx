@@ -4,10 +4,12 @@ import { FormEvent, useEffect, useState } from "react";
 import { Button, Dialog, DialogActions, DialogContent, DialogTitle, MenuItem, TextField } from "@mui/material";
 import { DataTable } from "@/components/ui/DataTable";
 import { httpClient } from "@/services/http-client";
+import { usePermissions } from "@/lib/permissions";
 import { FAQ, ListResponse } from "@/types";
 import { toast } from "sonner";
 
 export default function FAQsPage() {
+  const { can } = usePermissions();
   const [faqs, setFaqs] = useState<FAQ[]>([]);
   const [searchText, setSearchText] = useState("");
   const [category, setCategory] = useState("");
@@ -97,7 +99,9 @@ export default function FAQsPage() {
         </div>
         <div className="flex flex-wrap gap-2">
           <Button variant="outlined" onClick={() => setSearchOpen(true)}>Probar busqueda</Button>
-          <Button variant="contained" onClick={openCreate}>Nueva FAQ</Button>
+          {can("faqs", "create") ? (
+            <Button variant="contained" onClick={openCreate}>Nueva FAQ</Button>
+          ) : null}
         </div>
       </div>
       <section className="panel p-4">
@@ -112,14 +116,16 @@ export default function FAQsPage() {
           <input className="input" placeholder="Buscar pregunta o respuesta" value={searchText} onChange={(e) => setSearchText(e.target.value)} />
           <input className="input" placeholder="Categoria" value={category} onChange={(e) => setCategory(e.target.value)} />
           <Button variant="outlined" onClick={load}>Filtrar</Button>
-          <Button color="secondary" variant="outlined" onClick={handleBackfill}>Regenerar</Button>
+          {can("faqs", "update") ? (
+            <Button color="secondary" variant="outlined" onClick={handleBackfill}>Regenerar</Button>
+          ) : null}
         </div>
         <DataTable
           rows={faqs}
           getKey={(row) => row.id}
           getDeleteLabel={(row) => row.question}
-          onEdit={openEdit}
-          onDelete={remove}
+          onEdit={can("faqs", "update") ? openEdit : undefined}
+          onDelete={can("faqs", "delete") ? remove : undefined}
           columns={[
             { key: "question", label: "Pregunta" },
             { key: "category", label: "Categoria" },

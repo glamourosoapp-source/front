@@ -20,7 +20,7 @@ interface ProductCategory {
 const PAGE_SIZE_OPTIONS = [25, 50, 100];
 
 export default function ProductsPage() {
-  const { can } = usePermissions();
+  const { can, isAdmin } = usePermissions();
   const [products, setProducts] = useState<Product[]>([]);
   const [categories, setCategories] = useState<ProductCategory[]>([]);
   const [search, setSearch] = useState("");
@@ -128,7 +128,7 @@ export default function ProductsPage() {
     if (presentacion) variants.presentacion = presentacion;
     if (productGroupKey) variants.productGroupKey = productGroupKey;
 
-    const payload = {
+    const payload: Record<string, unknown> = {
       name: String(form.get("name")),
       sku: String(form.get("sku") || ""),
       unit: String(form.get("unit") || "pieza"),
@@ -136,7 +136,6 @@ export default function ProductsPage() {
       unitsPerPackage: unitsPerPackageRaw ? Number(unitsPerPackageRaw) : null,
       price: Number(form.get("price")),
       wholesalePrice: Number(form.get("wholesalePrice") || 0),
-      cost: Number(form.get("cost") || 0),
       stock: Number(form.get("stock") || 0),
       minStock: Number(form.get("minStock") || 0),
       description: String(form.get("description") || ""),
@@ -144,6 +143,7 @@ export default function ProductsPage() {
       isAvailable: String(form.get("isAvailable") || "true") === "true",
       variants,
     };
+    if (isAdmin) payload.cost = Number(form.get("cost") || 0);
     try {
       if (editing) {
         await httpClient.put(`/products/${editing.id}`, payload);
@@ -247,7 +247,7 @@ export default function ProductsPage() {
         product={selectedProduct}
         loading={detailLoading}
         onClose={closeProductDetail}
-        onEdit={openEdit}
+        onEdit={can("products", "update") ? openEdit : undefined}
       />
 
       <ProductFormDialog
