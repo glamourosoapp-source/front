@@ -84,7 +84,7 @@ export const MAX_CUSTOMER_LOCATIONS = 3;
 /** Acciones disponibles por módulo para perfiles de permisos. */
 export const PERMISSION_ACTIONS = ["view", "create", "update", "delete"] as const;
 
-/** Alcance de lectura/edición de pedidos: todos los de la org o solo los creados por el usuario. */
+/** Alcance de lectura/edición: todos los de la org o solo los creados por el usuario. */
 export const ORDER_SCOPES = {
   ALL: "all",
   OWN: "own",

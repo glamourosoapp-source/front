@@ -63,11 +63,18 @@ export function ProfileFormDialog({ open, profile, onClose, onSaved }: ProfileFo
     });
   };
 
-  const scope: OrderScope =
+  const orderScope: OrderScope =
     permissions.orders?.scope === ORDER_SCOPES.OWN ? ORDER_SCOPES.OWN : ORDER_SCOPES.ALL;
 
-  const setScope = (value: OrderScope) => {
+  const customerScope: OrderScope =
+    permissions.customers?.scope === ORDER_SCOPES.OWN ? ORDER_SCOPES.OWN : ORDER_SCOPES.ALL;
+
+  const setOrderScope = (value: OrderScope) => {
     setPermissions((prev) => ({ ...prev, orders: { ...(prev.orders ?? {}), scope: value } }));
+  };
+
+  const setCustomerScope = (value: OrderScope) => {
+    setPermissions((prev) => ({ ...prev, customers: { ...(prev.customers ?? {}), scope: value } }));
   };
 
   async function save(event: FormEvent<HTMLFormElement>) {
@@ -143,8 +150,16 @@ export function ProfileFormDialog({ open, profile, onClose, onSaved }: ProfileFo
           <Typography variant="subtitle2" sx={{ mt: 2, mb: 0.5, color: "var(--glam-navy)" }}>
             Alcance de pedidos
           </Typography>
-          <RadioGroup row value={scope} onChange={(e) => setScope(e.target.value as OrderScope)}>
+          <RadioGroup row value={orderScope} onChange={(e) => setOrderScope(e.target.value as OrderScope)}>
             <FormControlLabel value={ORDER_SCOPES.ALL} control={<Radio size="small" />} label="Todos los pedidos" />
+            <FormControlLabel value={ORDER_SCOPES.OWN} control={<Radio size="small" />} label="Solo los suyos" />
+          </RadioGroup>
+
+          <Typography variant="subtitle2" sx={{ mt: 2, mb: 0.5, color: "var(--glam-navy)" }}>
+            Alcance de clientes
+          </Typography>
+          <RadioGroup row value={customerScope} onChange={(e) => setCustomerScope(e.target.value as OrderScope)}>
+            <FormControlLabel value={ORDER_SCOPES.ALL} control={<Radio size="small" />} label="Todos los clientes" />
             <FormControlLabel value={ORDER_SCOPES.OWN} control={<Radio size="small" />} label="Solo los suyos" />
           </RadioGroup>
         </DialogContent>

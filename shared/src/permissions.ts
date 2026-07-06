@@ -6,7 +6,7 @@ export interface ModulePermissions {
   create?: boolean;
   update?: boolean;
   delete?: boolean;
-  /** Solo aplica a "orders": limita lectura/edición a los pedidos creados por el usuario. */
+  /** Aplica a "orders" y "customers": limita lectura/edición a los registros creados por el usuario. */
   scope?: OrderScope;
 }
 
@@ -49,4 +49,9 @@ export function can(
 /** Scope efectivo de pedidos; cualquier valor distinto de "own" se trata como "all". */
 export function getOrderScope(permissions: PermissionMap | null | undefined): OrderScope {
   return permissions?.orders?.scope === ORDER_SCOPES.OWN ? ORDER_SCOPES.OWN : ORDER_SCOPES.ALL;
+}
+
+/** Scope efectivo de clientes; cualquier valor distinto de "own" se trata como "all". */
+export function getCustomerScope(permissions: PermissionMap | null | undefined): OrderScope {
+  return permissions?.customers?.scope === ORDER_SCOPES.OWN ? ORDER_SCOPES.OWN : ORDER_SCOPES.ALL;
 }
