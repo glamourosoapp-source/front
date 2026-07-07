@@ -20,9 +20,14 @@ import {
 import { httpClient } from "@/services/http-client";
 import { useConversationStream, type ConnectionState } from "@/hooks/useConversationStream";
 import { Conversation } from "@/types";
-import type { ConversationMessage, MessageMedia } from "@glamouroso/shared/entities";
+import type { ConversationMessage, ConversationPatch, MessageMedia } from "@glamouroso/shared/entities";
 import { toast } from "sonner";
 import "./inbox.css";
+
+// Si el agente marco "escribiendo..." pero nunca llega su respuesta (fallo de
+// eve, respuesta vacia, sesion desfasada), apagamos el indicador tras este
+// tiempo para que los puntitos no queden animados para siempre.
+const TYPING_WATCHDOG_MS = 75_000;
 
 interface PendingAttachment {
   dataBase64: string;
@@ -54,6 +59,18 @@ function dayLabel(value?: string) {
   if (date.toDateString() === today.toDateString()) return "Hoy";
   if (date.toDateString() === yesterday.toDateString()) return "Ayer";
   return new Intl.DateTimeFormat("es-MX", { day: "2-digit", month: "long" }).format(date);
+}
+
+// Convierte el patch realtime (null-able) a los campos de Conversation, mapeando
+// null -> undefined y descartando lo que no vive en la entidad (derivationReason).
+function patchToConversation(patch: ConversationPatch): Partial<Conversation> {
+  return {
+    isAgentActive: patch.isAgentActive,
+    needsHumanReview: patch.needsHumanReview,
+    status: patch.status,
+    contactName: patch.contactName ?? undefined,
+    lastMessageAt: patch.lastMessageAt ?? undefined,
+  };
 }
 
 function roleLabel(role: string) {
@@ -120,6 +137,7 @@ export default function ConversationsPage() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const feedEndRef = useRef<HTMLDivElement>(null);
   const recorderRef = useRef<MediaRecorder | null>(null);
+  const typingTimersRef = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -134,10 +152,36 @@ export default function ConversationsPage() {
     load().catch(() => setLoading(false));
   }, [load]);
 
+  // Limpia los timers del watchdog de "escribiendo..." al desmontar.
+  useEffect(() => {
+    const timers = typingTimersRef.current;
+    return () => {
+      for (const timer of timers.values()) clearTimeout(timer);
+      timers.clear();
+    };
+  }, []);
+
   async function openConversation(id: string) {
     const detail = await httpClient.get<Conversation>(`/conversations/${id}`);
     setSelected(detail);
   }
+
+  // Recarga la lista y el detalle abierto SIN el spinner de carga. Se usa para
+  // ponerse al dia tras reconectar el SSE (mensajes perdidos durante la caida) y
+  // ante eventos de conversaciones que no estan en la lista.
+  const reloadSilent = useCallback(async () => {
+    try {
+      const rows = await httpClient.get<Conversation[]>("/conversations");
+      setConversations(rows);
+      const current = selectedRef.current;
+      if (current) {
+        const detail = await httpClient.get<Conversation>(`/conversations/${current.id}`);
+        setSelected(detail);
+      }
+    } catch {
+      /* best-effort: si falla, el proximo evento o accion recargara */
+    }
+  }, []);
 
   // --- Tiempo real (SSE) ---
   const handleStreamEvent = useCallback((event: { type: string } & Record<string, unknown>) => {
@@ -145,6 +189,40 @@ export default function ConversationsPage() {
       const conversationId = event.conversationId as string;
       const on = event.on as boolean;
       setTypingByConversation((prev) => ({ ...prev, [conversationId]: on }));
+
+      // Watchdog: reinicia cualquier timer previo; si "on", programa el apagado.
+      const timers = typingTimersRef.current;
+      const existing = timers.get(conversationId);
+      if (existing) {
+        clearTimeout(existing);
+        timers.delete(conversationId);
+      }
+      if (on) {
+        timers.set(
+          conversationId,
+          setTimeout(() => {
+            timers.delete(conversationId);
+            setTypingByConversation((prev) => ({ ...prev, [conversationId]: false }));
+          }, TYPING_WATCHDOG_MS)
+        );
+      }
+      return;
+    }
+    if (event.type === "conversation_updated") {
+      const conversationId = event.conversationId as string;
+      const update = patchToConversation(event.patch as ConversationPatch);
+      // Refleja control del agente / derivacion / status en vivo (sin recargar).
+      setSelected((current) =>
+        current?.id === conversationId ? { ...current, ...update } : current
+      );
+      setConversations((prev) => {
+        const idx = prev.findIndex((c) => c.id === conversationId);
+        if (idx === -1) {
+          reloadSilent().catch(() => undefined);
+          return prev;
+        }
+        return prev.map((c) => (c.id === conversationId ? { ...c, ...update } : c));
+      });
       return;
     }
     if (event.type === "message_created") {
@@ -154,6 +232,11 @@ export default function ConversationsPage() {
       // Si llega un mensaje, el agente dejó de escribir
       if (message.role !== "user") {
         setTypingByConversation((prev) => ({ ...prev, [conversationId]: false }));
+        const timer = typingTimersRef.current.get(conversationId);
+        if (timer) {
+          clearTimeout(timer);
+          typingTimersRef.current.delete(conversationId);
+        }
       }
 
       // Anexar al hilo abierto (dedupe por id, reemplaza optimista temporal)
@@ -173,16 +256,30 @@ export default function ConversationsPage() {
       setConversations((prev) => {
         const idx = prev.findIndex((c) => c.id === conversationId);
         if (idx === -1) {
-          load().catch(() => undefined);
+          reloadSilent().catch(() => undefined);
           return prev;
         }
         const updated = { ...prev[idx], lastMessageAt: message.createdAt };
         return [updated, ...prev.filter((c) => c.id !== conversationId)];
       });
     }
-  }, [load]);
+  }, [reloadSilent]);
 
-  useConversationStream({ onEvent: handleStreamEvent, onState: setConnState });
+  // Al reconectar (segundo "open" en adelante) recargamos para recuperar los
+  // mensajes que llegaron mientras el stream estuvo caido (backoff hasta 30s).
+  const hasConnectedRef = useRef(false);
+  const handleConnState = useCallback(
+    (state: ConnectionState) => {
+      setConnState(state);
+      if (state === "open") {
+        if (hasConnectedRef.current) reloadSilent().catch(() => undefined);
+        hasConnectedRef.current = true;
+      }
+    },
+    [reloadSilent]
+  );
+
+  useConversationStream({ onEvent: handleStreamEvent, onState: handleConnState });
 
   // Auto-scroll al fondo cuando cambian los mensajes o el typing
   const messages = useMemo(() => selected?.messages || [], [selected]);

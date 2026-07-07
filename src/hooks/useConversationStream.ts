@@ -24,7 +24,11 @@ function parseChunk(buffer: string): { events: ConversationStreamEvent[]; rest: 
       if (!line.startsWith("data: ")) continue;
       try {
         const payload = JSON.parse(line.slice(6)) as { type?: string };
-        if (payload.type === "message_created" || payload.type === "agent_typing") {
+        if (
+          payload.type === "message_created" ||
+          payload.type === "agent_typing" ||
+          payload.type === "conversation_updated"
+        ) {
           events.push(payload as ConversationStreamEvent);
         }
       } catch {

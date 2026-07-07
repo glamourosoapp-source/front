@@ -143,9 +143,19 @@ export interface Conversation {
   messages?: ConversationMessage[];
 }
 
+export interface ConversationPatch {
+  isAgentActive: boolean;
+  needsHumanReview: boolean;
+  status: string;
+  derivationReason?: string | null;
+  contactName?: string | null;
+  lastMessageAt?: string | null;
+}
+
 export type ConversationStreamEvent =
   | { type: "message_created"; conversationId: string; message: ConversationMessage }
-  | { type: "agent_typing"; conversationId: string; on: boolean };
+  | { type: "agent_typing"; conversationId: string; on: boolean }
+  | { type: "conversation_updated"; conversationId: string; patch: ConversationPatch };
 
 export interface Notification {
   id: string;
