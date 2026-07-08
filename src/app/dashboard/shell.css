@@ -189,6 +189,41 @@
   pointer-events: none;
 }
 
+.nav-section-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  width: 100%;
+  margin: 0 0 6px;
+  padding: 0 10px;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+}
+
+.nav-section-toggle .nav-section {
+  margin: 0;
+}
+
+.nav-section-chevron {
+  color: #9aa3b5;
+  flex-shrink: 0;
+  transition: transform 0.2s ease, color 0.2s ease;
+}
+
+.nav-section-toggle:hover .nav-section-chevron {
+  color: var(--glam-blue);
+}
+
+.nav-section-toggle:hover .nav-section {
+  color: var(--glam-navy);
+}
+
+.nav-section-chevron.open {
+  transform: rotate(180deg);
+}
+
 .nav-list {
   display: grid;
   gap: 2px;

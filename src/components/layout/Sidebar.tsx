@@ -96,8 +96,28 @@ function isLinkActive(pathname: string, href: string) {
   return pathname === href || pathname.startsWith(`${href}/`);
 }
 
+function sectionHasActive(pathname: string, section: NavSection) {
+  const links = [
+    ...(section.links ?? []),
+    ...(section.groups?.flatMap((group) => group.links) ?? []),
+  ];
+  return links.some((link) => isLinkActive(pathname, link.href));
+}
+
 function groupHasActive(pathname: string, group: NavGroup) {
   return group.links.some((link) => isLinkActive(pathname, link.href));
+}
+
+const DEFAULT_COLLAPSED_SECTIONS = new Set(["sistema"]);
+
+function getDefaultOpenSections(pathname: string) {
+  const open: Record<string, boolean> = {};
+  for (const section of sections) {
+    open[section.id] = DEFAULT_COLLAPSED_SECTIONS.has(section.id)
+      ? sectionHasActive(pathname, section)
+      : true;
+  }
+  return open;
 }
 
 function getDefaultOpenGroups(pathname: string) {
@@ -148,6 +168,9 @@ export function Sidebar() {
   const visibleSections = filterSectionsByPermissions(can);
   const allNavLinks = getAllNavLinks(visibleSections);
   const [isCollapsed, setIsCollapsed] = useState(false);
+  const [openSections, setOpenSections] = useState<Record<string, boolean>>(() =>
+    getDefaultOpenSections(pathname),
+  );
   const [openGroups, setOpenGroups] = useState<Record<string, boolean>>(() =>
     getDefaultOpenGroups(pathname),
   );
@@ -160,6 +183,15 @@ export function Sidebar() {
   }, []);
 
   useEffect(() => {
+    setOpenSections((prev) => {
+      const next = { ...prev };
+      for (const section of sections) {
+        if (DEFAULT_COLLAPSED_SECTIONS.has(section.id) && sectionHasActive(pathname, section)) {
+          next[section.id] = true;
+        }
+      }
+      return next;
+    });
     setOpenGroups((prev) => {
       const next = { ...prev };
       for (const section of sections) {
@@ -177,6 +209,10 @@ export function Sidebar() {
     const nextState = !isCollapsed;
     setIsCollapsed(nextState);
     localStorage.setItem("sidebar-collapsed", String(nextState));
+  };
+
+  const toggleSection = (sectionId: string) => {
+    setOpenSections((prev) => ({ ...prev, [sectionId]: !prev[sectionId] }));
   };
 
   const toggleGroup = (groupId: string) => {
@@ -231,42 +267,65 @@ export function Sidebar() {
             {allNavLinks.map((item) => renderNavLink(item))}
           </div>
         ) : (
-          visibleSections.map((section) => (
-            <div className="nav-block" key={section.id}>
-              <span className="nav-section">{section.label}</span>
-              <div className="nav-list">
-                {section.links?.map((item) => renderNavLink(item))}
-                {section.groups?.map((group) => {
-                  const GroupIcon = group.icon;
-                  const groupOpen = openGroups[group.id] ?? false;
-                  const groupActive = groupHasActive(pathname, group);
+          visibleSections.map((section) => {
+            const collapsible = DEFAULT_COLLAPSED_SECTIONS.has(section.id);
+            const isOpen = collapsible ? (openSections[section.id] ?? false) : true;
 
-                  return (
-                    <div className="nav-group" key={group.id}>
-                      <button
-                        type="button"
-                        className={groupActive ? "nav-group-toggle active" : "nav-group-toggle"}
-                        onClick={() => toggleGroup(group.id)}
-                        aria-expanded={groupOpen}
-                      >
-                        <GroupIcon size={18} style={{ minWidth: "18px" }} />
-                        <span className="nav-label">{group.label}</span>
-                        <ChevronDown
-                          size={14}
-                          className={groupOpen ? "nav-group-chevron open" : "nav-group-chevron"}
-                        />
-                      </button>
-                      {groupOpen ? (
-                        <div className="nav-sublist">
-                          {group.links.map((item) => renderNavLink(item, true))}
+            return (
+              <div className="nav-block" key={section.id}>
+                {collapsible ? (
+                  <button
+                    type="button"
+                    className="nav-section-toggle"
+                    onClick={() => toggleSection(section.id)}
+                    aria-expanded={isOpen}
+                  >
+                    <span className="nav-section">{section.label}</span>
+                    <ChevronDown
+                      size={12}
+                      className={isOpen ? "nav-section-chevron open" : "nav-section-chevron"}
+                    />
+                  </button>
+                ) : (
+                  <span className="nav-section">{section.label}</span>
+                )}
+
+                {isOpen ? (
+                  <div className="nav-list">
+                    {section.links?.map((item) => renderNavLink(item))}
+                    {section.groups?.map((group) => {
+                      const GroupIcon = group.icon;
+                      const groupOpen = openGroups[group.id] ?? false;
+                      const groupActive = groupHasActive(pathname, group);
+
+                      return (
+                        <div className="nav-group" key={group.id}>
+                          <button
+                            type="button"
+                            className={groupActive ? "nav-group-toggle active" : "nav-group-toggle"}
+                            onClick={() => toggleGroup(group.id)}
+                            aria-expanded={groupOpen}
+                          >
+                            <GroupIcon size={18} style={{ minWidth: "18px" }} />
+                            <span className="nav-label">{group.label}</span>
+                            <ChevronDown
+                              size={14}
+                              className={groupOpen ? "nav-group-chevron open" : "nav-group-chevron"}
+                            />
+                          </button>
+                          {groupOpen ? (
+                            <div className="nav-sublist">
+                              {group.links.map((item) => renderNavLink(item, true))}
+                            </div>
+                          ) : null}
                         </div>
-                      ) : null}
-                    </div>
-                  );
-                })}
+                      );
+                    })}
+                  </div>
+                ) : null}
               </div>
-            </div>
-          ))
+            );
+          })
         )}
       </nav>
 
