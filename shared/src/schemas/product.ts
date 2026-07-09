@@ -36,3 +36,9 @@ export const queryProductSchema = paginationSchema.extend({
   categoryId: z.union([z.string().uuid(), z.literal(""), z.null()]).optional(),
   available: z.coerce.boolean().optional(),
 });
+
+export const improveProductDescriptionSchema = z.object({
+  name: z.string().min(2).max(140),
+  categoryName: z.union([z.string().max(90), z.literal(""), z.null()]).optional(),
+  description: z.union([z.string().max(2000), z.literal(""), z.null()]).optional(),
+});

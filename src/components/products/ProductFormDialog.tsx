@@ -1,10 +1,25 @@
 "use client";
 
-import { FormEvent } from "react";
-import { Button, Dialog, DialogActions, DialogContent, DialogTitle, MenuItem, TextField } from "@mui/material";
+import { FormEvent, MouseEvent, useEffect, useState } from "react";
+import {
+  Button,
+  CircularProgress,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogTitle,
+  IconButton,
+  InputAdornment,
+  MenuItem,
+  TextField,
+  Tooltip,
+} from "@mui/material";
+import AutoAwesomeIcon from "@mui/icons-material/AutoAwesome";
 import { PRODUCT_UNITS } from "@glamouroso/shared";
 import { Product } from "@/types";
 import { usePermissions } from "@/lib/permissions";
+import { httpClient, getApiErrorMessage } from "@/services/http-client";
+import { toast } from "sonner";
 
 interface ProductCategory {
   id: string;
@@ -23,6 +38,38 @@ export function ProductFormDialog({ open, editing, categories, onClose, onSubmit
   const { isAdmin } = usePermissions();
   const presentation = editing?.variants?.presentacion;
   const productGroupKey = editing?.variants?.productGroupKey;
+  const [description, setDescription] = useState("");
+  const [improving, setImproving] = useState(false);
+
+  useEffect(() => {
+    if (open) setDescription(editing?.description || "");
+  }, [open, editing]);
+
+  async function improveDescription(event: MouseEvent<HTMLButtonElement>) {
+    const form = event.currentTarget.closest("form");
+    if (!form) return;
+    const data = new FormData(form);
+    const name = String(data.get("name") || "").trim();
+    if (name.length < 2) {
+      toast.error("Escribe primero el nombre del producto");
+      return;
+    }
+    const categoryIdValue = String(data.get("categoryId") || "");
+    const categoryName = categories.find((category) => category.id === categoryIdValue)?.name ?? null;
+    setImproving(true);
+    try {
+      const result = await httpClient.post<{ description: string }>("/products/improve-description", {
+        name,
+        categoryName,
+        description,
+      });
+      if (result?.description) setDescription(result.description);
+    } catch (error) {
+      toast.error(getApiErrorMessage(error, "No se pudo mejorar la descripción"));
+    } finally {
+      setImproving(false);
+    }
+  }
 
   return (
     <Dialog open={open} onClose={onClose} fullWidth maxWidth="md" key={editing?.id ?? "new"}>
@@ -47,11 +94,31 @@ export function ProductFormDialog({ open, editing, categories, onClose, onSubmit
           <TextField
             name="description"
             label="Descripcion"
-            defaultValue={editing?.description || ""}
+            value={description}
+            onChange={(event) => setDescription(event.target.value)}
             fullWidth
             multiline
             minRows={3}
             sx={{ gridColumn: "1 / -1" }}
+            InputProps={{
+              endAdornment: (
+                <InputAdornment position="end" sx={{ alignSelf: "flex-start", mt: 1 }}>
+                  <Tooltip title="Mejorar descripción con IA">
+                    <span>
+                      <IconButton
+                        aria-label="Mejorar descripción con IA"
+                        onClick={improveDescription}
+                        disabled={improving}
+                        size="small"
+                        sx={{ color: "var(--glam-navy)" }}
+                      >
+                        {improving ? <CircularProgress size={20} /> : <AutoAwesomeIcon fontSize="small" />}
+                      </IconButton>
+                    </span>
+                  </Tooltip>
+                </InputAdornment>
+              ),
+            }}
           />
 
           <p className="form-section-title">Precios</p>
