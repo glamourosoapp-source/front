@@ -17,6 +17,8 @@ import { toast } from "sonner";
 
 const orderStatuses = ["new", "processing", "delivered", "cancelled"];
 
+const DELIVERY_WINDOWS = ["09:00-13:00", "13:00-17:00", "17:00-20:00"];
+
 const statusLabels: Record<string, string> = {
   new: "Nuevo",
   processing: "En proceso",
@@ -44,6 +46,8 @@ export function OrderEditDialog({ open, order, onClose, onSaved }: OrderEditDial
         paymentMethod: String(form.get("paymentMethod") || ""),
         deliveryAddress: String(form.get("address") || ""),
         deliveryZone: String(form.get("deliveryZone") || ""),
+        scheduledDeliveryDate: String(form.get("scheduledDeliveryDate") || "") || null,
+        deliveryTimeWindow: String(form.get("deliveryTimeWindow") || "") || null,
         customerNotes: String(form.get("customerNotes") || ""),
         internalNotes: String(form.get("internalNotes") || ""),
       });
@@ -78,6 +82,22 @@ export function OrderEditDialog({ open, order, onClose, onSaved }: OrderEditDial
             {PAYMENT_METHOD_OPTIONS.map((item) => (
               <MenuItem key={item.value || "none"} value={item.value}>
                 {item.label}
+              </MenuItem>
+            ))}
+          </TextField>
+          <TextField
+            name="scheduledDeliveryDate"
+            label="Fecha de entrega"
+            type="date"
+            defaultValue={order?.scheduledDeliveryDate || ""}
+            fullWidth
+            InputLabelProps={{ shrink: true }}
+          />
+          <TextField select name="deliveryTimeWindow" label="Ventana horaria" defaultValue={order?.deliveryTimeWindow || ""} fullWidth>
+            <MenuItem value="">Sin ventana</MenuItem>
+            {DELIVERY_WINDOWS.map((item) => (
+              <MenuItem key={item} value={item}>
+                {item}
               </MenuItem>
             ))}
           </TextField>

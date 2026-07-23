@@ -25,6 +25,7 @@ import { PAYMENT_METHOD_OPTIONS, PAYMENT_STATUS_OPTIONS } from "@/constants/orde
 import { ArrowLeft, Plus, Trash2 } from "lucide-react";
 import { resolveProductUnitPrice } from "@glamouroso/shared";
 import { httpClient } from "@/services/http-client";
+import { formatDateOnly } from "@/lib/format-date-only";
 import { Customer, ListResponse, Product } from "@/types";
 import { toast } from "sonner";
 
@@ -173,7 +174,7 @@ export default function NewOrderPage() {
 
     setSubmitting(true);
     try {
-      await httpClient.post("/orders", {
+      const created = await httpClient.post<{ scheduledDeliveryDate?: string | null }>("/orders", {
         customerId: selectedCustomer.id,
         customerNotes: orderNote.trim() || undefined,
         paymentMethod: paymentMethod || undefined,
@@ -185,7 +186,10 @@ export default function NewOrderPage() {
         })),
         source: "panel",
       });
-      toast.success("Nuevo pedido creado con éxito");
+      const deliveryLabel = created?.scheduledDeliveryDate
+        ? ` Entrega asignada: ${formatDateOnly(created.scheduledDeliveryDate, { weekday: "long", day: "2-digit", month: "long" })}.`
+        : "";
+      toast.success(`Nuevo pedido creado con éxito.${deliveryLabel}`);
       router.push("/dashboard/orders");
     } catch (err) {
       const apiMessage =
@@ -210,7 +214,9 @@ export default function NewOrderPage() {
             Volver a pedidos
           </Link>
           <h1 className="page-title">Nuevo pedido</h1>
-          <p className="page-kicker">Agrega productos y asigna el cliente.</p>
+          <p className="page-kicker">
+            Agrega productos y asigna el cliente. La fecha de entrega se asigna automáticamente según la hora de corte.
+          </p>
         </div>
         <Box sx={{ display: "flex", gap: 1.5, alignItems: "center" }}>
           <Box sx={{ mr: 1, textAlign: "right" }}>

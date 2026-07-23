@@ -375,6 +375,65 @@
   color: var(--glam-blue);
 }
 
+.outline-action.danger {
+  color: #b91c1c;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.outline-action.danger:hover {
+  background: #fef2f2;
+  border-color: #fecaca;
+  color: #dc2626;
+}
+
+.outline-action:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.confirm-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  background: rgba(15, 23, 42, 0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+}
+
+.confirm-dialog {
+  width: min(420px, 100%);
+  background: #fff;
+  border-radius: 16px;
+  border: 1px solid var(--border);
+  box-shadow: 0 24px 48px rgba(38, 45, 96, 0.16);
+  padding: 22px 24px;
+}
+
+.confirm-dialog h3 {
+  margin: 0;
+  font-size: 18px;
+  color: var(--glam-navy);
+  font-weight: 700;
+}
+
+.confirm-dialog p {
+  margin: 10px 0 0;
+  font-size: 14px;
+  line-height: 1.45;
+  color: var(--glam-muted);
+}
+
+.confirm-actions {
+  margin-top: 20px;
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
 .message-feed {
   flex: 1;
   overflow-y: auto;

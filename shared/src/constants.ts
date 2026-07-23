@@ -3,6 +3,8 @@ export const ROLES = {
   ADMIN: "admin",
   ORG_ADMIN: "org_admin",
   SYSTEM_ADMIN: "system_admin",
+  /** Usuario sistema del agente IA de WhatsApp; no inicia sesión ni se lista. */
+  AGENT: "agent",
 } as const;
 
 /** Roles con acceso a configuracion del sistema (Kapso, webhook, IA). */

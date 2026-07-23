@@ -13,12 +13,14 @@ import {
   PauseCircle,
   Search,
   Send,
+  Trash2,
   UserRound,
   Warehouse,
   X,
 } from "lucide-react";
-import { httpClient } from "@/services/http-client";
+import { getApiErrorMessage, httpClient } from "@/services/http-client";
 import { useConversationStream, type ConnectionState } from "@/hooks/useConversationStream";
+import { usePermissions } from "@/lib/permissions";
 import { Conversation } from "@/types";
 import type { ConversationMessage, ConversationPatch, MessageMedia } from "@glamouroso/shared/entities";
 import { toast } from "sonner";
@@ -119,6 +121,8 @@ function MediaBubble({ media, onImageClick }: { media: MessageMedia; onImageClic
 }
 
 export default function ConversationsPage() {
+  const { can } = usePermissions();
+  const canDelete = can("conversations", "delete");
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [selected, setSelected] = useState<Conversation | null>(null);
   const selectedRef = useRef<Conversation | null>(null);
@@ -128,6 +132,8 @@ export default function ConversationsPage() {
   const [draft, setDraft] = useState("");
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
   const [attachment, setAttachment] = useState<PendingAttachment | null>(null);
   const [recording, setRecording] = useState(false);
   const [typingByConversation, setTypingByConversation] = useState<Record<string, boolean>>({});
@@ -163,6 +169,7 @@ export default function ConversationsPage() {
 
   async function openConversation(id: string) {
     const detail = await httpClient.get<Conversation>(`/conversations/${id}`);
+    setConfirmDelete(false);
     setSelected(detail);
   }
 
@@ -296,6 +303,25 @@ export default function ConversationsPage() {
     setConversations((prev) => prev.map((c) => (c.id === updated.id ? { ...c, ...updated } : c)));
   }
 
+  async function deleteConversation() {
+    if (!selected || deleting || !canDelete) return;
+    setDeleting(true);
+    const id = selected.id;
+    try {
+      await httpClient.delete(`/conversations/${id}`);
+      setConfirmDelete(false);
+      setConversations((prev) => prev.filter((c) => c.id !== id));
+      setSelected(null);
+      setDraft("");
+      setAttachment(null);
+      toast.success("Conversacion eliminada");
+    } catch (error) {
+      toast.error(getApiErrorMessage(error, "No se pudo eliminar la conversacion"));
+    } finally {
+      setDeleting(false);
+    }
+  }
+
   async function handlePickFile(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     e.target.value = "";
@@ -376,8 +402,8 @@ export default function ConversationsPage() {
       setAttachment(null);
       // El mensaje real llega por SSE y reemplaza al optimista; recargamos el detalle como respaldo
       await openConversation(selected.id);
-    } catch {
-      toast.error("No se pudo enviar el mensaje");
+    } catch (error) {
+      toast.error(getApiErrorMessage(error, "No se pudo enviar el mensaje"));
       setSelected((current) =>
         current ? { ...current, messages: (current.messages || []).filter((m) => m.id !== tempId) } : current
       );
@@ -478,6 +504,19 @@ export default function ConversationsPage() {
                 <button className="outline-action" onClick={() => toggleAgent(selected)}>
                   {selected.isAgentActive ? "Tomar control" : "Liberar a IA"}
                 </button>
+                {canDelete ? (
+                  <button
+                    type="button"
+                    className="outline-action danger"
+                    onClick={() => setConfirmDelete(true)}
+                    disabled={deleting}
+                    aria-label="Eliminar conversacion"
+                    title="Eliminar conversacion"
+                  >
+                    <Trash2 size={15} />
+                    Eliminar
+                  </button>
+                ) : null}
               </div>
             </header>
 
@@ -649,6 +688,26 @@ export default function ConversationsPage() {
           <img src={lightboxUrl} alt="vista previa" onClick={(e) => e.stopPropagation()} />
         </div>
       )}
+
+      {confirmDelete && selected ? (
+        <div className="confirm-overlay" onClick={() => !deleting && setConfirmDelete(false)}>
+          <div className="confirm-dialog" onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true">
+            <h3>Eliminar conversacion</h3>
+            <p>
+              Se borrara el historial con <strong>{selectedName}</strong>. Los pedidos vinculados se
+              conservan. Esta accion no se puede deshacer.
+            </p>
+            <div className="confirm-actions">
+              <button type="button" className="outline-action" disabled={deleting} onClick={() => setConfirmDelete(false)}>
+                Cancelar
+              </button>
+              <button type="button" className="outline-action danger" disabled={deleting} onClick={deleteConversation}>
+                {deleting ? "Eliminando..." : "Eliminar"}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }

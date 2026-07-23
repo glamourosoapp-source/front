@@ -25,3 +25,11 @@ export function paymentStatusLabel(value: string | null | undefined) {
   const found = PAYMENT_STATUS_OPTIONS.find((o) => o.value === value);
   return found?.label ?? value;
 }
+
+export function orderCreatorLabel(order: {
+  source?: string;
+  creator?: { name: string } | null;
+}) {
+  if (order.source === "whatsapp") return "Agente IA";
+  return order.creator?.name ?? "—";
+}

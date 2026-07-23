@@ -87,12 +87,17 @@ export interface Order {
   total: string | number;
   deliveryAddress?: string;
   deliveryZone?: string | null;
+  scheduledDeliveryDate?: string | null;
+  deliveryTimeWindow?: string | null;
   customerNotes?: string | null;
   internalNotes?: string | null;
   subtotal?: string | number;
   deliveryFee?: string | number;
   discount?: string | number;
   createdAt: string;
+  source?: string;
+  createdBy?: string | null;
+  creator?: { id: string; name: string } | null;
   customer?: Customer;
   items?: Array<{
     id: string;

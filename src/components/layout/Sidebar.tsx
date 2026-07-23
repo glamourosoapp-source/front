@@ -160,6 +160,17 @@ function filterSectionsByPermissions(can: CanFn): NavSection[] {
     .filter((section) => (section.links?.length ?? 0) > 0 || (section.groups?.length ?? 0) > 0);
 }
 
+const CONVERSATIONS_PATH = "/dashboard/conversations";
+
+function isConversationsRoute(pathname: string) {
+  return pathname === CONVERSATIONS_PATH || pathname.startsWith(`${CONVERSATIONS_PATH}/`);
+}
+
+function readCollapsedPreference() {
+  if (typeof window === "undefined") return false;
+  return localStorage.getItem("sidebar-collapsed") === "true";
+}
+
 export function Sidebar() {
   const pathname = usePathname();
   const router = useRouter();
@@ -167,7 +178,8 @@ export function Sidebar() {
   const { can } = usePermissions();
   const visibleSections = filterSectionsByPermissions(can);
   const allNavLinks = getAllNavLinks(visibleSections);
-  const [isCollapsed, setIsCollapsed] = useState(false);
+  // Inbox a 3 columnas: colapsar al entrar da mas ancho util.
+  const [isCollapsed, setIsCollapsed] = useState(() => isConversationsRoute(pathname));
   const [openSections, setOpenSections] = useState<Record<string, boolean>>(() =>
     getDefaultOpenSections(pathname),
   );
@@ -176,11 +188,12 @@ export function Sidebar() {
   );
 
   useEffect(() => {
-    const saved = localStorage.getItem("sidebar-collapsed");
-    if (saved === "true") {
+    if (isConversationsRoute(pathname)) {
       setIsCollapsed(true);
+      return;
     }
-  }, []);
+    setIsCollapsed(readCollapsedPreference());
+  }, [pathname]);
 
   useEffect(() => {
     setOpenSections((prev) => {
@@ -208,6 +221,8 @@ export function Sidebar() {
   const handleToggle = () => {
     const nextState = !isCollapsed;
     setIsCollapsed(nextState);
+    // En conversaciones el colapso es automatico al entrar; solo persistimos
+    // la preferencia del usuario fuera de esa pantalla (o si la fuerza aqui).
     localStorage.setItem("sidebar-collapsed", String(nextState));
   };
 

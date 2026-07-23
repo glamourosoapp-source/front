@@ -858,3 +858,25 @@ textarea.input {
   font-weight: 700 !important;
 }
 
+
+/* Hoja imprimible de pedido: oculta en pantalla, unica visible al imprimir. */
+.print-only {
+  display: none;
+}
+
+@media print {
+  body * {
+    visibility: hidden;
+  }
+  .print-only,
+  .print-only * {
+    visibility: visible;
+  }
+  .print-only {
+    display: block;
+    position: absolute;
+    inset: 0;
+    padding: 24px;
+    background: #fff;
+  }
+}

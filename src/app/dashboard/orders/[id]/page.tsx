@@ -14,12 +14,14 @@ import {
   TableRow,
   Typography,
 } from "@mui/material";
-import { ArrowLeft, Download, Pencil } from "lucide-react";
+import { ArrowLeft, Download, Pencil, Printer } from "lucide-react";
 import { OrderEditDialog } from "@/components/orders/OrderEditDialog";
-import { paymentMethodLabel, paymentStatusLabel } from "@/constants/orders";
+import { OrderPrintSheet } from "@/components/orders/OrderPrintSheet";
+import { orderCreatorLabel, paymentMethodLabel, paymentStatusLabel } from "@/constants/orders";
 import { httpClient } from "@/services/http-client";
 import { usePermissions } from "@/lib/permissions";
 import { exportOrderToXlsx } from "@/lib/export-order-xlsx";
+import { formatDateOnly } from "@/lib/format-date-only";
 import { Order } from "@/types";
 import { toast } from "sonner";
 
@@ -143,6 +145,9 @@ export default function OrderDetailPage() {
           <Button variant="outlined" startIcon={<Download size={16} />} onClick={handleDownload}>
             Descargar Excel
           </Button>
+          <Button variant="outlined" startIcon={<Printer size={16} />} onClick={() => window.print()}>
+            Imprimir
+          </Button>
         </Box>
       </div>
 
@@ -160,6 +165,21 @@ export default function OrderDetailPage() {
           <DetailField label="Estado de pago" value={paymentStatusLabel(order.paymentStatus)} />
           <DetailField label="Metodo de pago" value={paymentMethodLabel(order.paymentMethod)} />
           <DetailField label="Zona de entrega" value={order.deliveryZone || "—"} />
+          <DetailField
+            label="Fecha de entrega"
+            value={
+              order.scheduledDeliveryDate
+                ? formatDateOnly(order.scheduledDeliveryDate, {
+                    weekday: "long",
+                    day: "2-digit",
+                    month: "long",
+                    year: "numeric",
+                  })
+                : "Sin fecha"
+            }
+          />
+          <DetailField label="Ventana horaria" value={order.deliveryTimeWindow || "—"} />
+          <DetailField label="Creado por" value={orderCreatorLabel(order)} />
           <DetailField label="Total" value={money(order.total)} />
         </div>
       </section>
@@ -249,6 +269,8 @@ export default function OrderDetailPage() {
         onClose={() => setEditOpen(false)}
         onSaved={() => void load()}
       />
+
+      <OrderPrintSheet order={order} />
     </div>
   );
 }

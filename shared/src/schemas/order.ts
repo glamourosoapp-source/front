@@ -16,6 +16,11 @@ const paymentStatus = z.enum([
   PAYMENT_STATUS.REFUNDED,
 ]);
 
+const isoDate = z
+  .string()
+  .regex(/^\d{4}-\d{2}-\d{2}$/, "Expected YYYY-MM-DD")
+  .optional();
+
 const itemSchema = z
   .object({
     productId: z.string().uuid().nullable().optional(),
@@ -51,6 +56,8 @@ export const createOrderSchema = z
     paymentStatus: paymentStatus.default(PAYMENT_STATUS.UNPAID),
     customerNotes: z.union([z.string(), z.literal(""), z.null()]).optional(),
     internalNotes: z.union([z.string(), z.literal(""), z.null()]).optional(),
+    scheduledDeliveryDate: isoDate,
+    deliveryTimeWindow: z.union([z.string().max(50), z.literal(""), z.null()]).optional(),
     source: z.string().default("manual"),
   })
   .refine((data) => Boolean(data.customerId) !== Boolean(data.customer), {
@@ -63,14 +70,11 @@ export const updateOrderSchema = z.object({
   paymentMethod: z.union([z.string(), z.literal(""), z.null()]).optional(),
   deliveryAddress: z.union([z.string(), z.literal(""), z.null()]).optional(),
   deliveryZone: z.union([z.string(), z.literal(""), z.null()]).optional(),
+  scheduledDeliveryDate: z.union([isoDate.unwrap(), z.null()]).optional(),
+  deliveryTimeWindow: z.union([z.string().max(50), z.literal(""), z.null()]).optional(),
   customerNotes: z.union([z.string(), z.literal(""), z.null()]).optional(),
   internalNotes: z.union([z.string(), z.literal(""), z.null()]).optional(),
 });
-
-const isoDate = z
-  .string()
-  .regex(/^\d{4}-\d{2}-\d{2}$/, "Expected YYYY-MM-DD")
-  .optional();
 
 export const queryOrderSchema = paginationSchema.extend({
   status: z.union([orderStatus, z.literal(""), z.null()]).optional(),
@@ -78,5 +82,9 @@ export const queryOrderSchema = paginationSchema.extend({
   customerId: z.union([z.string().uuid(), z.literal(""), z.null()]).optional(),
   dateFrom: isoDate,
   dateTo: isoDate,
+  deliveryFrom: isoDate,
+  deliveryTo: isoDate,
+  unscheduled: z.coerce.boolean().optional(),
+  sortBy: z.enum(["createdAt", "deliveryDate"]).optional(),
   undelivered: z.coerce.boolean().optional(),
 });

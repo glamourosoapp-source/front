@@ -5,5 +5,6 @@ export * from "./entities";
 export * from "./permissions";
 export * from "./product-pricing";
 export * from "./utils/customer-address";
+export * from "./utils/delivery-schedule";
 export * from "./utils/google-maps-url";
 export * as schemas from "./schemas/index";
