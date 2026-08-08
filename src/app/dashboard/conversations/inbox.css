@@ -547,7 +547,7 @@
 }
 
 .bubble.agent p code {
-  background: rgba(255, 255, 255, 0.22);
+  background: rgba(6, 166, 224, 0.12);
 }
 
 .bubble time {
@@ -575,15 +575,18 @@
 .bubble.staff .bubble-role { color: rgba(255, 255, 255, 0.85); }
 .bubble.staff time { color: rgba(255, 255, 255, 0.6); }
 
+/* Burbuja del agente: clara con texto oscuro (estilo WhatsApp), en el azul
+   suave de la marca. El cyan solido con texto blanco cansaba la vista. */
 .bubble.agent {
-  background: var(--glam-blue);
-  color: white;
+  background: linear-gradient(180deg, #eaf7fd 0%, #def2fb 100%);
+  color: var(--text);
+  border: 1px solid rgba(6, 166, 224, 0.22);
   border-top-right-radius: 4px;
-  box-shadow: 0 4px 14px rgba(6, 166, 224, 0.2);
+  box-shadow: 0 2px 10px rgba(6, 166, 224, 0.1);
 }
 
 .bubble.agent .bubble-role {
-  color: #ffffff;
+  color: #0284b8;
   display: inline-flex;
   align-items: center;
   gap: 4px;
@@ -591,13 +594,14 @@
 
 .bubble.agent .bubble-role::after {
   content: "IA ACTIVA";
-  background: rgba(255, 255, 255, 0.2);
+  background: rgba(6, 166, 224, 0.14);
+  color: #0284b8;
   padding: 1px 4px;
   border-radius: 4px;
   font-size: 8px;
 }
 
-.bubble.agent time { color: rgba(255, 255, 255, 0.7); }
+.bubble.agent time { color: var(--muted); }
 
 .composer {
   padding: 16px 24px;
@@ -808,7 +812,7 @@
   width: 7px;
   height: 7px;
   border-radius: 50%;
-  background: rgba(255, 255, 255, 0.85);
+  background: rgba(2, 132, 184, 0.7);
   display: inline-block;
   animation: typing-bounce 1.2s infinite ease-in-out;
 }
@@ -871,9 +875,12 @@
   max-width: 240px;
 }
 
-.bubble.staff .bubble-media-file,
-.bubble.agent .bubble-media-file {
+.bubble.staff .bubble-media-file {
   background: rgba(255, 255, 255, 0.18);
+}
+
+.bubble.agent .bubble-media-file {
+  background: rgba(6, 166, 224, 0.12);
 }
 
 .bubble-media-file span {
