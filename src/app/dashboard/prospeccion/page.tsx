@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { Badge, Tab, Tabs } from "@mui/material";
+import { Badge, Button, Tab, Tabs } from "@mui/material";
 import {
   Search,
   Send,
@@ -17,7 +17,7 @@ import { ProspectOutreachPanel } from "@/components/prospects/ProspectOutreachPa
 import { FollowupTab } from "@/components/prospects/FollowupTab";
 import { NumberHealthCard } from "@/components/prospects/NumberHealthCard";
 import { TemplateStatsPanel } from "@/components/prospects/TemplateStatsPanel";
-import { httpClient } from "@/services/http-client";
+import { httpClient, getApiErrorMessage } from "@/services/http-client";
 import { usePermissions } from "@/lib/permissions";
 import { OUTBOUND_CONTEXT } from "@glamouroso/shared/constants";
 import type { ProspectMetricsResponse } from "@glamouroso/shared/schemas/campaign";
@@ -57,6 +57,7 @@ function cameFromCampaignsUrl(): boolean {
 export default function ProspeccionPage() {
   const { can } = usePermissions();
   const [metrics, setMetrics] = useState<ProspectMetricsResponse>(emptyMetrics);
+  const [metricsError, setMetricsError] = useState<string | null>(null);
   const [showCampaignsMoved] = useState(() => cameFromCampaignsUrl());
 
   const visibleTabs = useMemo(() => {
@@ -71,8 +72,11 @@ export default function ProspeccionPage() {
   const loadMetrics = useCallback(async () => {
     try {
       setMetrics(await httpClient.get<ProspectMetricsResponse>("/prospects/metrics"));
-    } catch {
-      // el embudo es informativo: si falla se queda en cero
+      setMetricsError(null);
+    } catch (error) {
+      // Ceros silenciosos mienten: "0 por contactar" se lee igual que "no pude
+      // leer nada", y son cosas muy distintas para quien decide a quién contactar.
+      setMetricsError(getApiErrorMessage(error, "No se pudo cargar el embudo"));
     }
   }, []);
 
@@ -115,7 +119,21 @@ export default function ProspeccionPage() {
         </div>
       )}
 
-      <section className="grid grid-4">
+      {metricsError && (
+        <div
+          className="panel p-4 flex flex-wrap items-center justify-between gap-2"
+          style={{ borderColor: "#f5a524" }}
+        >
+          <span className="page-kicker" style={{ margin: 0 }}>
+            <strong>Los números de abajo no son reales:</strong> {metricsError}
+          </span>
+          <Button size="small" variant="outlined" onClick={() => loadMetrics()}>
+            Reintentar
+          </Button>
+        </div>
+      )}
+
+      <section className="grid grid-4" style={metricsError ? { opacity: 0.5 } : undefined}>
         <div className="card metric">
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
             <span>1 · Por contactar</span>

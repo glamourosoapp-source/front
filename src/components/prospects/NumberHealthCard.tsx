@@ -87,13 +87,18 @@ function WarmupIndicator({ warmup }: { warmup: OutreachHealthResponse["warmup"] 
 export function NumberHealthCard({ compact = false }: { compact?: boolean }) {
   const { can } = usePermissions();
   const [health, setHealth] = useState<OutreachHealthResponse | null>(null);
+  const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
   const load = useCallback(async () => {
     try {
       setHealth(await httpClient.get<OutreachHealthResponse>("/outreach/health"));
-    } catch {
-      // tarjeta informativa: sin datos se muestra el skeleton
+      setError(null);
+    } catch (err) {
+      // Nunca fallar en silencio: esta tarjeta es la que dice si los envíos
+      // fríos están protegidos. Un esqueleto eterno haría pensar que todo va
+      // bien cuando en realidad no sabemos nada del número.
+      setError(getApiErrorMessage(err, "No se pudo leer la salud del número"));
     }
   }, []);
 
@@ -117,6 +122,29 @@ export function NumberHealthCard({ compact = false }: { compact?: boolean }) {
     } finally {
       setBusy(false);
     }
+  }
+
+  if (!health && error) {
+    return (
+      <div
+        className="panel p-4 flex flex-wrap items-center justify-between gap-3"
+        style={{ borderColor: "#f5a524" }}
+      >
+        <div className="flex items-center gap-3">
+          <ShieldAlert size={22} style={{ color: "#b45309" }} />
+          <div>
+            <strong style={{ display: "block" }}>No pude leer la salud del número</strong>
+            <span className="page-kicker" style={{ margin: 0 }}>
+              {error} · Si el backend no tiene aplicadas las migraciones del guardián de envíos,
+              esta tarjeta y los envíos con cupo no funcionan todavía.
+            </span>
+          </div>
+        </div>
+        <Button size="small" variant="outlined" onClick={() => load()}>
+          Reintentar
+        </Button>
+      </div>
+    );
   }
 
   if (!health) {
