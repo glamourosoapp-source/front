@@ -22,9 +22,11 @@ import {
 } from "@mui/material";
 import { CustomerFormDialog } from "@/components/customers/CustomerFormDialog";
 import { PAYMENT_METHOD_OPTIONS, PAYMENT_STATUS_OPTIONS } from "@/constants/orders";
-import { ArrowLeft, Plus, Trash2 } from "lucide-react";
+import { ArrowLeft, Plus, ShieldAlert, Trash2 } from "lucide-react";
 import { resolveProductUnitPrice } from "@glamouroso/shared";
-import { httpClient } from "@/services/http-client";
+import { httpClient, getApiErrorMessage } from "@/services/http-client";
+import { useAuthStore } from "@/stores/auth.store";
+import { usePermissions } from "@/lib/permissions";
 import { formatDateOnly } from "@/lib/format-date-only";
 import { Customer, ListResponse, Product } from "@/types";
 import { toast } from "sonner";
@@ -44,6 +46,9 @@ function defaultUnitPrice(product: Product, pricingTier: Customer["pricingTier"]
 
 export default function NewOrderPage() {
   const router = useRouter();
+  const user = useAuthStore((s) => s.user);
+  const { can } = usePermissions();
+  const canCreate = can("orders", "create");
   const [submitting, setSubmitting] = useState(false);
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
@@ -64,6 +69,11 @@ export default function NewOrderPage() {
   }
 
   useEffect(() => {
+    if (!canCreate) {
+      setLoadingCustomers(false);
+      setLoadingProducts(false);
+      return;
+    }
     void (async () => {
       setLoadingCustomers(true);
       setLoadingProducts(true);
@@ -86,7 +96,7 @@ export default function NewOrderPage() {
       }
       setLoadingProducts(false);
     })();
-  }, []);
+  }, [canCreate]);
 
   useEffect(() => {
     setLineItems((items) =>
@@ -192,13 +202,27 @@ export default function NewOrderPage() {
       toast.success(`Nuevo pedido creado con éxito.${deliveryLabel}`);
       router.push("/dashboard/orders");
     } catch (err) {
-      const apiMessage =
-        (err as { response?: { data?: { error?: { message?: string } } } })?.response?.data?.error?.message ??
-        null;
-      toast.error(apiMessage || "Error al crear el pedido");
+      toast.error(getApiErrorMessage(err, "Error al crear el pedido"));
     } finally {
       setSubmitting(false);
     }
+  }
+
+  if (user && !canCreate) {
+    return (
+      <div className="page-stack">
+        <div className="panel p-5 flex items-center gap-3">
+          <ShieldAlert size={20} style={{ color: "var(--glam-blue)" }} />
+          <div>
+            <h2 style={{ margin: 0 }}>Sin permiso para crear pedidos</h2>
+            <p className="page-kicker" style={{ margin: 0 }}>
+              Tu perfil no tiene la accion de crear en el modulo de pedidos. Pide acceso a tu
+              administrador si necesitas registrar un pedido.
+            </p>
+          </div>
+        </div>
+      </div>
+    );
   }
 
   return (
