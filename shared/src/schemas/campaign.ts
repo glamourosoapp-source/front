@@ -6,6 +6,8 @@ const prospectStatusValues = [
   PROSPECT_STATUS.NEW,
   PROSPECT_STATUS.CONTACTED_WHATSAPP,
   PROSPECT_STATUS.CONTACTED_VOICE,
+  PROSPECT_STATUS.REPLIED,
+  PROSPECT_STATUS.CONVERTED,
   PROSPECT_STATUS.FAILED,
 ] as const;
 
@@ -40,9 +42,12 @@ export const createCampaignSchema = z.object({
   templateName: z.string().min(2).max(120),
   messagePreview: z.union([z.string(), z.literal(""), z.null()]).optional(),
   recipientIds: z.array(z.string().uuid()).default([]),
+  scheduledAt: z.union([z.string().datetime({ offset: true }), z.null()]).optional(),
 });
 
-export const updateCampaignSchema = createCampaignSchema.partial();
+export const updateCampaignSchema = createCampaignSchema.partial().extend({
+  status: z.enum(["draft", "scheduled", "paused", "cancelled"]).optional(),
+});
 
 export const prospectSearchSchema = z.object({
   businessType: z.string().min(2),
@@ -144,12 +149,37 @@ export const prospectOutreachResponseSchema = z.object({
 
 export const queryCampaignSchema = paginationSchema;
 
+export const whatsappTemplateSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  language: z.string(),
+  status: z.string(),
+  category: z.string(),
+  bodyText: z.string().nullable(),
+});
+
+export const createWhatsappTemplateSchema = z.object({
+  name: z
+    .string()
+    .min(3)
+    .max(120)
+    .regex(/^[a-z0-9_]+$/, "Usa solo minusculas, numeros y guiones bajos (ej: promo_mayoreo)"),
+  language: z.string().min(2).max(15).default("es_MX"),
+  category: z.enum(["MARKETING", "UTILITY"]).default("MARKETING"),
+  bodyText: z.string().min(10).max(1024),
+});
+
+export type WhatsAppTemplateDto = z.infer<typeof whatsappTemplateSchema>;
+export type CreateWhatsAppTemplateInput = z.infer<typeof createWhatsappTemplateSchema>;
+
 export const prospectMetricsResponseSchema = z.object({
   total: z.number().int(),
   byStatus: z.object({
     new: z.number().int(),
     contacted_whatsapp: z.number().int(),
     contacted_voice: z.number().int(),
+    replied: z.number().int(),
+    converted: z.number().int(),
     failed: z.number().int(),
   }),
   contactedToday: z.number().int(),

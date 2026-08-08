@@ -67,7 +67,7 @@ function NotificationsEmpty({ filter }: { filter: "all" | "unread" }) {
           <PackageCheck size={16} />
           Pedidos
         </Link>
-        <Link href="/dashboard/outreach" className="notif-empty__link">
+        <Link href="/dashboard/prospeccion?tab=campanas" className="notif-empty__link">
           <Megaphone size={16} />
           Campañas
         </Link>

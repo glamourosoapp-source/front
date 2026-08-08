@@ -13,7 +13,6 @@ import {
   Headphones,
   LogOut,
   Bell,
-  Megaphone,
   MessageCircle,
   PackageCheck,
   Settings,
@@ -31,6 +30,8 @@ type NavLink = {
   label: string;
   icon: LucideIcon;
   module?: PermissionModule;
+  /** Visible si el usuario puede ver al menos uno de estos modulos. */
+  anyModule?: PermissionModule[];
 };
 
 type NavGroup = {
@@ -63,8 +64,12 @@ const sections: NavSection[] = [
     label: "WhatsApp IA",
     links: [
       { href: "/dashboard/conversations", label: "Conversaciones", icon: MessageCircle, module: "conversations" },
-      { href: "/dashboard/prospects", label: "Prospectos IA", icon: Sparkles, module: "prospects" },
-      { href: "/dashboard/outreach", label: "Outreach", icon: Megaphone, module: "outreach" },
+      {
+        href: "/dashboard/prospeccion",
+        label: "Prospeccion",
+        icon: Sparkles,
+        anyModule: ["prospects", "outreach"],
+      },
     ],
     groups: [
       {
@@ -145,6 +150,7 @@ type CanFn = (module: PermissionModule) => boolean;
 
 /** Un link es visible si no está atado a un módulo (ej. Soporte) o el usuario puede verlo. */
 function isLinkVisible(link: NavLink, can: CanFn): boolean {
+  if (link.anyModule) return link.anyModule.some((module) => can(module));
   return !link.module || can(link.module);
 }
 

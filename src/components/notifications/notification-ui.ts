@@ -36,7 +36,7 @@ export function hrefForNotification(n: Notification): string {
   if (n.entityType === NOTIFICATION_ENTITY_TYPES.CONVERSATION) {
     return `/dashboard/conversations`;
   }
-  return "/dashboard/outreach";
+  return "/dashboard/prospeccion?tab=campanas";
 }
 
 export function formatRelativeTime(value?: string | null): string {

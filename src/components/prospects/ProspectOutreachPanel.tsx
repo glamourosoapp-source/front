@@ -24,6 +24,7 @@ import {
   Paper,
 } from "@mui/material";
 import { httpClient, getApiErrorMessage } from "@/services/http-client";
+import { TemplatePicker } from "@/components/prospects/TemplatePicker";
 import { useDebounce } from "@/hooks/useDebounce";
 import { formatMxPhone } from "@/utils/format-phone";
 import { ProspectStatusPill, statusMeta, channelLabel } from "@/components/prospects/prospect-status";
@@ -43,6 +44,11 @@ import { toast } from "sonner";
 
 const LAST_IMPORTED_KEY = "lastImportedProspectIds";
 const LAST_TEMPLATE_KEY = "lastOutreachTemplateName";
+
+/** replied/converted ya avanzaron en el funnel: no se vuelven a contactar. */
+function isContactable(status?: string): boolean {
+  return status !== PROSPECT_STATUS.REPLIED && status !== PROSPECT_STATUS.CONVERTED;
+}
 
 type StatusFilter = "new" | "all" | "failed";
 
@@ -162,16 +168,21 @@ export function ProspectOutreachPanel({ onSelectionChange, onContacted }: Prospe
     );
   }, [prospects, debouncedSearch]);
 
+  const contactableProspects = useMemo(
+    () => visibleProspects.filter((p) => isContactable(p.status)),
+    [visibleProspects]
+  );
+
   const allVisibleSelected =
-    visibleProspects.length > 0 && visibleProspects.every((p) => selectedIds.has(p.id));
+    contactableProspects.length > 0 && contactableProspects.every((p) => selectedIds.has(p.id));
 
   function toggleAll() {
     setSelectedIds((prev) => {
       const next = new Set(prev);
       if (allVisibleSelected) {
-        visibleProspects.forEach((p) => next.delete(p.id));
+        contactableProspects.forEach((p) => next.delete(p.id));
       } else {
-        visibleProspects.forEach((p) => next.add(p.id));
+        contactableProspects.forEach((p) => next.add(p.id));
       }
       return next;
     });
@@ -294,14 +305,10 @@ export function ProspectOutreachPanel({ onSelectionChange, onContacted }: Prospe
           </FormControl>
 
           {showWhatsApp && (
-            <TextField
-              label="Plantilla Meta aprobada (Kapso)"
-              placeholder="nombre_plantilla"
+            <TemplatePicker
               value={templateName}
-              onChange={(e) => setTemplateName(e.target.value)}
-              helperText="Nombre exacto de la plantilla aprobada en Meta. WhatsApp solo permite iniciar conversacion con plantilla."
-              size="small"
-              fullWidth
+              onChange={setTemplateName}
+              helperText="WhatsApp solo permite iniciar conversacion con una plantilla aprobada por Meta."
               required
             />
           )}
@@ -350,10 +357,10 @@ export function ProspectOutreachPanel({ onSelectionChange, onContacted }: Prospe
                   <Checkbox
                     checked={allVisibleSelected}
                     indeterminate={
-                      visibleProspects.some((p) => selectedIds.has(p.id)) && !allVisibleSelected
+                      contactableProspects.some((p) => selectedIds.has(p.id)) && !allVisibleSelected
                     }
                     onChange={toggleAll}
-                    disabled={listLoading || visibleProspects.length === 0}
+                    disabled={listLoading || contactableProspects.length === 0}
                   />
                 </TableCell>
                 <TableCell>Negocio</TableCell>
@@ -378,7 +385,7 @@ export function ProspectOutreachPanel({ onSelectionChange, onContacted }: Prospe
                 <TableRow>
                   <TableCell colSpan={5} align="center" sx={{ py: 5, color: "text.secondary" }}>
                     {prospects.length === 0
-                      ? "No hay prospectos en este filtro. Importa desde Prospectos IA."
+                      ? "No hay prospectos en este filtro. Importa negocios en la pestana Buscar negocios."
                       : "Ningun prospecto coincide con tu busqueda."}
                   </TableCell>
                 </TableRow>
@@ -389,6 +396,7 @@ export function ProspectOutreachPanel({ onSelectionChange, onContacted }: Prospe
                       <Checkbox
                         checked={selectedIds.has(row.id)}
                         onChange={() => toggleOne(row.id)}
+                        disabled={!isContactable(row.status)}
                       />
                     </TableCell>
                     <TableCell>{row.name}</TableCell>

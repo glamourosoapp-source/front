@@ -9,6 +9,7 @@ import { CustomerFormDialog } from "@/components/customers/CustomerFormDialog";
 import { DataTable } from "@/components/ui/DataTable";
 import { DateFilterField } from "@/components/ui/DateFilterField";
 import { PAYMENT_STATUS_OPTIONS, paymentStatusLabel } from "@/constants/orders";
+import { DetailField } from "@/components/ui/DetailField";
 import { httpClient } from "@/services/http-client";
 import { usePermissions } from "@/lib/permissions";
 import { Customer, ListResponse, Order, CustomerLocation } from "@/types";
@@ -33,17 +34,6 @@ function formatOrderDate(value: string | Date | undefined) {
 
 function money(value: string | number | undefined) {
   return `$${Number(value || 0).toFixed(2)}`;
-}
-
-function DetailField({ label, value }: { label: string; value: React.ReactNode }) {
-  return (
-    <div>
-      <Typography variant="caption" sx={{ color: "var(--muted)", fontWeight: 700, textTransform: "uppercase" }}>
-        {label}
-      </Typography>
-      <Typography sx={{ color: "var(--glam-navy)", fontWeight: 600, mt: 0.5 }}>{value}</Typography>
-    </div>
-  );
 }
 
 export default function CustomerDetailPage() {

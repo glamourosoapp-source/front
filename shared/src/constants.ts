@@ -43,6 +43,8 @@ export const PROSPECT_STATUS = {
   NEW: "new",
   CONTACTED_WHATSAPP: "contacted_whatsapp",
   CONTACTED_VOICE: "contacted_voice",
+  REPLIED: "replied",
+  CONVERTED: "converted",
   FAILED: "failed",
 } as const;
 
@@ -99,8 +101,8 @@ export const PERMISSION_MODULES = [
   { key: "customers", label: "Clientes" },
   { key: "products", label: "Catalogo" },
   { key: "conversations", label: "Conversaciones" },
-  { key: "prospects", label: "Prospectos IA" },
-  { key: "outreach", label: "Outreach" },
+  { key: "prospects", label: "Prospeccion: buscar negocios" },
+  { key: "outreach", label: "Prospeccion: contactar y campanas" },
   { key: "agent", label: "Metricas IA" },
   { key: "faqs", label: "FAQs IA" },
   { key: "notifications", label: "Notificaciones" },

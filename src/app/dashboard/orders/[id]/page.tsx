@@ -18,6 +18,7 @@ import { ArrowLeft, Download, Pencil, Printer } from "lucide-react";
 import { OrderEditDialog } from "@/components/orders/OrderEditDialog";
 import { OrderPrintSheet } from "@/components/orders/OrderPrintSheet";
 import { orderCreatorLabel, paymentMethodLabel, paymentStatusLabel } from "@/constants/orders";
+import { DetailField } from "@/components/ui/DetailField";
 import { httpClient } from "@/services/http-client";
 import { usePermissions } from "@/lib/permissions";
 import { exportOrderToXlsx } from "@/lib/export-order-xlsx";
@@ -67,17 +68,6 @@ type OrderDetail = Omit<Order, "items"> & {
     notes?: string | null;
   }>;
 };
-
-function DetailField({ label, value }: { label: string; value: React.ReactNode }) {
-  return (
-    <div>
-      <Typography variant="caption" sx={{ color: "var(--muted)", fontWeight: 700, textTransform: "uppercase" }}>
-        {label}
-      </Typography>
-      <Typography sx={{ color: "var(--glam-navy)", fontWeight: 600, mt: 0.5 }}>{value}</Typography>
-    </div>
-  );
-}
 
 export default function OrderDetailPage() {
   const params = useParams<{ id: string }>();
