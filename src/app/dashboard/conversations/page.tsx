@@ -542,7 +542,9 @@ export default function ConversationsPage() {
                         <div className={fromCustomer ? "bubble received" : fromAgent ? "bubble agent" : "bubble staff"}>
                           <span className="bubble-role">{roleLabel(message.role)}</span>
                           {media && <MediaBubble media={media} onImageClick={setLightboxUrl} />}
-                          {message.content && !(media && message.content === `[${media.type}]`) && (
+                          {/* Con media visible, un contenido tipo "[imagen]" o
+                              "[Imagen: foto.jpg]" es placeholder, no caption. */}
+                          {message.content && !(media && /^\[[^\]]*\]$/.test(message.content.trim())) && (
                             <p>{message.content}</p>
                           )}
                           <time>{formatTime(message.createdAt)}</time>
