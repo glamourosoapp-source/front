@@ -367,10 +367,17 @@ export const outreachHealthResponseSchema = z.object({
   usedToday: z.number().int(),
   queuedTotal: z.number().int(),
   nextScheduledAt: z.string().nullable(),
+  /** Rampa de calentamiento: en qué semana va y cuándo sube el cupo. */
   warmup: z.object({
     enabled: z.boolean(),
     effectiveCap: z.number().int(),
     maxCap: z.number().int(),
+    week: z.number().int(),
+    totalWeeks: z.number().int(),
+    atFullCapacity: z.boolean(),
+    startedAt: z.string().nullable(),
+    nextIncreaseAt: z.string().nullable(),
+    nextCap: z.number().int(),
   }),
   suppressedCount: z.number().int(),
   /** Último quality rating de Meta (GREEN/YELLOW/RED) o null sin snapshot. */

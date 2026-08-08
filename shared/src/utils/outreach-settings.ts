@@ -105,6 +105,8 @@ export function resolveOutreachSettings(raw: unknown): OutreachSettings {
   };
 }
 
+const WEEK_MS = 7 * 24 * 60 * 60 * 1000;
+
 /**
  * Cupo diario efectivo considerando el warm-up: crece con las semanas
  * transcurridas desde el PRIMER envío frío exitoso de la organización.
@@ -117,8 +119,86 @@ export function effectiveDailyCap(
   if (!settings.warmup.enabled) return settings.dailyCap;
   const { startCap, weeklyIncrease, maxCap } = settings.warmup;
   if (!firstSendAt) return Math.min(startCap, settings.dailyCap, maxCap);
-  const msElapsed = now.getTime() - firstSendAt.getTime();
-  const weeks = Math.max(0, Math.floor(msElapsed / (7 * 24 * 60 * 60 * 1000)));
+  const weeks = Math.max(0, Math.floor((now.getTime() - firstSendAt.getTime()) / WEEK_MS));
   const cap = startCap + weeks * weeklyIncrease;
   return Math.min(cap, maxCap, settings.dailyCap);
+}
+
+/**
+ * Estado de la rampa de calentamiento, para mostrarlo en el dashboard: en qué
+ * semana va, cuánto falta para la capacidad plena y cuándo sube el cupo.
+ *
+ * El techo real es `min(warmup.maxCap, dailyCap)`: si alguien baja `dailyCap`
+ * por debajo de `maxCap`, la rampa termina ahí y no en el maxCap teórico.
+ */
+export interface WarmupProgress {
+  enabled: boolean;
+  /** Cupo diario de hoy. */
+  effectiveCap: number;
+  /** Techo al que llega la rampa. */
+  maxCap: number;
+  /** Semana de la rampa, 1-based. */
+  week: number;
+  /** Semanas totales hasta la capacidad plena. */
+  totalWeeks: number;
+  atFullCapacity: boolean;
+  /** Primer envío frío exitoso: la rampa cuenta desde ahí. Null si aún no arranca. */
+  startedAt: string | null;
+  /** Cuándo sube el cupo la próxima vez (null si ya está al tope o no arrancó). */
+  nextIncreaseAt: string | null;
+  /** Cupo tras el próximo aumento. */
+  nextCap: number;
+}
+
+export function warmupProgress(
+  settings: OutreachSettings,
+  firstSendAt: Date | null,
+  now: Date
+): WarmupProgress {
+  const { enabled, startCap, weeklyIncrease, maxCap } = settings.warmup;
+  const ceiling = Math.min(maxCap, settings.dailyCap);
+  const effectiveCap = effectiveDailyCap(settings, firstSendAt, now);
+
+  if (!enabled) {
+    return {
+      enabled: false,
+      effectiveCap,
+      maxCap: ceiling,
+      week: 1,
+      totalWeeks: 1,
+      atFullCapacity: true,
+      startedAt: firstSendAt?.toISOString() ?? null,
+      nextIncreaseAt: null,
+      nextCap: effectiveCap,
+    };
+  }
+
+  // Semanas de aumento necesarias para alcanzar el techo desde el cupo inicial.
+  const missing = Math.max(0, ceiling - Math.min(startCap, ceiling));
+  const increases = weeklyIncrease > 0 ? Math.ceil(missing / weeklyIncrease) : 0;
+  const totalWeeks = increases + 1;
+
+  const weeksElapsed = firstSendAt
+    ? Math.max(0, Math.floor((now.getTime() - firstSendAt.getTime()) / WEEK_MS))
+    : 0;
+  const week = Math.min(weeksElapsed + 1, totalWeeks);
+  const atFullCapacity = effectiveCap >= ceiling;
+
+  return {
+    enabled: true,
+    effectiveCap,
+    maxCap: ceiling,
+    week,
+    totalWeeks,
+    atFullCapacity,
+    startedAt: firstSendAt?.toISOString() ?? null,
+    // Sin envíos aún la rampa no ha arrancado: no hay fecha que prometer.
+    nextIncreaseAt:
+      atFullCapacity || !firstSendAt
+        ? null
+        : new Date(firstSendAt.getTime() + (weeksElapsed + 1) * WEEK_MS).toISOString(),
+    nextCap: atFullCapacity
+      ? effectiveCap
+      : Math.min(startCap + (weeksElapsed + 1) * weeklyIncrease, ceiling),
+  };
 }
