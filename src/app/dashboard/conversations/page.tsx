@@ -536,7 +536,7 @@ export default function ConversationsPage() {
                   const showDay =
                     index === 0 || dayLabel(messages[index - 1].createdAt) !== dayLabel(message.createdAt);
                   return (
-                    <div key={message.id}>
+                    <div key={message.id} className="message-group">
                       {showDay && <div className="day-divider">{dayLabel(message.createdAt)}</div>}
                       <article className={fromCustomer ? "message-row incoming" : "message-row outgoing"}>
                         {fromCustomer && <span className="avatar mini">{initials(selectedName)}</span>}

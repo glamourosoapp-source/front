@@ -497,6 +497,15 @@
   line-height: 1.4;
 }
 
+/* Wrapper por mensaje (divisor de dia + fila). Sin esta columna flex, el
+   align-self de .message-row no aplica y las burbujas largas del agente se
+   pegan a la izquierda en vez de alinearse a la derecha como en WhatsApp. */
+.message-group {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
 .message-row {
   display: flex;
   gap: 10px;
