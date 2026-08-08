@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useCallback, useEffect, useState } from "react";
+import { FormEvent, useCallback, useEffect, useRef, useState } from "react";
 import {
   Autocomplete,
   Button,
@@ -45,6 +45,7 @@ export function TemplatePicker({ value, onChange, helperText, size = "small", re
   const [loadError, setLoadError] = useState<string | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
   const [creating, setCreating] = useState(false);
+  const bodyRef = useRef<HTMLTextAreaElement | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -225,14 +226,35 @@ export function TemplatePicker({ value, onChange, helperText, size = "small", re
             </div>
             <TextField
               name="bodyText"
+              inputRef={bodyRef}
               label="Mensaje"
-              helperText="Texto que recibira el prospecto. Sin variables; escribe el mensaje completo."
+              helperText="Usa {{1}} donde quieras el nombre del negocio. Ej: Hola {{1}}, somos Glamouroso…"
               fullWidth
               required
               multiline
               minRows={4}
               inputProps={{ minLength: 10, maxLength: 1024 }}
             />
+            <div className="flex items-center gap-2">
+              <Button
+                size="small"
+                variant="text"
+                onClick={() => {
+                  const input = bodyRef.current;
+                  if (!input) return;
+                  const start = input.selectionStart ?? input.value.length;
+                  const end = input.selectionEnd ?? input.value.length;
+                  input.value = `${input.value.slice(0, start)}{{1}}${input.value.slice(end)}`;
+                  input.focus();
+                  input.setSelectionRange(start + 5, start + 5);
+                }}
+              >
+                + Insertar nombre del negocio
+              </Button>
+              <span className="page-kicker" style={{ margin: 0 }}>
+                Los mensajes personalizados con el nombre reciben más respuestas.
+              </span>
+            </div>
           </DialogContent>
           <DialogActions>
             <Button onClick={() => setCreateOpen(false)} disabled={creating}>

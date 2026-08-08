@@ -4,11 +4,12 @@ import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 import { Button, Skeleton } from "@mui/material";
-import { ArrowLeft, UserCheck } from "lucide-react";
+import { ArrowLeft, Ban, MessageCircle, UserCheck } from "lucide-react";
 import { DataTable } from "@/components/ui/DataTable";
 import { DetailField } from "@/components/ui/DetailField";
 import { ProspectStatusPill, channelLabel } from "@/components/prospects/prospect-status";
 import { httpClient, getApiErrorMessage } from "@/services/http-client";
+import { usePermissions } from "@/lib/permissions";
 import { formatMxPhone } from "@/utils/format-phone";
 import { OUTREACH_ATTEMPT_STATUS } from "@glamouroso/shared/constants";
 import { toast } from "sonner";
@@ -24,6 +25,7 @@ interface OutreachAttemptRow {
 interface ProspectDetail {
   id: string;
   name: string;
+  suppressed?: boolean;
   phone?: string | null;
   address?: string | null;
   city?: string | null;
@@ -31,6 +33,7 @@ interface ProspectDetail {
   source?: string;
   status?: string;
   customerId?: string | null;
+  conversationId?: string | null;
   convertedAt?: string | null;
   createdAt?: string;
   metadata?: Record<string, unknown> | null;
@@ -68,9 +71,11 @@ function attemptStatusLabel(status: string) {
 export default function ProspectDetailPage() {
   const params = useParams<{ id: string }>();
   const prospectId = params.id;
+  const { can } = usePermissions();
 
   const [prospect, setProspect] = useState<ProspectDetail | null>(null);
   const [loading, setLoading] = useState(true);
+  const [suppressing, setSuppressing] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -130,20 +135,58 @@ export default function ProspectDetailPage() {
           <p className="page-kicker">
             <span className="flex items-center gap-2">
               <ProspectStatusPill status={prospect.status} />
+              {prospect.suppressed && <span className="pill-danger">No contactar</span>}
               {searchQuery ? <span>Importado con: “{searchQuery}”</span> : null}
             </span>
           </p>
         </div>
-        {prospect.customer && (
-          <Button
-            component={Link}
-            href={`/dashboard/customers/${prospect.customer.id}`}
-            variant="contained"
-            startIcon={<UserCheck size={16} />}
-          >
-            Ver cliente
-          </Button>
-        )}
+        <div className="flex items-center gap-2">
+          {can("outreach", "update") && prospect.phone && !prospect.suppressed && (
+            <Button
+              variant="outlined"
+              color="error"
+              startIcon={<Ban size={16} />}
+              disabled={suppressing}
+              onClick={async () => {
+                setSuppressing(true);
+                try {
+                  await httpClient.post("/outreach/suppressions", {
+                    phone: prospect.phone,
+                    notes: `Desde detalle de prospecto: ${prospect.name}`,
+                  });
+                  toast.success("Agregado a la lista de no contactar");
+                  await load();
+                } catch (error) {
+                  toast.error(getApiErrorMessage(error, "No se pudo agregar a la lista"));
+                } finally {
+                  setSuppressing(false);
+                }
+              }}
+            >
+              No contactar
+            </Button>
+          )}
+          {prospect.conversationId && (
+            <Button
+              component={Link}
+              href={`/dashboard/conversations?open=${prospect.conversationId}`}
+              variant="outlined"
+              startIcon={<MessageCircle size={16} />}
+            >
+              Ver conversación
+            </Button>
+          )}
+          {prospect.customer && (
+            <Button
+              component={Link}
+              href={`/dashboard/customers/${prospect.customer.id}`}
+              variant="contained"
+              startIcon={<UserCheck size={16} />}
+            >
+              Ver cliente
+            </Button>
+          )}
+        </div>
       </div>
 
       <section className="panel p-5">

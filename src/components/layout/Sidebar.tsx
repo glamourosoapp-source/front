@@ -15,6 +15,7 @@ import {
   Bell,
   MessageCircle,
   PackageCheck,
+  RotateCcw,
   Settings,
   Sparkles,
   UserCog,
@@ -51,12 +52,12 @@ type NavSection = {
 const sections: NavSection[] = [
   {
     id: "operacion",
-    label: "Operacion",
+    label: "Operación",
     links: [
       { href: "/dashboard", label: "Overview", icon: BarChart3, module: "dashboard" },
       { href: "/dashboard/orders", label: "Pedidos", icon: PackageCheck, module: "orders" },
       { href: "/dashboard/customers", label: "Clientes", icon: Users, module: "customers" },
-      { href: "/dashboard/products", label: "Catalogo", icon: Boxes, module: "products" },
+      { href: "/dashboard/products", label: "Catálogo", icon: Boxes, module: "products" },
     ],
   },
   {
@@ -66,9 +67,15 @@ const sections: NavSection[] = [
       { href: "/dashboard/conversations", label: "Conversaciones", icon: MessageCircle, module: "conversations" },
       {
         href: "/dashboard/prospeccion",
-        label: "Prospeccion",
+        label: "Prospección",
         icon: Sparkles,
         anyModule: ["prospects", "outreach"],
+      },
+      {
+        href: "/dashboard/reactivacion",
+        label: "Reactivación",
+        icon: RotateCcw,
+        module: "reactivation",
       },
     ],
     groups: [
@@ -77,7 +84,7 @@ const sections: NavSection[] = [
         label: "Agente IA",
         icon: Bot,
         links: [
-          { href: "/dashboard/agent", label: "Metricas IA", icon: BarChart3, module: "agent" },
+          { href: "/dashboard/agent", label: "Métricas IA", icon: BarChart3, module: "agent" },
           { href: "/dashboard/faqs", label: "FAQs IA", icon: Bot, module: "faqs" },
         ],
       },
@@ -89,7 +96,7 @@ const sections: NavSection[] = [
     links: [
       { href: "/dashboard/notifications", label: "Notificaciones", icon: Bell, module: "notifications" },
       { href: "/dashboard/users", label: "Usuarios", icon: UserCog, module: "users" },
-      { href: "/dashboard/settings", label: "Configuracion", icon: Settings, module: "settings" },
+      { href: "/dashboard/settings", label: "Configuración", icon: Settings, module: "settings" },
       { href: "#", label: "Soporte", icon: Headphones },
     ],
   },
@@ -369,7 +376,7 @@ export function Sidebar() {
           title="Cerrar sesión"
         >
           <LogOut size={16} style={{ minWidth: "16px" }} />
-          <span className="nav-label">Cerrar sesion</span>
+          <span className="nav-label">Cerrar sesión</span>
         </button>
       </div>
     </aside>

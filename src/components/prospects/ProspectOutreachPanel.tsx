@@ -68,6 +68,13 @@ interface ResultRow {
   error?: string | null;
 }
 
+/** Resultado del envío: resumen de cola de WhatsApp + detalle de llamadas. */
+interface OutreachResultState {
+  whatsapp: ProspectOutreachResponse["whatsapp"] | null;
+  voiceRows: ResultRow[];
+  skipped: ProspectOutreachResponse["skipped"];
+}
+
 interface ProspectOutreachPanelProps {
   onSelectionChange?: (ids: string[]) => void;
   onContacted?: () => void;
@@ -84,7 +91,7 @@ export function ProspectOutreachPanel({ onSelectionChange, onContacted }: Prospe
   const [listLoading, setListLoading] = useState(true);
   const [searchText, setSearchText] = useState("");
   const debouncedSearch = useDebounce(searchText, 250);
-  const [resultRows, setResultRows] = useState<ResultRow[] | null>(null);
+  const [result, setResult] = useState<OutreachResultState | null>(null);
   const [attempts, setAttempts] = useState<ProspectOutreachAttempt[]>([]);
 
   const showWhatsApp = channel === OUTREACH_CHANNEL.WHATSAPP || channel === OUTREACH_CHANNEL.BOTH;
@@ -218,38 +225,38 @@ export function ProspectOutreachPanel({ onSelectionChange, onContacted }: Prospe
     setLoading(true);
     const toastId = toast.loading(`Contactando ${selectedIds.size} prospectos...`);
     try {
-      const result = await httpClient.post<ProspectOutreachResponse>("/prospects/outreach", {
+      const response = await httpClient.post<ProspectOutreachResponse>("/prospects/outreach", {
         prospectIds: Array.from(selectedIds),
         channel,
         templateName: showWhatsApp ? templateName.trim() : undefined,
         voiceScript: showVoice ? voiceScript.trim() : undefined,
       });
 
-      const rows: ResultRow[] = [];
-      for (const d of result.outreach.whatsapp?.details ?? []) {
-        rows.push({
-          prospectId: d.prospectId,
-          name: nameById.get(d.prospectId) || "Prospecto",
-          channel: OUTREACH_CHANNEL.WHATSAPP,
-          status: d.status,
-          error: d.error,
-        });
-      }
-      for (const d of result.outreach.voice?.details ?? []) {
-        rows.push({
-          prospectId: d.prospectId,
-          name: nameById.get(d.prospectId) || "Prospecto",
-          channel: OUTREACH_CHANNEL.VOICE,
-          status: d.status,
-          error: d.error,
-        });
-      }
-      setResultRows(rows);
+      const voiceRows: ResultRow[] = (response.voice?.details ?? []).map((d) => ({
+        prospectId: d.prospectId,
+        name: nameById.get(d.prospectId) || "Prospecto",
+        channel: OUTREACH_CHANNEL.VOICE,
+        status: d.status,
+        error: d.error,
+      }));
+      setResult({ whatsapp: response.whatsapp ?? null, voiceRows, skipped: response.skipped });
 
-      toast.success(
-        `Contactados: ${result.contacted} · Omitidos: ${result.skipped.alreadyContacted} ya contactados, ${result.skipped.noPhone} sin telefono`,
-        { id: toastId }
-      );
+      const parts: string[] = [];
+      if (response.whatsapp) {
+        parts.push(
+          response.whatsapp.scheduledLater > 0
+            ? `WhatsApp: ${response.whatsapp.queued} en cola (${response.whatsapp.scheduledToday} hoy, ${response.whatsapp.scheduledLater} después)`
+            : `WhatsApp: ${response.whatsapp.queued} en cola`
+        );
+      }
+      if (response.voice) parts.push(`Llamadas: ${response.voice.sent} realizadas`);
+      const skippedTotal =
+        response.skipped.alreadyContacted +
+        response.skipped.noPhone +
+        response.skipped.suppressed +
+        response.skipped.alreadyQueued;
+      if (skippedTotal > 0) parts.push(`${skippedTotal} omitidos`);
+      toast.success(parts.join(" · ") || "Sin envíos", { id: toastId });
       if (showWhatsApp && templateName.trim()) {
         try {
           localStorage.setItem(LAST_TEMPLATE_KEY, templateName.trim());
@@ -281,7 +288,7 @@ export function ProspectOutreachPanel({ onSelectionChange, onContacted }: Prospe
       <div className="mb-4 flex flex-wrap items-end justify-between gap-3">
         <div>
           <h2>Contactar prospectos</h2>
-          <p className="page-kicker">Elige a quien contactar y el canal (WhatsApp, llamada o ambos).</p>
+          <p className="page-kicker">Elige a quién contactar y el canal (WhatsApp, llamada o ambos).</p>
         </div>
         <span className="pill">{selectedIds.size} seleccionados</span>
       </div>
@@ -308,7 +315,7 @@ export function ProspectOutreachPanel({ onSelectionChange, onContacted }: Prospe
             <TemplatePicker
               value={templateName}
               onChange={setTemplateName}
-              helperText="WhatsApp solo permite iniciar conversacion con una plantilla aprobada por Meta."
+              helperText="WhatsApp solo permite iniciar conversación con una plantilla aprobada por Meta."
               required
             />
           )}
@@ -318,7 +325,7 @@ export function ProspectOutreachPanel({ onSelectionChange, onContacted }: Prospe
               label="Script de llamada (TTS)"
               value={voiceScript}
               onChange={(e) => setVoiceScript(e.target.value)}
-              helperText="Texto que la llamada automatica leera en voz alta al contestar."
+              helperText="Texto que la llamada automática leerá en voz alta al contestar."
               multiline
               minRows={2}
               size="small"
@@ -343,7 +350,7 @@ export function ProspectOutreachPanel({ onSelectionChange, onContacted }: Prospe
           <input
             className="input"
             style={{ maxWidth: 280 }}
-            placeholder="Buscar negocio, telefono o ciudad"
+            placeholder="Buscar negocio, teléfono o ciudad"
             value={searchText}
             onChange={(e) => setSearchText(e.target.value)}
           />
@@ -364,7 +371,7 @@ export function ProspectOutreachPanel({ onSelectionChange, onContacted }: Prospe
                   />
                 </TableCell>
                 <TableCell>Negocio</TableCell>
-                <TableCell>Telefono</TableCell>
+                <TableCell>Teléfono</TableCell>
                 <TableCell>Ciudad</TableCell>
                 <TableCell>Estado</TableCell>
               </TableRow>
@@ -385,8 +392,8 @@ export function ProspectOutreachPanel({ onSelectionChange, onContacted }: Prospe
                 <TableRow>
                   <TableCell colSpan={5} align="center" sx={{ py: 5, color: "text.secondary" }}>
                     {prospects.length === 0
-                      ? "No hay prospectos en este filtro. Importa negocios en la pestana Buscar negocios."
-                      : "Ningun prospecto coincide con tu busqueda."}
+                      ? "No hay prospectos en este filtro. Importa negocios en la pestaña Buscar negocios."
+                      : "Ningún prospecto coincide con tu búsqueda."}
                   </TableCell>
                 </TableRow>
               ) : (
@@ -470,51 +477,86 @@ export function ProspectOutreachPanel({ onSelectionChange, onContacted }: Prospe
         </div>
       )}
 
-      <Dialog open={resultRows !== null} onClose={() => setResultRows(null)} fullWidth maxWidth="sm">
-        <DialogTitle>Resultado del envio</DialogTitle>
+      <Dialog open={result !== null} onClose={() => setResult(null)} fullWidth maxWidth="sm">
+        <DialogTitle>Resultado del envío</DialogTitle>
         <DialogContent dividers>
-          {resultRows && resultRows.length === 0 ? (
-            <p className="page-kicker" style={{ margin: 0 }}>
-              No se realizaron envios (prospectos ya contactados o sin telefono valido).
-            </p>
-          ) : (
-            <Table size="small">
-              <TableHead>
-                <TableRow>
-                  <TableCell>Negocio</TableCell>
-                  <TableCell>Canal</TableCell>
-                  <TableCell>Resultado</TableCell>
-                </TableRow>
-              </TableHead>
-              <TableBody>
-                {resultRows?.map((r, i) => (
-                  <TableRow key={`${r.prospectId}-${r.channel}-${i}`}>
-                    <TableCell>{r.name}</TableCell>
-                    <TableCell>{channelLabel(r.channel)}</TableCell>
-                    <TableCell>
-                      <span className="flex flex-col gap-1">
-                        <span
-                          className={
-                            r.status === OUTREACH_ATTEMPT_STATUS.SENT
-                              ? "pill-success"
-                              : "pill-danger"
-                          }
-                        >
-                          {r.status === OUTREACH_ATTEMPT_STATUS.SENT ? "Enviado" : "Fallido"}
-                        </span>
-                        {r.error && (
-                          <span style={{ fontSize: 12, color: "var(--muted)" }}>{r.error}</span>
-                        )}
-                      </span>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
+          {result && (
+            <div className="grid gap-3">
+              {result.whatsapp && (
+                <div>
+                  <strong>WhatsApp: {result.whatsapp.queued} mensajes en cola</strong>
+                  <p className="page-kicker" style={{ margin: "4px 0 0" }}>
+                    {result.whatsapp.queued === 0
+                      ? "Nada nuevo por enviar (revisa los omitidos abajo)."
+                      : `${result.whatsapp.scheduledToday} salen hoy` +
+                        (result.whatsapp.scheduledLater > 0
+                          ? ` y ${result.whatsapp.scheduledLater} en los próximos días (cupo diario para cuidar el número).`
+                          : ".") +
+                        " El guardián los envía espaciados y verás cada resultado en Actividad reciente."}
+                  </p>
+                </div>
+              )}
+
+              {result.voiceRows.length > 0 && (
+                <Table size="small">
+                  <TableHead>
+                    <TableRow>
+                      <TableCell>Negocio</TableCell>
+                      <TableCell>Canal</TableCell>
+                      <TableCell>Resultado</TableCell>
+                    </TableRow>
+                  </TableHead>
+                  <TableBody>
+                    {result.voiceRows.map((r, i) => (
+                      <TableRow key={`${r.prospectId}-${r.channel}-${i}`}>
+                        <TableCell>{r.name}</TableCell>
+                        <TableCell>{channelLabel(r.channel)}</TableCell>
+                        <TableCell>
+                          <span className="flex flex-col gap-1">
+                            <span
+                              className={
+                                r.status === OUTREACH_ATTEMPT_STATUS.SENT
+                                  ? "pill-success"
+                                  : "pill-danger"
+                              }
+                            >
+                              {r.status === OUTREACH_ATTEMPT_STATUS.SENT ? "Enviado" : "Fallido"}
+                            </span>
+                            {r.error && (
+                              <span style={{ fontSize: 12, color: "var(--muted)" }}>{r.error}</span>
+                            )}
+                          </span>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              )}
+
+              {(result.skipped.alreadyContacted > 0 ||
+                result.skipped.noPhone > 0 ||
+                result.skipped.suppressed > 0 ||
+                result.skipped.alreadyQueued > 0) && (
+                <div className="flex flex-wrap gap-2">
+                  {result.skipped.alreadyContacted > 0 && (
+                    <span className="pill-muted">{result.skipped.alreadyContacted} ya contactados</span>
+                  )}
+                  {result.skipped.noPhone > 0 && (
+                    <span className="pill warning">{result.skipped.noPhone} sin teléfono</span>
+                  )}
+                  {result.skipped.suppressed > 0 && (
+                    <span className="pill-danger">{result.skipped.suppressed} en no contactar</span>
+                  )}
+                  {result.skipped.alreadyQueued > 0 && (
+                    <span className="pill-muted">{result.skipped.alreadyQueued} ya en cola</span>
+                  )}
+                </div>
+              )}
+            </div>
           )}
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setResultRows(null)} variant="contained">
+          <Button onClick={() => setResult(null)} variant="contained">
             Entendido
           </Button>
         </DialogActions>

@@ -150,6 +150,17 @@ export default function ConversationsPage() {
     setLoading(true);
     const rows = await httpClient.get<Conversation[]>("/conversations");
     setConversations(rows);
+    // Deep-link desde otras vistas (ej. detalle de prospecto): ?open=<id>.
+    const requested = new URLSearchParams(window.location.search).get("open");
+    if (!selectedRef.current && requested) {
+      try {
+        await openConversation(requested);
+        setLoading(false);
+        return;
+      } catch {
+        // conversación inexistente: cae al comportamiento normal
+      }
+    }
     if (!selectedRef.current && rows[0]) await openConversation(rows[0].id);
     setLoading(false);
     // eslint-disable-next-line react-hooks/exhaustive-deps

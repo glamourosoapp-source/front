@@ -9,9 +9,10 @@ const STATUS_META: Record<string, StatusMeta> = {
   [PROSPECT_STATUS.NEW]: { label: "Nuevo", className: "pill" },
   [PROSPECT_STATUS.CONTACTED_WHATSAPP]: { label: "WhatsApp enviado", className: "pill warning" },
   [PROSPECT_STATUS.CONTACTED_VOICE]: { label: "Llamado", className: "pill warning" },
-  [PROSPECT_STATUS.REPLIED]: { label: "Respondio", className: "pill-success" },
+  [PROSPECT_STATUS.REPLIED]: { label: "Respondió", className: "pill-success" },
   [PROSPECT_STATUS.CONVERTED]: { label: "Convertido", className: "pill-success" },
   [PROSPECT_STATUS.FAILED]: { label: "Fallido", className: "pill-danger" },
+  [PROSPECT_STATUS.EXHAUSTED]: { label: "Sin respuesta", className: "pill-muted" },
 };
 
 export function statusMeta(status?: string | null): StatusMeta {

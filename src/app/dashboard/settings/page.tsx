@@ -13,6 +13,8 @@ import {
   TextField,
 } from "@mui/material";
 import { ShieldAlert } from "lucide-react";
+import { SuppressionListPanel } from "@/components/settings/SuppressionListPanel";
+import { NumberHealthCard } from "@/components/prospects/NumberHealthCard";
 import { httpClient, getApiErrorMessage } from "@/services/http-client";
 import { useAuthStore } from "@/stores/auth.store";
 import { usePermissions } from "@/lib/permissions";
@@ -214,6 +216,11 @@ export default function SettingsPage() {
             </div>
           </div>
         </div>
+      </section>
+
+      <section className="grid gap-4">
+        <NumberHealthCard />
+        <SuppressionListPanel />
       </section>
 
       <Dialog open={deliveryOpen} onClose={() => setDeliveryOpen(false)} fullWidth maxWidth="sm">

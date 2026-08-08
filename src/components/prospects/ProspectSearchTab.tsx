@@ -25,6 +25,7 @@ import { useDebounce } from "@/hooks/useDebounce";
 import { formatMxPhone } from "@/utils/format-phone";
 import { PROSPECT_STATUS } from "@glamouroso/shared/constants";
 import type {
+  ProspectBulkCreateResponse,
   ProspectBulkDeleteResponse,
   ProspectImportResponse,
 } from "@glamouroso/shared/schemas/campaign";
@@ -45,10 +46,47 @@ interface ProspectRow {
 }
 
 const PROMPT_SUGGESTIONS = [
-  "Buscame en zona norte de la ciudad de Jalisco ferreterias",
+  "Ferreterías en zona norte de Guadalajara",
   "Encuentra distribuidores de pintura en Guadalajara",
-  "Busca tortillerias en Zapopan",
+  "Busca tortillerías en Zapopan",
 ];
+
+/** Parser CSV mínimo (soporta comillas dobles). Columnas: nombre,telefono,ciudad,giro,direccion */
+function parseCsv(text: string): string[][] {
+  const rows: string[][] = [];
+  let row: string[] = [];
+  let cell = "";
+  let inQuotes = false;
+  for (let i = 0; i < text.length; i += 1) {
+    const ch = text[i];
+    if (inQuotes) {
+      if (ch === '"' && text[i + 1] === '"') {
+        cell += '"';
+        i += 1;
+      } else if (ch === '"') {
+        inQuotes = false;
+      } else {
+        cell += ch;
+      }
+    } else if (ch === '"') {
+      inQuotes = true;
+    } else if (ch === ",") {
+      row.push(cell);
+      cell = "";
+    } else if (ch === "\n" || ch === "\r") {
+      if (ch === "\r" && text[i + 1] === "\n") i += 1;
+      row.push(cell);
+      if (row.some((c) => c.trim() !== "")) rows.push(row);
+      row = [];
+      cell = "";
+    } else {
+      cell += ch;
+    }
+  }
+  row.push(cell);
+  if (row.some((c) => c.trim() !== "")) rows.push(row);
+  return rows;
+}
 
 const SOURCE_LABELS: Record<string, string> = {
   google_places: "Google Places",
@@ -92,15 +130,22 @@ export function ProspectSearchTab({
 
   const canCreate = can("prospects", "create");
   const canDelete = can("prospects", "delete");
+  const [addOpen, setAddOpen] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [importingCsv, setImportingCsv] = useState(false);
 
   const loadProspects = useCallback(async () => {
     setListLoading(true);
     try {
-      const response = await httpClient.get<ListResponse<ProspectRow>>("/prospects", {
-        search: debouncedSearch,
-        page,
-        limit,
-      });
+      // "Solo la última búsqueda" se filtra en el server por ids: si el import
+      // fue grande y cae en varias páginas, el filtro local ocultaría filas.
+      const params: Record<string, string | number> = { search: debouncedSearch, page, limit };
+      if (showOnlyLastImport && lastImportedIds.length) {
+        params.ids = lastImportedIds.slice(0, 100).join(",");
+        params.limit = 100;
+        params.page = 1;
+      }
+      const response = await httpClient.get<ListResponse<ProspectRow>>("/prospects", params);
       setProspects(response.items);
       setTotal(response.total);
       setTotalPages(response.totalPages);
@@ -109,7 +154,7 @@ export function ProspectSearchTab({
     } finally {
       setListLoading(false);
     }
-  }, [debouncedSearch, page, limit]);
+  }, [debouncedSearch, page, limit, showOnlyLastImport, lastImportedIds]);
 
   useEffect(() => {
     setPage(1);
@@ -131,7 +176,7 @@ export function ProspectSearchTab({
   async function handleImport(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!query.trim()) {
-      toast.error("Escribe que tipo de negocios quieres buscar");
+      toast.error("Escribe qué tipo de negocios quieres buscar");
       return;
     }
 
@@ -150,7 +195,8 @@ export function ProspectSearchTab({
       await loadProspects();
       onDataChanged?.();
       toast.success(
-        `${result.imported.length} importados · ${result.skipped.noPhone} sin telefono · ${result.skipped.duplicate} duplicados`,
+        `${result.imported.length} importados · ${result.skipped.noPhone} sin teléfono · ${result.skipped.duplicate} duplicados` +
+          (result.skipped.suppressed ? ` · ${result.skipped.suppressed} excluidos por no contactar` : ""),
         { id: toastId }
       );
     } catch (error) {
@@ -182,9 +228,67 @@ export function ProspectSearchTab({
   }
 
   const lastImportedSet = new Set(lastImportedIds);
-  const visibleProspects = showOnlyLastImport
-    ? prospects.filter((row) => lastImportedSet.has(row.id))
-    : prospects;
+  const visibleProspects = prospects;
+
+  async function handleAddManual(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const form = new FormData(event.currentTarget);
+    setSaving(true);
+    try {
+      await httpClient.post("/prospects", {
+        name: String(form.get("name") || ""),
+        phone: String(form.get("phone") || ""),
+        city: String(form.get("city") || ""),
+        businessType: String(form.get("businessType") || ""),
+        address: String(form.get("address") || ""),
+        source: "manual",
+      });
+      toast.success("Negocio agregado");
+      setAddOpen(false);
+      await loadProspects();
+      onDataChanged?.();
+    } catch (error) {
+      toast.error(getApiErrorMessage(error, "Error al agregar el negocio"));
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function handleCsvFile(file: File) {
+    setImportingCsv(true);
+    const toastId = toast.loading("Importando CSV...");
+    try {
+      const text = await file.text();
+      const parsed = parseCsv(text);
+      if (!parsed.length) throw new Error("El archivo está vacío");
+      // Detecta encabezado (si la primera fila trae "nombre"/"telefono", se salta).
+      const first = parsed[0].map((c) => c.trim().toLowerCase());
+      const hasHeader = first.some((c) => ["nombre", "name", "telefono", "teléfono", "phone"].includes(c));
+      const dataRows = (hasHeader ? parsed.slice(1) : parsed).slice(0, 500);
+      const rows = dataRows
+        .map((cols) => ({
+          name: (cols[0] || "").trim(),
+          phone: (cols[1] || "").trim(),
+          city: (cols[2] || "").trim(),
+          businessType: (cols[3] || "").trim(),
+          address: (cols[4] || "").trim(),
+        }))
+        .filter((r) => r.name.length >= 2);
+      if (!rows.length) throw new Error("No encontré filas válidas (columnas: nombre, teléfono, ciudad, giro, dirección)");
+      const result = await httpClient.post<ProspectBulkCreateResponse>("/prospects/csv-import", { rows });
+      toast.success(
+        `${result.imported} importados · ${result.skipped.duplicate} duplicados · ${result.skipped.noPhone} sin teléfono` +
+          (result.skipped.suppressed ? ` · ${result.skipped.suppressed} excluidos` : ""),
+        { id: toastId }
+      );
+      await loadProspects();
+      onDataChanged?.();
+    } catch (error) {
+      toast.error(getApiErrorMessage(error, "Error al importar el CSV"), { id: toastId });
+    } finally {
+      setImportingCsv(false);
+    }
+  }
 
   return (
     <div className="grid gap-4">
@@ -193,14 +297,14 @@ export function ProspectSearchTab({
           <div className="mb-3">
             <h2>Buscar negocios con IA</h2>
             <p className="page-kicker">
-              Describe a quien buscas y la IA importa negocios con telefono desde Google Places
-              (Mexico). Luego contactalos en la pestana Envio directo.
+              Describe a quién buscas y la IA importa negocios con teléfono desde Google Places
+              (México). Luego contáctalos en la pestaña Envío directo.
             </p>
           </div>
           <form onSubmit={handleImport} className="grid gap-4">
             <TextField
-              label="Que negocios buscas?"
-              placeholder="Ej: ferreterias en zona norte de Guadalajara..."
+              label="¿Qué negocios buscas?"
+              placeholder="Ej: ferreterías en zona norte de Guadalajara..."
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               multiline
@@ -252,12 +356,15 @@ export function ProspectSearchTab({
                 style={{ borderColor: "var(--border)" }}
               >
                 <span className="page-kicker" style={{ margin: 0 }}>
-                  Ultima busqueda: {lastResult.parsed.businessType} en {lastResult.parsed.city}
+                  Última búsqueda: {lastResult.parsed.businessType} en {lastResult.parsed.city}
                   {lastResult.parsed.zone ? ` · ${lastResult.parsed.zone}` : ""}
                 </span>
                 <span className="pill-success">{lastResult.imported.length} importados</span>
-                <span className="pill warning">{lastResult.skipped.noPhone} sin telefono</span>
+                <span className="pill warning">{lastResult.skipped.noPhone} sin teléfono</span>
                 <span className="pill-muted">{lastResult.skipped.duplicate} duplicados</span>
+                {(lastResult.skipped.suppressed ?? 0) > 0 && (
+                  <span className="pill-danger">{lastResult.skipped.suppressed} no contactar</span>
+                )}
               </div>
             )}
           </form>
@@ -270,15 +377,35 @@ export function ProspectSearchTab({
             <h2>Negocios guardados</h2>
             <p className="page-kicker">
               {showOnlyLastImport
-                ? "Mostrando solo la ultima busqueda."
+                ? "Mostrando solo la última búsqueda."
                 : "Haz clic en un negocio para ver su historial completo."}
             </p>
           </div>
           <div className="flex items-center gap-2">
             {showOnlyLastImport && (
               <Button size="small" variant="text" onClick={() => setShowOnlyLastImport(false)}>
-                Ver todos ({total})
+                Ver todos
               </Button>
+            )}
+            {canCreate && (
+              <>
+                <Button size="small" variant="outlined" onClick={() => setAddOpen(true)}>
+                  Agregar negocio
+                </Button>
+                <Button size="small" variant="outlined" component="label" disabled={importingCsv}>
+                  {importingCsv ? "Importando..." : "Importar CSV"}
+                  <input
+                    type="file"
+                    accept=".csv,text/csv"
+                    hidden
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      e.target.value = "";
+                      if (file) void handleCsvFile(file);
+                    }}
+                  />
+                </Button>
+              </>
             )}
             {canDelete && notContactedCount > 0 && (
               <Button
@@ -298,7 +425,7 @@ export function ProspectSearchTab({
         <div className="mb-4">
           <input
             className="input"
-            placeholder="Buscar negocio, telefono o ciudad"
+            placeholder="Buscar negocio, teléfono o ciudad"
             value={searchText}
             onChange={(e) => setSearchText(e.target.value)}
           />
@@ -316,9 +443,9 @@ export function ProspectSearchTab({
             onRowClick={(row) => router.push(`/dashboard/prospeccion/${row.id}`)}
             columns={[
               { key: "name", label: "Negocio" },
-              { key: "phone", label: "Telefono", render: (row) => formatMxPhone(row.phone) },
+              { key: "phone", label: "Teléfono", render: (row) => formatMxPhone(row.phone) },
               { key: "city", label: "Ciudad", render: (row) => row.city || "-" },
-              { key: "address", label: "Direccion", render: (row) => row.address || "-" },
+              { key: "address", label: "Dirección", render: (row) => row.address || "-" },
               {
                 key: "source",
                 label: "Origen",
@@ -352,12 +479,40 @@ export function ProspectSearchTab({
         )}
       </section>
 
+      <Dialog open={addOpen} onClose={() => (saving ? null : setAddOpen(false))} fullWidth maxWidth="sm">
+        <form onSubmit={handleAddManual}>
+          <DialogTitle>Agregar negocio</DialogTitle>
+          <DialogContent className="form-grid" dividers>
+            <TextField name="name" label="Nombre del negocio" fullWidth required autoFocus />
+            <TextField
+              name="phone"
+              label="Teléfono (WhatsApp)"
+              helperText="10 dígitos, ej: 33 1234 5678"
+              fullWidth
+            />
+            <div className="grid gap-3 md:grid-cols-2">
+              <TextField name="city" label="Ciudad" fullWidth />
+              <TextField name="businessType" label="Giro" placeholder="Ej: ferretería" fullWidth />
+            </div>
+            <TextField name="address" label="Dirección" fullWidth />
+          </DialogContent>
+          <DialogActions>
+            <Button onClick={() => setAddOpen(false)} disabled={saving}>
+              Cancelar
+            </Button>
+            <Button type="submit" variant="contained" disabled={saving}>
+              {saving ? "Guardando..." : "Guardar"}
+            </Button>
+          </DialogActions>
+        </form>
+      </Dialog>
+
       <Dialog open={confirmClearOpen} onClose={() => (clearing ? null : setConfirmClearOpen(false))}>
         <DialogTitle>Limpiar prospectos</DialogTitle>
         <DialogContent>
           <DialogContentText>
-            Se eliminaran {notContactedCount} prospectos no contactados (nuevos y fallidos). Los ya
-            contactados se conservan para no perder el historial. Esta accion no se puede deshacer.
+            Se eliminarán {notContactedCount} prospectos no contactados (nuevos y fallidos). Los ya
+            contactados se conservan para no perder el historial. Esta acción no se puede deshacer.
           </DialogContentText>
         </DialogContent>
         <DialogActions>

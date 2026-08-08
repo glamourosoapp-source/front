@@ -1,21 +1,43 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Tab, Tabs } from "@mui/material";
-import { Search, Send, Megaphone, Sparkles, PhoneCall, MessageCircleReply, Trophy } from "lucide-react";
+import Link from "next/link";
+import { Badge, Tab, Tabs } from "@mui/material";
+import {
+  Search,
+  Send,
+  Sparkles,
+  PhoneCall,
+  MessageCircleReply,
+  Trophy,
+  RotateCcw,
+} from "lucide-react";
 import { ProspectSearchTab } from "@/components/prospects/ProspectSearchTab";
 import { ProspectOutreachPanel } from "@/components/prospects/ProspectOutreachPanel";
-import { CampaignsTab } from "@/components/prospects/CampaignsTab";
+import { FollowupTab } from "@/components/prospects/FollowupTab";
+import { NumberHealthCard } from "@/components/prospects/NumberHealthCard";
+import { TemplateStatsPanel } from "@/components/prospects/TemplateStatsPanel";
 import { httpClient } from "@/services/http-client";
 import { usePermissions } from "@/lib/permissions";
+import { OUTBOUND_CONTEXT } from "@glamouroso/shared/constants";
 import type { ProspectMetricsResponse } from "@glamouroso/shared/schemas/campaign";
 
-type TabKey = "buscar" | "contactar" | "campanas";
+type TabKey = "buscar" | "contactar" | "seguimiento";
 
 const emptyMetrics: ProspectMetricsResponse = {
   total: 0,
-  byStatus: { new: 0, contacted_whatsapp: 0, contacted_voice: 0, replied: 0, converted: 0, failed: 0 },
+  byStatus: {
+    new: 0,
+    contacted_whatsapp: 0,
+    contacted_voice: 0,
+    replied: 0,
+    converted: 0,
+    failed: 0,
+    exhausted: 0,
+  },
   contactedToday: 0,
+  everContacted: 0,
+  followupDue: 0,
 };
 
 function initialTab(visible: TabKey[]): TabKey {
@@ -26,14 +48,21 @@ function initialTab(visible: TabKey[]): TabKey {
   return visible[0] ?? "buscar";
 }
 
+/** Las campañas se mudaron al módulo Reactivación; avisar a quien traiga la URL vieja. */
+function cameFromCampaignsUrl(): boolean {
+  if (typeof window === "undefined") return false;
+  return new URLSearchParams(window.location.search).get("tab") === "campanas";
+}
+
 export default function ProspeccionPage() {
   const { can } = usePermissions();
   const [metrics, setMetrics] = useState<ProspectMetricsResponse>(emptyMetrics);
+  const [showCampaignsMoved] = useState(() => cameFromCampaignsUrl());
 
   const visibleTabs = useMemo(() => {
     const tabs: TabKey[] = [];
     if (can("prospects")) tabs.push("buscar");
-    if (can("outreach")) tabs.push("contactar", "campanas");
+    if (can("outreach")) tabs.push("contactar", "seguimiento");
     return tabs;
   }, [can]);
 
@@ -60,20 +89,31 @@ export default function ProspeccionPage() {
     loadMetrics().catch(() => undefined);
   }
 
-  const contactedTotal = metrics.byStatus.contacted_whatsapp + metrics.byStatus.contacted_voice;
   const responsesTotal = metrics.byStatus.replied + metrics.byStatus.converted;
 
   return (
     <div className="page-stack">
       <div className="toolbar">
         <div>
-          <h1 className="page-title">Prospeccion</h1>
+          <h1 className="page-title">Prospección</h1>
           <p className="page-kicker">
-            Encuentra negocios con IA, contactalos por WhatsApp o llamada, y conviertelos en
-            clientes.
+            Encuentra negocios con IA, contáctalos por WhatsApp o llamada, dales seguimiento y
+            conviértelos en clientes.
           </p>
         </div>
       </div>
+
+      {showCampaignsMoved && (
+        <div className="panel p-4 flex flex-wrap items-center justify-between gap-2">
+          <span className="page-kicker" style={{ margin: 0 }}>
+            Las campañas ahora viven en <strong>Reactivación</strong> (clientes que llevan tiempo
+            sin comprar).
+          </span>
+          <Link href="/dashboard/reactivacion" style={{ color: "var(--glam-blue)", fontWeight: 600 }}>
+            Ir a Reactivación →
+          </Link>
+        </div>
+      )}
 
       <section className="grid grid-4">
         <div className="card metric">
@@ -89,9 +129,9 @@ export default function ProspeccionPage() {
             <span>2 · Contactados</span>
             <PhoneCall size={18} style={{ color: "var(--glam-blue)" }} />
           </div>
-          <strong>{contactedTotal}</strong>
+          <strong>{metrics.everContacted}</strong>
           <small>
-            {metrics.contactedToday} hoy · {metrics.byStatus.failed} fallidos
+            {metrics.contactedToday} hoy · {metrics.followupDue} esperan seguimiento
           </small>
         </div>
         <div className="card metric">
@@ -112,6 +152,8 @@ export default function ProspeccionPage() {
         </div>
       </section>
 
+      {visibleTabs.includes("contactar") && <NumberHealthCard compact />}
+
       <section className="panel" style={{ padding: "0 16px" }}>
         <Tabs
           value={tab}
@@ -131,19 +173,27 @@ export default function ProspeccionPage() {
           {visibleTabs.includes("contactar") && (
             <Tab
               value="contactar"
-              label="Envio directo"
+              label="Envío directo"
               icon={<Send size={16} />}
               iconPosition="start"
               sx={{ minHeight: 56 }}
             />
           )}
-          {visibleTabs.includes("campanas") && (
+          {visibleTabs.includes("seguimiento") && (
             <Tab
-              value="campanas"
-              label="Campanas"
-              icon={<Megaphone size={16} />}
+              value="seguimiento"
+              label={
+                <Badge
+                  color="warning"
+                  badgeContent={metrics.followupDue || null}
+                  sx={{ "& .MuiBadge-badge": { right: -12 } }}
+                >
+                  Seguimiento
+                </Badge>
+              }
+              icon={<RotateCcw size={16} />}
               iconPosition="start"
-              sx={{ minHeight: 56 }}
+              sx={{ minHeight: 56, pr: metrics.followupDue ? 3 : undefined }}
             />
           )}
         </Tabs>
@@ -162,8 +212,12 @@ export default function ProspeccionPage() {
         <ProspectOutreachPanel onContacted={loadMetrics} />
       )}
 
-      {tab === "campanas" && visibleTabs.includes("campanas") && (
-        <CampaignsTab onDataChanged={loadMetrics} />
+      {tab === "seguimiento" && visibleTabs.includes("seguimiento") && (
+        <FollowupTab onContacted={loadMetrics} />
+      )}
+
+      {tab !== "buscar" && visibleTabs.includes("contactar") && (
+        <TemplateStatsPanel context={OUTBOUND_CONTEXT.PROSPECT_OUTREACH} />
       )}
     </div>
   );
