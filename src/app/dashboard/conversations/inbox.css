@@ -534,6 +534,20 @@
   font-size: 14px;
   line-height: 1.5;
   word-break: break-word;
+  /* WhatsApp preserva los saltos de linea del mensaje */
+  white-space: pre-wrap;
+}
+
+.bubble p code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 13px;
+  background: rgba(38, 45, 96, 0.08);
+  border-radius: 4px;
+  padding: 0 4px;
+}
+
+.bubble.agent p code {
+  background: rgba(255, 255, 255, 0.22);
 }
 
 .bubble time {

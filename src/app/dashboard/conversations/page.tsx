@@ -19,6 +19,7 @@ import {
   X,
 } from "lucide-react";
 import { getApiErrorMessage, httpClient } from "@/services/http-client";
+import { formatWhatsAppText } from "@/lib/whatsapp-format";
 import { useConversationStream, type ConnectionState } from "@/hooks/useConversationStream";
 import { usePermissions } from "@/lib/permissions";
 import { Conversation } from "@/types";
@@ -545,7 +546,7 @@ export default function ConversationsPage() {
                           {/* Con media visible, un contenido tipo "[imagen]" o
                               "[Imagen: foto.jpg]" es placeholder, no caption. */}
                           {message.content && !(media && /^\[[^\]]*\]$/.test(message.content.trim())) && (
-                            <p>{message.content}</p>
+                            <p>{formatWhatsAppText(message.content)}</p>
                           )}
                           <time>{formatTime(message.createdAt)}</time>
                         </div>
