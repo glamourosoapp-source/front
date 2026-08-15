@@ -4,6 +4,7 @@ import { FormEvent, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Sparkles } from "lucide-react";
 import { useAuthStore } from "@/stores/auth.store";
+import { getApiErrorMessage } from "@/services/http-client";
 import "./login.css";
 
 export default function LoginPage() {
@@ -21,7 +22,7 @@ export default function LoginPage() {
       await login(String(form.get("email")), String(form.get("password")));
       router.push("/dashboard");
     } catch (err) {
-      setError(err instanceof Error ? err.message : "No se pudo iniciar sesion");
+      setError(getApiErrorMessage(err, "No se pudo iniciar sesión"));
       setLoading(false);
     }
   }
