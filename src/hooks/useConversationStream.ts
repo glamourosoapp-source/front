@@ -80,7 +80,9 @@ export function useConversationStream({ onEvent, onState }: Options) {
 
         while (!cancelled) {
           const { done, value } = await reader.read();
-          if (done) break;
+          // Cierre limpio del server/proxy (p. ej. corte de conexión idle):
+          // tratarlo como caída para entrar al mismo reintento con backoff.
+          if (done) throw new Error("SSE stream closed by server");
           buffer += decoder.decode(value, { stream: true });
           const { events, rest } = parseChunk(buffer);
           buffer = rest;

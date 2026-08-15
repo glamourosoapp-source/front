@@ -21,7 +21,11 @@ class HttpClient {
     this.api.interceptors.response.use(
       (response) => response,
       (error) => {
-        if (error.response?.status === 401 && typeof window !== "undefined") {
+        // El 401 de /auth/login|register es "credenciales inválidas": lo maneja
+        // el formulario. Redirigir aquí recargaría la página y se comería el error.
+        const url: string = error.config?.url ?? "";
+        const isAuthAttempt = url.includes("/auth/login") || url.includes("/auth/register");
+        if (error.response?.status === 401 && !isAuthAttempt && typeof window !== "undefined") {
           localStorage.removeItem("token");
           localStorage.removeItem("user");
           window.location.href = "/login";

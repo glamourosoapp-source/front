@@ -36,16 +36,16 @@ const NAV_ROUTES: { module: PermissionModule; href: string }[] = [
   { module: "settings", href: "/dashboard/settings" },
 ];
 
-// Mock data for executive weekly trend visual
-const weeklySalesData = [
-  { day: "Lun", ventas: 1200, pedidos: 14 },
-  { day: "Mar", ventas: 1900, pedidos: 22 },
-  { day: "Mié", ventas: 1700, pedidos: 18 },
-  { day: "Jue", ventas: 2400, pedidos: 29 },
-  { day: "Vie", ventas: 3100, pedidos: 35 },
-  { day: "Sáb", ventas: 2800, pedidos: 30 },
-  { day: "Dom", ventas: 3500, pedidos: 42 },
-];
+/** Etiqueta "vie 15" para una fecha DATEONLY sin correrla de día por timezone. */
+function weekdayLabel(dateOnly: string): string {
+  const [year, month, day] = dateOnly.split("-").map(Number);
+  if (!year || !month || !day) return dateOnly;
+  return new Date(Date.UTC(year, month - 1, day)).toLocaleDateString("es-MX", {
+    weekday: "short",
+    day: "numeric",
+    timeZone: "UTC",
+  });
+}
 
 export default function DashboardPage() {
   const [data, setData] = useState<any>(null);
@@ -81,6 +81,12 @@ export default function DashboardPage() {
     name: p.name.length > 15 ? p.name.slice(0, 15) + "..." : p.name,
     ventas: Number(p.total || 0),
     cantidad: Number(p.quantity || 0),
+  }));
+
+  const weeklySalesData = (data?.weeklyTrend || []).map((point: any) => ({
+    day: weekdayLabel(String(point.date)),
+    ventas: Number(point.sales || 0),
+    pedidos: Number(point.orders || 0),
   }));
 
   const firstName = user?.name?.trim().split(/\s+/)[0] || "equipo";

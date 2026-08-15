@@ -37,7 +37,7 @@ export function resolveDeliveryScheduleConfig(raw: unknown): DeliveryScheduleCon
   return cfg;
 }
 
-function civilDateAndMinutes(now: Date, timeZone: string) {
+export function civilDateAndMinutes(now: Date, timeZone: string) {
   const parts = new Intl.DateTimeFormat("en-CA", {
     timeZone,
     year: "numeric",
