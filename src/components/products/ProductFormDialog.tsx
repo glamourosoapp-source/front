@@ -30,11 +30,12 @@ interface ProductFormDialogProps {
   open: boolean;
   editing: Product | null;
   categories: ProductCategory[];
+  saving?: boolean;
   onClose: () => void;
   onSubmit: (event: FormEvent<HTMLFormElement>) => void | Promise<void>;
 }
 
-export function ProductFormDialog({ open, editing, categories, onClose, onSubmit }: ProductFormDialogProps) {
+export function ProductFormDialog({ open, editing, categories, saving = false, onClose, onSubmit }: ProductFormDialogProps) {
   const { isAdmin } = usePermissions();
   const presentation = editing?.variants?.presentacion;
   const productGroupKey = editing?.variants?.productGroupKey;
@@ -158,7 +159,7 @@ export function ProductFormDialog({ open, editing, categories, onClose, onSubmit
         </DialogContent>
         <DialogActions sx={{ px: 3, py: 2 }}>
           <Button onClick={onClose}>Cancelar</Button>
-          <Button type="submit" variant="contained">Guardar</Button>
+          <Button type="submit" variant="contained" disabled={saving}>{saving ? "Guardando..." : "Guardar"}</Button>
         </DialogActions>
       </form>
     </Dialog>

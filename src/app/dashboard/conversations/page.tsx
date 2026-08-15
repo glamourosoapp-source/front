@@ -135,7 +135,18 @@ export default function ConversationsPage() {
   const [sending, setSending] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
-  const [attachment, setAttachment] = useState<PendingAttachment | null>(null);
+  const [attachment, setAttachmentState] = useState<PendingAttachment | null>(null);
+
+  // Revoca el objectURL del adjunto anterior al reemplazarlo/quitarlo: sin esto
+  // cada foto o nota de voz queda viva en memoria toda la sesión del inbox.
+  const setAttachment = useCallback((next: PendingAttachment | null) => {
+    setAttachmentState((prev) => {
+      if (prev && prev.previewUrl !== next?.previewUrl) URL.revokeObjectURL(prev.previewUrl);
+      return next;
+    });
+  }, []);
+
+  useEffect(() => () => setAttachment(null), [setAttachment]);
   const [recording, setRecording] = useState(false);
   const [typingByConversation, setTypingByConversation] = useState<Record<string, boolean>>({});
   const [connState, setConnState] = useState<ConnectionState>("connecting");
@@ -179,8 +190,13 @@ export default function ConversationsPage() {
     };
   }, []);
 
+  // Solo el último click gana: con red lenta, la respuesta de una conversación
+  // anterior no debe quedar seleccionada encima de la que el usuario abrió después.
+  const openSeq = useRef(0);
   async function openConversation(id: string) {
+    const seq = ++openSeq.current;
     const detail = await httpClient.get<Conversation>(`/conversations/${id}`);
+    if (seq !== openSeq.current) return;
     setConfirmDelete(false);
     setSelected(detail);
   }
@@ -308,11 +324,15 @@ export default function ConversationsPage() {
   }, [messages, isTyping]);
 
   async function toggleAgent(conversation: Conversation) {
-    const updated = await httpClient.patch<Conversation>(`/conversations/${conversation.id}/agent`, {
-      isAgentActive: !conversation.isAgentActive,
-    });
-    setSelected((current) => (current?.id === updated.id ? { ...current, ...updated } : current));
-    setConversations((prev) => prev.map((c) => (c.id === updated.id ? { ...c, ...updated } : c)));
+    try {
+      const updated = await httpClient.patch<Conversation>(`/conversations/${conversation.id}/agent`, {
+        isAgentActive: !conversation.isAgentActive,
+      });
+      setSelected((current) => (current?.id === updated.id ? { ...current, ...updated } : current));
+      setConversations((prev) => prev.map((c) => (c.id === updated.id ? { ...c, ...updated } : c)));
+    } catch (error) {
+      toast.error(getApiErrorMessage(error, "No se pudo cambiar el control del agente"));
+    }
   }
 
   async function deleteConversation() {
@@ -474,7 +494,7 @@ export default function ConversationsPage() {
             const name = conversation.contactName || conversation.customer?.name || conversation.contactPhone || "Sin nombre";
             const isActive = selected?.id === conversation.id;
             return (
-              <button className={isActive ? "conversation-card active" : "conversation-card"} key={conversation.id} onClick={() => openConversation(conversation.id)}>
+              <button className={isActive ? "conversation-card active" : "conversation-card"} key={conversation.id} onClick={() => openConversation(conversation.id).catch((error) => toast.error(getApiErrorMessage(error, "No se pudo abrir la conversación")))}>
                 <span className="avatar">{initials(name)}</span>
                 <span className="conversation-main">
                   <strong>{name}</strong>

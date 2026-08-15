@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   Button,
@@ -53,20 +53,25 @@ export function InactiveCustomersTab({ days, onDaysChange, onCreateCampaign }: I
   const [search, setSearch] = useState("");
   const debouncedSearch = useDebounce(search, 300);
 
+  // Solo la carga más reciente escribe estado (cambios rápidos de 15/30/60/90 días).
+  const loadSeq = useRef(0);
   const load = useCallback(async () => {
+    const seq = ++loadSeq.current;
     setLoading(true);
     try {
       const response = await httpClient.get<ReactivationSegmentResponse>(
         "/campaigns/reactivation-segment",
         { days, search: debouncedSearch, limit: 200 }
       );
+      if (seq !== loadSeq.current) return;
       setRows(response.items);
       setTotal(response.total);
       setSelectedIds(new Set());
     } catch (error) {
+      if (seq !== loadSeq.current) return;
       toast.error(getApiErrorMessage(error, "Error al cargar clientes inactivos"));
     } finally {
-      setLoading(false);
+      if (seq === loadSeq.current) setLoading(false);
     }
   }, [days, debouncedSearch]);
 
@@ -94,10 +99,16 @@ export function InactiveCustomersTab({ days, onDaysChange, onCreateCampaign }: I
     setSelectedIds((prev) => {
       if (allSelected) return new Set();
       const next = new Set(prev);
+      let capped = false;
       for (const row of rows) {
-        if (next.size >= MAX_RECIPIENTS) break;
+        if (next.size >= MAX_RECIPIENTS) {
+          capped = true;
+          break;
+        }
         next.add(row.id);
       }
+      // Igual que toggleOne: avisar que no se seleccionó todo lo visible.
+      if (capped) toast.error(`Máximo ${MAX_RECIPIENTS} destinatarios por campaña`);
       return next;
     });
   }

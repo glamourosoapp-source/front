@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, ReactNode, useCallback, useEffect, useMemo, useState } from "react";
+import { FormEvent, ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Button,
   Checkbox,
@@ -91,6 +91,8 @@ interface CampaignsTabProps {
   preselectedRecipientIds?: string[];
   /** Abrir el diálogo de creación al montar (tras "Crear campaña con seleccionados"). */
   autoOpenCreate?: boolean;
+  /** Avisa que el auto-open ya se consumió, para que el padre no lo repita al remontar. */
+  onAutoOpenHandled?: () => void;
 }
 
 /**
@@ -106,6 +108,7 @@ export function CampaignsTab({
   inactiveDays = 15,
   preselectedRecipientIds,
   autoOpenCreate = false,
+  onAutoOpenHandled,
 }: CampaignsTabProps) {
   const { can } = usePermissions();
   const isReactivation = audience === CAMPAIGN_AUDIENCE.CUSTOMERS;
@@ -125,13 +128,18 @@ export function CampaignsTab({
   const [recipientSearch, setRecipientSearch] = useState("");
   const debouncedRecipientSearch = useDebounce(recipientSearch, 250);
 
+  // Solo la carga más reciente escribe estado: una respuesta vieja (la fase de
+  // métricas puede tardar) no debe pisar los resultados de una búsqueda nueva.
+  const loadSeq = useRef(0);
   const load = useCallback(async () => {
+    const seq = ++loadSeq.current;
     try {
       const rows = await httpClient.get<ListResponse<Campaign>>("/campaigns", {
         search: debouncedCampaignSearch,
         audience,
         limit: 100,
       });
+      if (seq !== loadSeq.current) return;
       setCampaigns(rows.items);
 
       // Métricas solo de las que ya salieron: son las que tienen resultados.
@@ -150,8 +158,10 @@ export function CampaignsTab({
           }
         })
       );
+      if (seq !== loadSeq.current) return;
       setMetricsById(Object.fromEntries(entries.filter(Boolean) as Array<readonly [string, CampaignMetricsResponse]>));
     } catch (error) {
+      if (seq !== loadSeq.current) return;
       toast.error(getApiErrorMessage(error, "Error al cargar las campañas"));
     }
   }, [debouncedCampaignSearch, audience]);
@@ -212,6 +222,8 @@ export function CampaignsTab({
   useEffect(() => {
     if (autoOpenCreate && preselectedRecipientIds?.length) {
       openCreate(preselectedRecipientIds);
+      // Consumido: el padre limpia la señal para no reabrir al volver al tab.
+      onAutoOpenHandled?.();
     }
     // Solo al montar con la señal: no reabrir si el usuario cierra el diálogo.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -352,7 +364,7 @@ export function CampaignsTab({
           </p>
         </div>
         {can(permissionModule, "create") ? (
-          <Button variant="contained" onClick={() => openCreate(preselectedRecipientIds)}>
+          <Button variant="contained" onClick={() => openCreate()}>
             Nueva campaña
           </Button>
         ) : null}

@@ -299,8 +299,10 @@ export default function CustomerDetailPage() {
         open={editOpen}
         customer={customer}
         onClose={() => setEditOpen(false)}
-        onSaved={(updated) => {
-          if (updated) setCustomer(updated);
+        onSaved={() => {
+          // El PUT no devuelve `locations`: refetch completo para no borrar
+          // secciones de la vista (ubicaciones guardadas) hasta recargar.
+          loadCustomer();
         }}
       />
     </div>

@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useCallback, useEffect, useState } from "react";
+import { FormEvent, useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   Button,
@@ -134,7 +134,11 @@ export function ProspectSearchTab({
   const [saving, setSaving] = useState(false);
   const [importingCsv, setImportingCsv] = useState(false);
 
+  // Solo la carga más reciente escribe estado: al importar/limpiar cambian los
+  // filtros y el useEffect relanza la carga; una respuesta vieja no debe pisarla.
+  const loadSeq = useRef(0);
   const loadProspects = useCallback(async () => {
+    const seq = ++loadSeq.current;
     setListLoading(true);
     try {
       // "Solo la última búsqueda" se filtra en el server por ids: si el import
@@ -146,13 +150,15 @@ export function ProspectSearchTab({
         params.page = 1;
       }
       const response = await httpClient.get<ListResponse<ProspectRow>>("/prospects", params);
+      if (seq !== loadSeq.current) return;
       setProspects(response.items);
       setTotal(response.total);
       setTotalPages(response.totalPages);
     } catch (error) {
+      if (seq !== loadSeq.current) return;
       toast.error(getApiErrorMessage(error, "Error al cargar prospectos"));
     } finally {
-      setListLoading(false);
+      if (seq === loadSeq.current) setListLoading(false);
     }
   }, [debouncedSearch, page, limit, showOnlyLastImport, lastImportedIds]);
 
@@ -192,7 +198,8 @@ export function ProspectSearchTab({
       setLastImportedIds(ids);
       setShowOnlyLastImport(ids.length > 0);
       sessionStorage.setItem(LAST_IMPORTED_KEY, JSON.stringify(ids));
-      await loadProspects();
+      // El cambio de filtros relanza la carga vía useEffect; llamar
+      // loadProspects() aquí usaría el closure viejo (sin el filtro de ids).
       onDataChanged?.();
       toast.success(
         `${result.imported.length} importados · ${result.skipped.noPhone} sin teléfono · ${result.skipped.duplicate} duplicados` +
@@ -218,7 +225,7 @@ export function ProspectSearchTab({
       setLastImportedIds([]);
       setLastResult(null);
       sessionStorage.removeItem(LAST_IMPORTED_KEY);
-      await loadProspects();
+      // La carga se relanza sola por el cambio de filtros (useEffect).
       onDataChanged?.();
     } catch (error) {
       toast.error(getApiErrorMessage(error, "Error al limpiar prospectos"));

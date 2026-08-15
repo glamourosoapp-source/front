@@ -88,11 +88,13 @@ export function NumberHealthCard({ compact = false }: { compact?: boolean }) {
   const { can } = usePermissions();
   const [health, setHealth] = useState<OutreachHealthResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [lastLoadedAt, setLastLoadedAt] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
   const load = useCallback(async () => {
     try {
       setHealth(await httpClient.get<OutreachHealthResponse>("/outreach/health"));
+      setLastLoadedAt(new Date().toISOString());
       setError(null);
     } catch (err) {
       // Nunca fallar en silencio: esta tarjeta es la que dice si los envíos
@@ -179,6 +181,13 @@ export function NumberHealthCard({ compact = false }: { compact?: boolean }) {
               : `Cupo de hoy: ${health.usedToday}/${health.dailyCap} · ${health.queuedTotal} en cola` +
                 (health.queuedTotal > 0 ? ` · próximo: ${formatTime(health.nextScheduledAt)}` : "")}
           </span>
+          {error && (
+            // El refresh de 60s está fallando: lo de arriba es una foto vieja,
+            // no el estado actual del número. Decirlo, no fingir normalidad.
+            <span className="page-kicker" style={{ margin: 0, display: "block", color: "#b45309" }}>
+              Sin actualizar desde {formatTime(lastLoadedAt)}: {error}
+            </span>
+          )}
         </div>
       </div>
       <div className="flex items-center gap-2">

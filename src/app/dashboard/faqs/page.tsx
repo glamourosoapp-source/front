@@ -3,6 +3,7 @@
 import { FormEvent, useEffect, useState } from "react";
 import { Button, Dialog, DialogActions, DialogContent, DialogTitle, MenuItem, TextField } from "@mui/material";
 import { DataTable } from "@/components/ui/DataTable";
+import { ListPagination } from "@/components/ui/ListPagination";
 import { httpClient } from "@/services/http-client";
 import { usePermissions } from "@/lib/permissions";
 import { FAQ, ListResponse } from "@/types";
@@ -18,8 +19,41 @@ export default function FAQsPage() {
   const [open, setOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
   const [editing, setEditing] = useState<FAQ | null>(null);
-  const load = () => httpClient.get<ListResponse<FAQ>>("/faqs", { search: searchText, category, limit: 100 }).then((r) => setFaqs(r.items));
-  useEffect(() => { load(); }, []);
+  const [saving, setSaving] = useState(false);
+  const [page, setPage] = useState(1);
+  const [limit, setLimit] = useState(25);
+  const [total, setTotal] = useState(0);
+  const [totalPages, setTotalPages] = useState(1);
+
+  const load = async (targetPage = page) => {
+    try {
+      const r = await httpClient.get<ListResponse<FAQ>>("/faqs", {
+        search: searchText,
+        category,
+        page: targetPage,
+        limit,
+      });
+      setFaqs(r.items);
+      setTotal(r.total);
+      setPage(r.page);
+      setTotalPages(r.totalPages || 1);
+    } catch {
+      // Antes fallaba en silencio: tabla vacía indistinguible de "no hay FAQs".
+      toast.error("Error al cargar las FAQs");
+    }
+  };
+  useEffect(() => {
+    load(page);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [page, limit]);
+
+  function applyFilters() {
+    if (page === 1) {
+      load(1);
+      return;
+    }
+    setPage(1);
+  }
 
   function openCreate() {
     setEditing(null);
@@ -40,6 +74,7 @@ export default function FAQsPage() {
       category: String(form.get("category") || "general"),
       isActive: String(form.get("isActive") || "true") === "true",
     };
+    setSaving(true);
     try {
       if (editing) {
         await httpClient.put(`/faqs/${editing.id}`, payload);
@@ -52,6 +87,8 @@ export default function FAQsPage() {
       await load();
     } catch (err) {
       toast.error("Error al guardar la FAQ");
+    } finally {
+      setSaving(false);
     }
   }
 
@@ -110,12 +147,20 @@ export default function FAQsPage() {
             <h2>Conocimiento cargado</h2>
             <p className="page-kicker">Preguntas disponibles para busqueda semantica.</p>
           </div>
-          <span className="pill">{faqs.length} FAQs</span>
+          <span className="pill">{total.toLocaleString("es-MX")} FAQs</span>
         </div>
         <div className="mb-4 grid gap-3 md:grid-cols-[minmax(220px,1fr)_180px_auto_auto]">
-          <input className="input" placeholder="Buscar pregunta o respuesta" value={searchText} onChange={(e) => setSearchText(e.target.value)} />
+          <input
+            className="input"
+            placeholder="Buscar pregunta o respuesta"
+            value={searchText}
+            onChange={(e) => setSearchText(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") applyFilters();
+            }}
+          />
           <input className="input" placeholder="Categoria" value={category} onChange={(e) => setCategory(e.target.value)} />
-          <Button variant="outlined" onClick={load}>Filtrar</Button>
+          <Button variant="outlined" onClick={applyFilters}>Filtrar</Button>
           {can("faqs", "update") ? (
             <Button color="secondary" variant="outlined" onClick={handleBackfill}>Regenerar</Button>
           ) : null}
@@ -132,6 +177,17 @@ export default function FAQsPage() {
             { key: "embeddingStatus", label: "Embedding", render: (r) => <span className="pill">{r.embeddingStatus}</span> },
           ]}
         />
+        <ListPagination
+          page={page}
+          totalPages={totalPages}
+          total={total}
+          limit={limit}
+          onPageChange={setPage}
+          onLimitChange={(nextLimit) => {
+            setLimit(nextLimit);
+            setPage(1);
+          }}
+        />
       </section>
 
       <Dialog open={open} onClose={() => setOpen(false)} fullWidth maxWidth="md">
@@ -141,14 +197,16 @@ export default function FAQsPage() {
             <TextField name="category" label="Categoria" defaultValue={editing?.category || "general"} fullWidth />
             <TextField name="question" label="Pregunta" defaultValue={editing?.question || ""} fullWidth multiline minRows={2} required />
             <TextField name="answer" label="Respuesta" defaultValue={editing?.answer || ""} fullWidth multiline minRows={5} required />
-            <TextField select name="isActive" label="Estado" defaultValue="true" fullWidth>
+            <TextField select name="isActive" label="Estado" defaultValue={String(editing?.isActive ?? true)} fullWidth>
               <MenuItem value="true">Activa</MenuItem>
               <MenuItem value="false">Inactiva</MenuItem>
             </TextField>
           </DialogContent>
           <DialogActions>
             <Button onClick={() => setOpen(false)}>Cancelar</Button>
-            <Button type="submit" variant="contained">Guardar</Button>
+            <Button type="submit" variant="contained" disabled={saving}>
+              {saving ? "Guardando..." : "Guardar"}
+            </Button>
           </DialogActions>
         </form>
       </Dialog>

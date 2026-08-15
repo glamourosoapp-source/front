@@ -11,6 +11,7 @@ interface NotificationState {
   prepend: (item: Notification) => void;
   markReadLocal: (id: string) => void;
   markAllReadLocal: () => void;
+  reset: () => void;
 }
 
 export const useNotificationStore = create<NotificationState>((set) => ({
@@ -42,4 +43,7 @@ export const useNotificationStore = create<NotificationState>((set) => ({
       })),
       unreadCount: 0,
     })),
+  // Al cerrar sesión: el contador/preview del usuario anterior no debe
+  // sobrevivir hasta que el refresh del siguiente usuario responda.
+  reset: () => set({ unreadCount: 0, preview: [] }),
 }));

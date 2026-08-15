@@ -34,7 +34,8 @@ export function hrefForNotification(n: Notification): string {
     return `/dashboard/orders/${n.entityId}`;
   }
   if (n.entityType === NOTIFICATION_ENTITY_TYPES.CONVERSATION) {
-    return `/dashboard/conversations`;
+    // entityId ES el conversationId: abrir esa conversación, no el inbox genérico.
+    return n.entityId ? `/dashboard/conversations?open=${n.entityId}` : `/dashboard/conversations`;
   }
   return "/dashboard/prospeccion?tab=campanas";
 }

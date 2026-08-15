@@ -37,6 +37,7 @@ export function UserFormDialog({ open, user, profiles, onClose, onSaved }: UserF
   const { isAdmin } = usePermissions();
   const [isActive, setIsActive] = useState(user?.isActive ?? true);
   const [accessType, setAccessType] = useState<AccessType>(() => accessTypeFromRole(user?.role));
+  const [saving, setSaving] = useState(false);
 
   useEffect(() => {
     if (open) {
@@ -64,6 +65,7 @@ export function UserFormDialog({ open, user, profiles, onClose, onSaved }: UserF
       payload.role = selectedAccess === "admin" ? ROLES.ADMIN : ROLES.ASSISTANT;
     }
 
+    setSaving(true);
     try {
       if (isEdit && user) {
         await httpClient.put(`/users/${user.id}`, {
@@ -80,6 +82,8 @@ export function UserFormDialog({ open, user, profiles, onClose, onSaved }: UserF
       onClose();
     } catch (error) {
       toast.error(getApiErrorMessage(error, "Error al guardar el usuario"));
+    } finally {
+      setSaving(false);
     }
   }
 
@@ -141,8 +145,8 @@ export function UserFormDialog({ open, user, profiles, onClose, onSaved }: UserF
         </DialogContent>
         <DialogActions>
           <Button onClick={onClose}>Cancelar</Button>
-          <Button type="submit" variant="contained">
-            Guardar
+          <Button type="submit" variant="contained" disabled={saving}>
+            {saving ? "Guardando..." : "Guardar"}
           </Button>
         </DialogActions>
       </form>

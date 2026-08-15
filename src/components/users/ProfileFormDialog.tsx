@@ -46,6 +46,7 @@ const ACTION_LABELS: Record<PermissionAction, string> = {
 export function ProfileFormDialog({ open, profile, onClose, onSaved }: ProfileFormDialogProps) {
   const isEdit = Boolean(profile);
   const [permissions, setPermissions] = useState<PermissionMap>(() => ({ ...(profile?.permissions ?? {}) }));
+  const [saving, setSaving] = useState(false);
 
   // El componente no se remonta al cambiar de perfil: sincroniza la matriz al abrir.
   useEffect(() => {
@@ -85,6 +86,7 @@ export function ProfileFormDialog({ open, profile, onClose, onSaved }: ProfileFo
       description: String(form.get("description") || ""),
       permissions,
     };
+    setSaving(true);
     try {
       if (isEdit && profile) {
         await httpClient.put(`/profiles/${profile.id}`, payload);
@@ -97,6 +99,8 @@ export function ProfileFormDialog({ open, profile, onClose, onSaved }: ProfileFo
       onClose();
     } catch (error) {
       toast.error(getApiErrorMessage(error, "Error al guardar el perfil"));
+    } finally {
+      setSaving(false);
     }
   }
 
@@ -165,7 +169,7 @@ export function ProfileFormDialog({ open, profile, onClose, onSaved }: ProfileFo
         </DialogContent>
         <DialogActions>
           <Button onClick={onClose}>Cancelar</Button>
-          <Button type="submit" variant="contained">
+          <Button type="submit" variant="contained" disabled={saving}>
             Guardar
           </Button>
         </DialogActions>

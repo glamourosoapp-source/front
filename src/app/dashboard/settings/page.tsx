@@ -38,6 +38,7 @@ export default function SettingsPage() {
   const [open, setOpen] = useState(false);
   const [delivery, setDelivery] = useState<DeliveryScheduleConfig | null>(null);
   const [deliveryOpen, setDeliveryOpen] = useState(false);
+  const [saving, setSaving] = useState(false);
 
   useEffect(() => {
     if (!canSettings) return;
@@ -71,6 +72,7 @@ export default function SettingsPage() {
   async function save(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const form = new FormData(event.currentTarget);
+    setSaving(true);
     try {
       const result = await httpClient.put<WhatsAppConfig>("/whatsapp/config", {
         phoneNumberId: String(form.get("phoneNumberId") || ""),
@@ -87,12 +89,15 @@ export default function SettingsPage() {
       toast.success("Configuración de WhatsApp e IA guardada con éxito");
     } catch (error) {
       toast.error(getApiErrorMessage(error, "Error al guardar la configuración"));
+    } finally {
+      setSaving(false);
     }
   }
 
   async function saveDelivery(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const form = new FormData(event.currentTarget);
+    setSaving(true);
     try {
       const result = await httpClient.put<DeliveryScheduleConfig>("/settings/delivery", {
         cutoffTime: String(form.get("cutoffTime") || "15:00"),
@@ -106,6 +111,8 @@ export default function SettingsPage() {
       toast.success("Configuración de entregas guardada con éxito");
     } catch (error) {
       toast.error(getApiErrorMessage(error, "Error al guardar la configuración de entregas"));
+    } finally {
+      setSaving(false);
     }
   }
 
@@ -218,10 +225,14 @@ export default function SettingsPage() {
         </div>
       </section>
 
-      <section className="grid gap-4">
-        <NumberHealthCard />
-        <SuppressionListPanel />
-      </section>
+      {/* Sus endpoints exigen outreach|reactivation:view: sin esos módulos solo
+          se verían tarjetas de error con causas engañosas. */}
+      {(can("outreach") || can("reactivation")) && (
+        <section className="grid gap-4">
+          <NumberHealthCard />
+          <SuppressionListPanel />
+        </section>
+      )}
 
       <Dialog open={deliveryOpen} onClose={() => setDeliveryOpen(false)} fullWidth maxWidth="sm">
         <form onSubmit={saveDelivery}>
@@ -276,7 +287,7 @@ export default function SettingsPage() {
           </DialogContent>
           <DialogActions>
             <Button onClick={() => setDeliveryOpen(false)}>Cancelar</Button>
-            <Button type="submit" variant="contained">Guardar</Button>
+            <Button type="submit" variant="contained" disabled={saving}>{saving ? "Guardando..." : "Guardar"}</Button>
           </DialogActions>
         </form>
       </Dialog>
@@ -312,7 +323,7 @@ export default function SettingsPage() {
           </DialogContent>
           <DialogActions>
             <Button onClick={() => setOpen(false)}>Cancelar</Button>
-            <Button type="submit" variant="contained">Guardar</Button>
+            <Button type="submit" variant="contained" disabled={saving}>{saving ? "Guardando..." : "Guardar"}</Button>
           </DialogActions>
         </form>
       </Dialog>

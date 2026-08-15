@@ -2,14 +2,17 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Button, Checkbox, FormControlLabel, Tab, Tabs } from "@mui/material";
 import { OrderEditDialog } from "@/components/orders/OrderEditDialog";
 import { DataTable } from "@/components/ui/DataTable";
 import { DateFilterField } from "@/components/ui/DateFilterField";
+import { ListPagination } from "@/components/ui/ListPagination";
 import { PAYMENT_STATUS_OPTIONS, orderCreatorLabel, paymentStatusLabel } from "@/constants/orders";
 import { httpClient } from "@/services/http-client";
 import { usePermissions } from "@/lib/permissions";
+import { useAuthStore } from "@/stores/auth.store";
+import { DEFAULT_DELIVERY_SCHEDULE } from "@glamouroso/shared";
 import { formatDateOnly, localDateOnly } from "@/lib/format-date-only";
 import { exportOrdersToPdf, exportOrdersToXlsx } from "@/lib/export-orders-list";
 import { ListResponse, Order } from "@/types";
@@ -24,15 +27,18 @@ const TAB_LABELS: Record<DeliveryTab, string> = {
   all: "Todos",
 };
 
-/** Params de fecha de entrega según el tab activo. */
-function deliveryParams(tab: DeliveryTab, unscheduledOnly: boolean) {
+/**
+ * Params de fecha de entrega según el tab activo. "Hoy"/"Mañana" se calculan
+ * en la timezone del negocio: un usuario en otra TZ vería el día equivocado.
+ */
+function deliveryParams(tab: DeliveryTab, unscheduledOnly: boolean, timeZone: string) {
   switch (tab) {
     case "today":
-      return { deliveryFrom: localDateOnly(0), deliveryTo: localDateOnly(0), sortBy: "deliveryDate" };
+      return { deliveryFrom: localDateOnly(0, timeZone), deliveryTo: localDateOnly(0, timeZone), sortBy: "deliveryDate" };
     case "tomorrow":
-      return { deliveryFrom: localDateOnly(1), deliveryTo: localDateOnly(1), sortBy: "deliveryDate" };
+      return { deliveryFrom: localDateOnly(1, timeZone), deliveryTo: localDateOnly(1, timeZone), sortBy: "deliveryDate" };
     case "upcoming":
-      return { deliveryFrom: localDateOnly(2), sortBy: "deliveryDate" };
+      return { deliveryFrom: localDateOnly(2, timeZone), sortBy: "deliveryDate" };
     case "all":
       return unscheduledOnly ? { unscheduled: true } : {};
   }
@@ -57,8 +63,14 @@ function formatOrderDate(value: string | Date | undefined) {
 export default function OrdersPage() {
   const router = useRouter();
   const { can } = usePermissions();
+  const orgTimezone = useAuthStore(
+    (s) => s.user?.organization?.timezone ?? DEFAULT_DELIVERY_SCHEDULE.timezone
+  );
   const [orders, setOrders] = useState<Order[]>([]);
   const [total, setTotal] = useState(0);
+  const [page, setPage] = useState(1);
+  const [limit, setLimit] = useState(25);
+  const [totalPages, setTotalPages] = useState(1);
   const [search, setSearch] = useState("");
   const [appliedSearch, setAppliedSearch] = useState("");
   const [status, setStatus] = useState("");
@@ -81,26 +93,34 @@ export default function OrdersPage() {
       dateFrom: dateFrom || undefined,
       dateTo: dateTo || undefined,
       undelivered: undelivered || undefined,
-      ...deliveryParams(tab, unscheduledOnly),
+      ...deliveryParams(tab, unscheduledOnly, orgTimezone),
     }),
-    [appliedSearch, dateFrom, dateTo, paymentStatus, status, tab, undelivered, unscheduledOnly]
+    [appliedSearch, dateFrom, dateTo, paymentStatus, status, tab, undelivered, unscheduledOnly, orgTimezone]
   );
 
+  // Solo la carga más reciente escribe estado: al cambiar rápido de tab/filtro
+  // con red lenta, la respuesta vieja no debe pisar a la nueva.
+  const loadSeq = useRef(0);
   const load = useCallback(async () => {
+    const seq = ++loadSeq.current;
     setLoading(true);
     try {
       const response = await httpClient.get<ListResponse<Order>>("/orders", {
         ...buildParams(),
-        limit: 100,
+        page,
+        limit,
       });
+      if (seq !== loadSeq.current) return;
       setOrders(response.items);
       setTotal(response.total);
+      setTotalPages(response.totalPages || 1);
     } catch {
+      if (seq !== loadSeq.current) return;
       toast.error("No se pudieron cargar los pedidos.");
     } finally {
-      setLoading(false);
+      if (seq === loadSeq.current) setLoading(false);
     }
-  }, [buildParams]);
+  }, [buildParams, page, limit]);
 
   /** Trae TODO lo filtrado paginando (el tope del API es 200 por página). */
   const fetchAllFiltered = useCallback(async () => {
@@ -142,6 +162,11 @@ export default function OrdersPage() {
   useEffect(() => {
     load();
   }, [load]);
+
+  // Filtros o tab nuevos vuelven a la página 1 (el seq guard evita el doble render).
+  useEffect(() => {
+    setPage(1);
+  }, [tab, appliedSearch, status, paymentStatus, dateFrom, dateTo, undelivered, unscheduledOnly]);
 
   function applySearch() {
     setAppliedSearch(search.trim());
@@ -326,6 +351,17 @@ export default function OrdersPage() {
             },
             { key: "total", label: "Total", render: (r) => `$${Number(r.total).toFixed(2)}` },
           ]}
+        />
+        <ListPagination
+          page={page}
+          totalPages={totalPages}
+          total={total}
+          limit={limit}
+          onPageChange={setPage}
+          onLimitChange={(nextLimit) => {
+            setLimit(nextLimit);
+            setPage(1);
+          }}
         />
       </section>
 

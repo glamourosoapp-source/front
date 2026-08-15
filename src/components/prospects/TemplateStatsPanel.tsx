@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { Skeleton, Table, TableBody, TableCell, TableHead, TableRow } from "@mui/material";
-import { httpClient } from "@/services/http-client";
+import { httpClient, getApiErrorMessage } from "@/services/http-client";
 import type { TemplateStatsResponse, TemplateStatsRow } from "@glamouroso/shared/schemas/campaign";
 
 function formatPct(rate: number): string {
@@ -33,6 +33,7 @@ export function TemplateStatsPanel({
   conversionLabel = "Convirtieron",
 }: TemplateStatsPanelProps) {
   const [data, setData] = useState<TemplateStatsResponse | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     try {
@@ -41,8 +42,10 @@ export function TemplateStatsPanel({
           ...(context ? { context } : {}),
         })
       );
-    } catch {
-      // panel informativo: si falla queda oculto
+      setError(null);
+    } catch (err) {
+      // Un 500 no es "todavía no hay envíos": mostrar el error real.
+      setError(getApiErrorMessage(err, "No se pudieron leer las estadísticas"));
       setData({ items: [], days: 90 });
     }
   }, [context]);
@@ -73,7 +76,11 @@ export function TemplateStatsPanel({
         </div>
       </div>
 
-      {rows.length === 0 ? (
+      {error ? (
+        <p className="page-kicker" style={{ margin: 0, color: "#b45309" }}>
+          No se pudieron cargar las estadísticas: {error}
+        </p>
+      ) : rows.length === 0 ? (
         <p className="page-kicker" style={{ margin: 0 }}>
           Todavía no hay envíos suficientes. En cuanto salgan los primeros mensajes verás aquí qué
           plantilla trae más respuestas.

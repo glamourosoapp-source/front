@@ -2,6 +2,7 @@
 
 import { create } from "zustand";
 import { httpClient } from "@/services/http-client";
+import { useNotificationStore } from "@/stores/notification.store";
 import { User } from "@/types";
 
 interface AuthState {
@@ -51,5 +52,7 @@ export const useAuthStore = create<AuthState>((set) => ({
     localStorage.removeItem("token");
     localStorage.removeItem("user");
     set({ token: null, user: null, isAuthenticated: false });
+    // Estado en memoria del usuario anterior: no debe verlo el siguiente login.
+    useNotificationStore.getState().reset();
   },
 }));

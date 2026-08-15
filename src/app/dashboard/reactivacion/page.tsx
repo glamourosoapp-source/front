@@ -1,14 +1,15 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { Tab, Tabs } from "@mui/material";
+import { Button, Tab, Tabs } from "@mui/material";
 import { Megaphone, MessageCircleReply, RotateCcw, Send, Trophy } from "lucide-react";
 import { InactiveCustomersTab } from "@/components/reactivation/InactiveCustomersTab";
 import { CampaignsTab } from "@/components/prospects/CampaignsTab";
 import { NumberHealthCard } from "@/components/prospects/NumberHealthCard";
 import { TemplateStatsPanel } from "@/components/prospects/TemplateStatsPanel";
-import { httpClient } from "@/services/http-client";
+import { httpClient, getApiErrorMessage } from "@/services/http-client";
 import { usePermissions } from "@/lib/permissions";
+import { useAuthStore } from "@/stores/auth.store";
 import { CAMPAIGN_AUDIENCE, OUTBOUND_CONTEXT } from "@glamouroso/shared/constants";
 import type { ReactivationMetricsResponse } from "@glamouroso/shared/schemas/campaign";
 
@@ -30,9 +31,11 @@ const emptyMetrics: ReactivationMetricsResponse = {
  */
 export default function ReactivacionPage() {
   const { can } = usePermissions();
+  const user = useAuthStore((s) => s.user);
   const [tab, setTab] = useState<TabKey>("inactivos");
   const [days, setDays] = useState(15);
   const [metrics, setMetrics] = useState<ReactivationMetricsResponse>(emptyMetrics);
+  const [metricsError, setMetricsError] = useState<string | null>(null);
   const [preselectedIds, setPreselectedIds] = useState<string[]>([]);
   const [autoOpenCreate, setAutoOpenCreate] = useState(false);
   /** Fuerza remount del tab de campañas al llegar con preselección. */
@@ -45,8 +48,11 @@ export default function ReactivacionPage() {
           days: forDays,
         })
       );
-    } catch {
-      // el embudo es informativo: si falla se queda en cero
+      setMetricsError(null);
+    } catch (error) {
+      // Ceros silenciosos mienten: "0 inactivos" se lee igual que "no pude
+      // leer nada", y son cosas muy distintas para quien decide una campaña.
+      setMetricsError(getApiErrorMessage(error, "No se pudo cargar el embudo"));
     }
   }, []);
 
@@ -61,9 +67,17 @@ export default function ReactivacionPage() {
     setTab("campanas");
   }
 
+  /** El tab de campañas ya consumió la preselección: no reabrir el diálogo al volver. */
+  function handleAutoOpenHandled() {
+    setAutoOpenCreate(false);
+    setPreselectedIds([]);
+  }
+
   const canReactivation = can("reactivation");
 
-  if (!canReactivation) {
+  // `user` nulo = aún hidratando la sesión; sin este guard la pantalla de "Sin
+  // acceso" parpadea en cada carga dura incluso para el admin.
+  if (user && !canReactivation) {
     return (
       <div className="page-stack">
         <section className="panel p-5">
@@ -88,7 +102,21 @@ export default function ReactivacionPage() {
         </div>
       </div>
 
-      <section className="grid grid-4">
+      {metricsError && (
+        <div
+          className="panel p-4 flex flex-wrap items-center justify-between gap-2"
+          style={{ borderColor: "#f5a524" }}
+        >
+          <span className="page-kicker" style={{ margin: 0 }}>
+            <strong>Los números de abajo no son reales:</strong> {metricsError}
+          </span>
+          <Button size="small" variant="outlined" onClick={() => loadMetrics(days)}>
+            Reintentar
+          </Button>
+        </div>
+      )}
+
+      <section className="grid grid-4" style={metricsError ? { opacity: 0.5 } : undefined}>
         <div className="card metric">
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
             <span>1 · Inactivos</span>
@@ -166,6 +194,7 @@ export default function ReactivacionPage() {
             inactiveDays={days}
             preselectedRecipientIds={preselectedIds}
             autoOpenCreate={autoOpenCreate}
+            onAutoOpenHandled={handleAutoOpenHandled}
             onDataChanged={() => loadMetrics(days)}
           />
           <TemplateStatsPanel

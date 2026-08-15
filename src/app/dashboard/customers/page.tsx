@@ -1,10 +1,11 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@mui/material";
 import { CustomerFormDialog } from "@/components/customers/CustomerFormDialog";
 import { DataTable } from "@/components/ui/DataTable";
+import { ListPagination } from "@/components/ui/ListPagination";
 import { httpClient } from "@/services/http-client";
 import { usePermissions } from "@/lib/permissions";
 import { Customer, ListResponse } from "@/types";
@@ -16,23 +17,54 @@ export default function CustomersPage() {
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [search, setSearch] = useState("");
   const [zone, setZone] = useState("");
+  const [page, setPage] = useState(1);
+  const [limit, setLimit] = useState(25);
+  const [total, setTotal] = useState(0);
+  const [totalPages, setTotalPages] = useState(1);
   const [loading, setLoading] = useState(false);
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<Customer | null>(null);
 
-  const load = async () => {
-    setLoading(true);
-    try {
-      const r = await httpClient.get<ListResponse<Customer>>("/customers", { search, zone, limit: 100 });
-      setCustomers(r.items);
-    } catch {
-      toast.error("Error al cargar clientes");
-    } finally {
-      setLoading(false);
-    }
-  };
+  // Solo la carga más reciente escribe estado (filtros/página en cambio rápido).
+  const loadSeq = useRef(0);
+  const load = useCallback(
+    async (targetPage: number) => {
+      const seq = ++loadSeq.current;
+      setLoading(true);
+      try {
+        const r = await httpClient.get<ListResponse<Customer>>("/customers", {
+          search,
+          zone,
+          page: targetPage,
+          limit,
+        });
+        if (seq !== loadSeq.current) return;
+        setCustomers(r.items);
+        setTotal(r.total);
+        setPage(r.page);
+        setTotalPages(r.totalPages || 1);
+      } catch {
+        if (seq !== loadSeq.current) return;
+        toast.error("Error al cargar clientes");
+      } finally {
+        if (seq === loadSeq.current) setLoading(false);
+      }
+    },
+    [search, zone, limit]
+  );
 
-  useEffect(() => { load(); }, []);
+  useEffect(() => {
+    load(page);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [page, limit]);
+
+  function applyFilters() {
+    if (page === 1) {
+      load(1);
+      return;
+    }
+    setPage(1);
+  }
 
   function openCreate() {
     setEditing(null);
@@ -48,7 +80,7 @@ export default function CustomersPage() {
     try {
       await httpClient.delete(`/customers/${customer.id}`);
       toast.success(`Cliente ${customer.name} eliminado con éxito`);
-      await load();
+      await load(page);
     } catch {
       toast.error("Error al eliminar el cliente");
     }
@@ -71,12 +103,20 @@ export default function CustomersPage() {
             <h2>Base de clientes</h2>
             <p className="page-kicker">Consulta rapida para ventas y soporte.</p>
           </div>
-          <span className="pill">{customers.length} clientes</span>
+          <span className="pill">{total.toLocaleString("es-MX")} clientes</span>
         </div>
         <div className="mb-4 grid gap-3 md:grid-cols-[minmax(220px,1fr)_180px_auto]">
-          <input className="input" placeholder="Buscar nombre o WhatsApp" value={search} onChange={(e) => setSearch(e.target.value)} />
+          <input
+            className="input"
+            placeholder="Buscar nombre o WhatsApp"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") applyFilters();
+            }}
+          />
           <input className="input" placeholder="Zona" value={zone} onChange={(e) => setZone(e.target.value)} />
-          <Button variant="outlined" onClick={load} disabled={loading}>{loading ? "Cargando..." : "Filtrar"}</Button>
+          <Button variant="outlined" onClick={applyFilters} disabled={loading}>{loading ? "Cargando..." : "Filtrar"}</Button>
         </div>
         <DataTable
           rows={customers}
@@ -100,13 +140,24 @@ export default function CustomersPage() {
             { key: "totalSpent", label: "Compra", render: (r) => `$${Number(r.totalSpent || 0).toFixed(2)}` },
           ]}
         />
+        <ListPagination
+          page={page}
+          totalPages={totalPages}
+          total={total}
+          limit={limit}
+          onPageChange={setPage}
+          onLimitChange={(nextLimit) => {
+            setLimit(nextLimit);
+            setPage(1);
+          }}
+        />
       </section>
 
       <CustomerFormDialog
         open={open}
         customer={editing}
         onClose={() => setOpen(false)}
-        onSaved={() => void load()}
+        onSaved={() => void load(page)}
       />
     </div>
   );

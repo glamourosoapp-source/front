@@ -45,9 +45,16 @@ import { toast } from "sonner";
 const LAST_IMPORTED_KEY = "lastImportedProspectIds";
 const LAST_TEMPLATE_KEY = "lastOutreachTemplateName";
 
-/** replied/converted ya avanzaron en el funnel: no se vuelven a contactar. */
+/**
+ * replied/converted ya avanzaron en el funnel y exhausted agotó sus toques:
+ * el Back los descarta siempre, así que no ofrecerlos como seleccionables.
+ */
 function isContactable(status?: string): boolean {
-  return status !== PROSPECT_STATUS.REPLIED && status !== PROSPECT_STATUS.CONVERTED;
+  return (
+    status !== PROSPECT_STATUS.REPLIED &&
+    status !== PROSPECT_STATUS.CONVERTED &&
+    status !== PROSPECT_STATUS.EXHAUSTED
+  );
 }
 
 type StatusFilter = "new" | "all" | "failed";

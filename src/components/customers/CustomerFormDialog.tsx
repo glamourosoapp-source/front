@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent } from "react";
+import { FormEvent, useState } from "react";
 import {
   Box,
   Button,
@@ -26,6 +26,7 @@ interface CustomerFormDialogProps {
 
 export function CustomerFormDialog({ open, customer, onClose, onSaved }: CustomerFormDialogProps) {
   const isEdit = Boolean(customer);
+  const [saving, setSaving] = useState(false);
 
   async function save(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -47,6 +48,7 @@ export function CustomerFormDialog({ open, customer, onClose, onSaved }: Custome
             address: String(form.get("address") || ""),
           }),
     };
+    setSaving(true);
     try {
       if (isEdit && customer) {
         const updated = await httpClient.put<Customer>(`/customers/${customer.id}`, payload);
@@ -55,18 +57,25 @@ export function CustomerFormDialog({ open, customer, onClose, onSaved }: Custome
       } else {
         const created = await httpClient.post<Customer>("/customers", payload);
         const hasLocation =
-          payload.street || payload.colony || payload.city || payload.address || payload.zone;
+          payload.street || payload.colony || payload.postalCode || payload.city ||
+          payload.address || payload.zone;
         if (hasLocation) {
-          await httpClient.post(`/customers/${created.id}/locations`, {
-            label: "Principal",
-            street: payload.street,
-            colony: payload.colony,
-            postalCode: payload.postalCode,
-            city: payload.city,
-            zone: payload.zone,
-            reference: payload.address,
-            isDefault: true,
-          });
+          // El cliente ya existe: si falla el domicilio no hay que "reintentar
+          // guardar el cliente" (duplicaría), solo avisar qué faltó.
+          try {
+            await httpClient.post(`/customers/${created.id}/locations`, {
+              label: "Principal",
+              street: payload.street,
+              colony: payload.colony,
+              postalCode: payload.postalCode,
+              city: payload.city,
+              zone: payload.zone,
+              reference: payload.address,
+              isDefault: true,
+            });
+          } catch {
+            toast.warning("Cliente creado, pero el domicilio no se pudo guardar. Agrégalo desde Editar.");
+          }
         }
         toast.success("Cliente creado con éxito");
         onSaved(created);
@@ -74,6 +83,8 @@ export function CustomerFormDialog({ open, customer, onClose, onSaved }: Custome
       onClose();
     } catch {
       toast.error("Error al guardar el cliente");
+    } finally {
+      setSaving(false);
     }
   }
 
@@ -125,7 +136,7 @@ export function CustomerFormDialog({ open, customer, onClose, onSaved }: Custome
           </TextField>
           {isEdit && customer ? (
             <Box sx={{ gridColumn: "1 / -1" }}>
-              <CustomerLocationsEditor customerId={customer.id} />
+              <CustomerLocationsEditor customerId={customer.id} onChanged={() => onSaved()} />
             </Box>
           ) : null}
 
@@ -133,8 +144,8 @@ export function CustomerFormDialog({ open, customer, onClose, onSaved }: Custome
         </DialogContent>
         <DialogActions>
           <Button onClick={onClose}>Cancelar</Button>
-          <Button type="submit" variant="contained">
-            Guardar
+          <Button type="submit" variant="contained" disabled={saving}>
+            {saving ? "Guardando..." : "Guardar"}
           </Button>
         </DialogActions>
       </form>

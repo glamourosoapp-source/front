@@ -14,6 +14,7 @@ import {
   Paper,
 } from "@mui/material";
 import { httpClient, getApiErrorMessage } from "@/services/http-client";
+import { usePermissions } from "@/lib/permissions";
 import { TemplatePicker } from "@/components/prospects/TemplatePicker";
 import { formatMxPhone } from "@/utils/format-phone";
 import { OUTREACH_CHANNEL } from "@glamouroso/shared/constants";
@@ -49,6 +50,9 @@ function daysAgo(iso?: string | null): string {
  * guardián con la misma protección de cupos y supresiones.
  */
 export function FollowupTab({ onContacted }: { onContacted?: () => void }) {
+  const { can } = usePermissions();
+  // El envío exige outreach:create en el Back; sin él la tabla es solo lectura.
+  const canSend = can("outreach", "create");
   const [rows, setRows] = useState<FollowupRow[]>([]);
   const [config, setConfig] = useState<{ waitDays: number; maxTouches: number } | null>(null);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
@@ -146,7 +150,7 @@ export function FollowupTab({ onContacted }: { onContacted?: () => void }) {
             trae la mayoría de las respuestas.
           </p>
         </div>
-        <span className="pill">{selectedIds.size} seleccionados</span>
+        {canSend && <span className="pill">{selectedIds.size} seleccionados</span>}
       </div>
 
       {listLoading ? (
@@ -163,26 +167,30 @@ export function FollowupTab({ onContacted }: { onContacted?: () => void }) {
         </p>
       ) : (
         <form onSubmit={handleSend} className="grid gap-4">
-          <TemplatePicker
-            value={templateName}
-            onChange={setTemplateName}
-            helperText="Usa una plantilla DISTINTA a la del primer mensaje: recordar sin repetir funciona mejor."
-            required
-          />
+          {canSend && (
+            <TemplatePicker
+              value={templateName}
+              onChange={setTemplateName}
+              helperText="Usa una plantilla DISTINTA a la del primer mensaje: recordar sin repetir funciona mejor."
+              required
+            />
+          )}
 
           <TableContainer component={Paper} elevation={0} className="table-container-premium">
             <Table sx={{ minWidth: 650 }}>
               <TableHead>
                 <TableRow>
-                  <TableCell padding="checkbox">
-                    <Checkbox
-                      checked={allSelected}
-                      indeterminate={rows.some((r) => selectedIds.has(r.id)) && !allSelected}
-                      onChange={() =>
-                        setSelectedIds(allSelected ? new Set() : new Set(rows.map((r) => r.id)))
-                      }
-                    />
-                  </TableCell>
+                  {canSend && (
+                    <TableCell padding="checkbox">
+                      <Checkbox
+                        checked={allSelected}
+                        indeterminate={rows.some((r) => selectedIds.has(r.id)) && !allSelected}
+                        onChange={() =>
+                          setSelectedIds(allSelected ? new Set() : new Set(rows.map((r) => r.id)))
+                        }
+                      />
+                    </TableCell>
+                  )}
                   <TableCell>Negocio</TableCell>
                   <TableCell>Teléfono</TableCell>
                   <TableCell>Ciudad</TableCell>
@@ -192,10 +200,12 @@ export function FollowupTab({ onContacted }: { onContacted?: () => void }) {
               </TableHead>
               <TableBody>
                 {rows.map((row) => (
-                  <TableRow key={row.id} hover selected={selectedIds.has(row.id)}>
-                    <TableCell padding="checkbox">
-                      <Checkbox checked={selectedIds.has(row.id)} onChange={() => toggleOne(row.id)} />
-                    </TableCell>
+                  <TableRow key={row.id} hover selected={canSend && selectedIds.has(row.id)}>
+                    {canSend && (
+                      <TableCell padding="checkbox">
+                        <Checkbox checked={selectedIds.has(row.id)} onChange={() => toggleOne(row.id)} />
+                      </TableCell>
+                    )}
                     <TableCell>{row.name}</TableCell>
                     <TableCell>{formatMxPhone(row.phone)}</TableCell>
                     <TableCell>{row.city || "-"}</TableCell>
@@ -211,23 +221,25 @@ export function FollowupTab({ onContacted }: { onContacted?: () => void }) {
             </Table>
           </TableContainer>
 
-          <div
-            className="flex flex-wrap items-center justify-between gap-3"
-            style={{
-              position: "sticky",
-              bottom: 0,
-              background: "var(--card)",
-              borderTop: "1px solid var(--border)",
-              padding: "12px 4px 4px",
-            }}
-          >
-            <span className="page-kicker" style={{ margin: 0 }}>
-              El envío pasa por el guardián: respeta el cupo diario y la lista de no contactar.
-            </span>
-            <Button type="submit" variant="contained" disabled={sending || selectedIds.size === 0}>
-              {sending ? "Enviando..." : `Enviar seguimiento (${selectedIds.size})`}
-            </Button>
-          </div>
+          {canSend && (
+            <div
+              className="flex flex-wrap items-center justify-between gap-3"
+              style={{
+                position: "sticky",
+                bottom: 0,
+                background: "var(--card)",
+                borderTop: "1px solid var(--border)",
+                padding: "12px 4px 4px",
+              }}
+            >
+              <span className="page-kicker" style={{ margin: 0 }}>
+                El envío pasa por el guardián: respeta el cupo diario y la lista de no contactar.
+              </span>
+              <Button type="submit" variant="contained" disabled={sending || selectedIds.size === 0}>
+                {sending ? "Enviando..." : `Enviar seguimiento (${selectedIds.size})`}
+              </Button>
+            </div>
+          )}
         </form>
       )}
     </section>

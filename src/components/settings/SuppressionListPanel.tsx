@@ -1,9 +1,10 @@
 "use client";
 
-import { FormEvent, useCallback, useEffect, useState } from "react";
+import { FormEvent, useCallback, useEffect, useRef, useState } from "react";
 import { Button, TextField } from "@mui/material";
 import { httpClient, getApiErrorMessage } from "@/services/http-client";
 import { usePermissions } from "@/lib/permissions";
+import { useDebounce } from "@/hooks/useDebounce";
 import { formatMxPhone } from "@/utils/format-phone";
 import { SUPPRESSION_REASON } from "@glamouroso/shared/constants";
 import type { SuppressionsResponse, SuppressionRow } from "@glamouroso/shared/schemas/campaign";
@@ -32,21 +33,28 @@ export function SuppressionListPanel() {
   const [rows, setRows] = useState<SuppressionRow[]>([]);
   const [total, setTotal] = useState(0);
   const [search, setSearch] = useState("");
+  const debouncedSearch = useDebounce(search, 300);
   const [newPhone, setNewPhone] = useState("");
   const [newNotes, setNewNotes] = useState("");
   const [busy, setBusy] = useState(false);
 
+  // Debounce + seq guard: sin esto hay un request por tecla y una respuesta
+  // fuera de orden deja la lista filtrada con un término anterior.
+  const loadSeq = useRef(0);
   const load = useCallback(async () => {
+    const seq = ++loadSeq.current;
     try {
       const response = await httpClient.get<SuppressionsResponse>("/outreach/suppressions", {
-        search,
+        search: debouncedSearch,
       });
+      if (seq !== loadSeq.current) return;
       setRows(response.items);
       setTotal(response.total);
     } catch (error) {
+      if (seq !== loadSeq.current) return;
       toast.error(getApiErrorMessage(error, "Error al cargar la lista de exclusión"));
     }
-  }, [search]);
+  }, [debouncedSearch]);
 
   useEffect(() => {
     load().catch(() => undefined);

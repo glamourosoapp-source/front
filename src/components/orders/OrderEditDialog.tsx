@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent } from "react";
+import { FormEvent, useState } from "react";
 import {
   Button,
   Dialog,
@@ -34,11 +34,14 @@ interface OrderEditDialogProps {
 }
 
 export function OrderEditDialog({ open, order, onClose, onSaved }: OrderEditDialogProps) {
+  const [saving, setSaving] = useState(false);
+
   async function save(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!order) return;
 
     const form = new FormData(event.currentTarget);
+    setSaving(true);
     try {
       await httpClient.put(`/orders/${order.id}`, {
         status: String(form.get("status") || order.status),
@@ -56,6 +59,8 @@ export function OrderEditDialog({ open, order, onClose, onSaved }: OrderEditDial
       onSaved();
     } catch {
       toast.error("Error al guardar el pedido");
+    } finally {
+      setSaving(false);
     }
   }
 
@@ -108,7 +113,7 @@ export function OrderEditDialog({ open, order, onClose, onSaved }: OrderEditDial
         </DialogContent>
         <DialogActions>
           <Button onClick={onClose}>Cancelar</Button>
-          <Button type="submit" variant="contained">
+          <Button type="submit" variant="contained" disabled={saving}>
             Guardar
           </Button>
         </DialogActions>

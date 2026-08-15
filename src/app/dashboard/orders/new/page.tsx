@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { FormEvent, useEffect, useMemo, useState } from "react";
+import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   Autocomplete,
@@ -27,6 +27,7 @@ import { resolveProductUnitPrice } from "@glamouroso/shared";
 import { httpClient, getApiErrorMessage } from "@/services/http-client";
 import { useAuthStore } from "@/stores/auth.store";
 import { usePermissions } from "@/lib/permissions";
+import { useDebounce } from "@/hooks/useDebounce";
 import { formatDateOnly } from "@/lib/format-date-only";
 import { Customer, ListResponse, Product } from "@/types";
 import { toast } from "sonner";
@@ -68,35 +69,78 @@ export default function NewOrderPage() {
     setCustomerDialogOpen(true);
   }
 
+  // Búsqueda server-side: con >200 clientes/productos, cargar una sola página
+  // y filtrar en memoria dejaba registros imposibles de encontrar.
+  const [customerInput, setCustomerInput] = useState("");
+  const [productInput, setProductInput] = useState("");
+  const debouncedCustomerInput = useDebounce(customerInput, 300);
+  const debouncedProductInput = useDebounce(productInput, 300);
+  const customerSeq = useRef(0);
+  const productSeq = useRef(0);
+
   useEffect(() => {
     if (!canCreate) {
       setLoadingCustomers(false);
+      return;
+    }
+    const seq = ++customerSeq.current;
+    setLoadingCustomers(true);
+    httpClient
+      .get<ListResponse<Customer>>("/customers", {
+        search: debouncedCustomerInput.trim() || undefined,
+        limit: 50,
+      })
+      .then((res) => {
+        if (seq === customerSeq.current) setCustomers(res.items);
+      })
+      .catch(() => {
+        if (seq === customerSeq.current) toast.error("No se pudo cargar clientes");
+      })
+      .finally(() => {
+        if (seq === customerSeq.current) setLoadingCustomers(false);
+      });
+  }, [canCreate, debouncedCustomerInput]);
+
+  useEffect(() => {
+    if (!canCreate) {
       setLoadingProducts(false);
       return;
     }
-    void (async () => {
-      setLoadingCustomers(true);
-      setLoadingProducts(true);
-      const [customersResult, productsResult] = await Promise.allSettled([
-        httpClient.get<ListResponse<Customer>>("/customers", { limit: 200 }),
-        httpClient.get<ListResponse<Product>>("/products", { available: true, limit: 200 }),
-      ]);
+    const seq = ++productSeq.current;
+    setLoadingProducts(true);
+    httpClient
+      .get<ListResponse<Product>>("/products", {
+        available: true,
+        search: debouncedProductInput.trim() || undefined,
+        limit: 50,
+      })
+      .then((res) => {
+        if (seq === productSeq.current) setProducts(res.items);
+      })
+      .catch(() => {
+        if (seq === productSeq.current) toast.error("No se pudo cargar productos");
+      })
+      .finally(() => {
+        if (seq === productSeq.current) setLoadingProducts(false);
+      });
+  }, [canCreate, debouncedProductInput]);
 
-      if (customersResult.status === "fulfilled") {
-        setCustomers(customersResult.value.items);
-      } else {
-        toast.error("No se pudo cargar clientes");
-      }
-      setLoadingCustomers(false);
-
-      if (productsResult.status === "fulfilled") {
-        setProducts(productsResult.value.items);
-      } else {
-        toast.error("No se pudo cargar productos");
-      }
-      setLoadingProducts(false);
-    })();
-  }, [canCreate]);
+  // La opción seleccionada debe seguir existiendo aunque la búsqueda actual ya
+  // no la incluya (el server solo devuelve lo que matchea el texto).
+  const customerOptions = useMemo(
+    () =>
+      selectedCustomer && !customers.some((c) => c.id === selectedCustomer.id)
+        ? [selectedCustomer, ...customers]
+        : customers,
+    [customers, selectedCustomer]
+  );
+  const productOptions = useMemo(
+    () =>
+      selectedProduct && !products.some((p) => p.id === selectedProduct.id)
+        ? [selectedProduct, ...products]
+        : products,
+    [products, selectedProduct]
+  );
 
   useEffect(() => {
     setLineItems((items) =>
@@ -266,24 +310,28 @@ export default function NewOrderPage() {
 
         <Box sx={{ display: "flex", gap: 2, alignItems: "flex-start", flexWrap: "wrap", mb: 3 }}>
           <Autocomplete
-            options={products}
+            options={productOptions}
             value={selectedProduct}
             onChange={(_, value) => setSelectedProduct(value)}
+            onInputChange={(_, value, reason) => {
+              // "reset" es el relleno del label al seleccionar: no buscar eso.
+              if (reason !== "reset") setProductInput(value);
+            }}
+            filterOptions={(options) => options}
             getOptionLabel={(option) =>
               `${option.name}${option.sku ? ` · ${option.sku}` : ""} · $${Number(option.price).toFixed(2)}`
             }
             isOptionEqualToValue={(option, value) => option.id === value.id}
             loading={loadingProducts}
-            disabled={loadingProducts}
             renderInput={(params) => (
               <TextField
                 {...params}
                 label="Producto del catálogo"
                 helperText={
                   loadingProducts
-                    ? "Cargando productos…"
-                    : products.length === 0
-                      ? "No hay productos disponibles"
+                    ? "Buscando productos…"
+                    : productOptions.length === 0
+                      ? "Sin resultados en el catálogo"
                       : "Tip: presiona Enter para agregar"
                 }
                 onKeyDown={(e) => {
@@ -402,11 +450,14 @@ export default function NewOrderPage() {
         <div className="form-grid">
           <Box sx={{ display: "flex", gap: 1.5, alignItems: "flex-start" }}>
             <Autocomplete
-              options={customers}
+              options={customerOptions}
               value={selectedCustomer}
               onChange={(_, value) => setSelectedCustomer(value)}
+              onInputChange={(_, value, reason) => {
+                if (reason !== "reset") setCustomerInput(value);
+              }}
+              filterOptions={(options) => options}
               loading={loadingCustomers}
-              disabled={loadingCustomers}
               getOptionLabel={(option) => `${option.name}${option.phone ? ` (${option.phone})` : ""}`}
               isOptionEqualToValue={(option, value) => option.id === value.id}
               renderInput={(params) => (
@@ -414,7 +465,7 @@ export default function NewOrderPage() {
                   {...params}
                   label="Buscar cliente"
                   required
-                  helperText={loadingCustomers ? "Cargando clientes…" : customers.length === 0 ? "No hay clientes" : " "}
+                  helperText={loadingCustomers ? "Buscando clientes…" : customerOptions.length === 0 ? "Sin resultados" : " "}
                 />
               )}
               sx={{ flex: 1, minWidth: 0 }}

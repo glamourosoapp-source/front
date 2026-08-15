@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useCallback, useEffect, useState } from "react";
+import { FormEvent, useCallback, useEffect, useRef, useState } from "react";
 import { Button } from "@mui/material";
 import { DataTable } from "@/components/ui/DataTable";
 import { ListPagination } from "@/components/ui/ListPagination";
@@ -36,9 +36,13 @@ export default function ProductsPage() {
   const [detailOpen, setDetailOpen] = useState(false);
   const [detailLoading, setDetailLoading] = useState(false);
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
+  const [saving, setSaving] = useState(false);
+  // Solo la carga más reciente escribe estado (cambios rápidos de filtro/página).
+  const loadSeq = useRef(0);
 
   const load = useCallback(
     async (targetPage: number) => {
+      const seq = ++loadSeq.current;
       setLoading(true);
       try {
         const response = await httpClient.get<ListResponse<Product>>("/products", {
@@ -48,14 +52,16 @@ export default function ProductsPage() {
           page: targetPage,
           limit,
         });
+        if (seq !== loadSeq.current) return;
         setProducts(response.items);
         setTotal(response.total);
         setPage(response.page);
         setTotalPages(response.totalPages);
       } catch {
+        if (seq !== loadSeq.current) return;
         toast.error("No se pudo cargar el catalogo. Verifica que el backend este corriendo.");
       } finally {
-        setLoading(false);
+        if (seq === loadSeq.current) setLoading(false);
       }
     },
     [available, categoryId, limit, search]
@@ -144,6 +150,7 @@ export default function ProductsPage() {
       variants,
     };
     if (isAdmin) payload.cost = Number(form.get("cost") || 0);
+    setSaving(true);
     try {
       if (editing) {
         await httpClient.put(`/products/${editing.id}`, payload);
@@ -156,6 +163,8 @@ export default function ProductsPage() {
       await load(page);
     } catch {
       toast.error("Error al guardar el producto");
+    } finally {
+      setSaving(false);
     }
   }
 
@@ -254,6 +263,7 @@ export default function ProductsPage() {
         open={open}
         editing={editing}
         categories={categories}
+        saving={saving}
         onClose={() => setOpen(false)}
         onSubmit={save}
       />

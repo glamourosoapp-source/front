@@ -20,6 +20,8 @@ export interface User {
   isActive?: boolean;
   profileId?: string | null;
   profile?: Profile | null;
+  /** Resumen de la organización que cualquier rol necesita (viene de /auth/me). */
+  organization?: { timezone: string };
 }
 
 export interface Customer {
@@ -113,6 +115,7 @@ export interface FAQ {
   question: string;
   answer: string;
   category: string;
+  isActive?: boolean;
   embeddingStatus: "pending" | "ready" | "failed";
   score?: number;
 }
