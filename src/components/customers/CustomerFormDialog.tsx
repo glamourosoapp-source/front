@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useState } from "react";
+import { FormEvent, useEffect, useRef, useState } from "react";
 import {
   Box,
   Button,
@@ -13,9 +13,13 @@ import {
   Typography,
 } from "@mui/material";
 import { httpClient } from "@/services/http-client";
-import { Customer } from "@/types";
+import { usePermissions } from "@/lib/permissions";
+import { Customer, ListResponse, Team } from "@/types";
 import { toast } from "sonner";
-import { CustomerLocationsEditor } from "@/components/customers/CustomerLocationsEditor";
+import {
+  CustomerLocationsEditor,
+  type CustomerLocationsEditorHandle,
+} from "@/components/customers/CustomerLocationsEditor";
 
 interface CustomerFormDialogProps {
   open: boolean;
@@ -26,17 +30,32 @@ interface CustomerFormDialogProps {
 
 export function CustomerFormDialog({ open, customer, onClose, onSaved }: CustomerFormDialogProps) {
   const isEdit = Boolean(customer);
+  const { isAdmin } = usePermissions();
   const [saving, setSaving] = useState(false);
+  const [teams, setTeams] = useState<Team[]>([]);
+  const locationsEditorRef = useRef<CustomerLocationsEditorHandle>(null);
+
+  // Reasignación de equipo: solo admins en edición.
+  const showTeamSelect = isAdmin && isEdit;
+  useEffect(() => {
+    if (!open || !showTeamSelect || teams.length) return;
+    httpClient
+      .get<ListResponse<Team>>("/teams", { limit: 200 })
+      .then((r) => setTeams(r.items))
+      .catch(() => undefined);
+  }, [open, showTeamSelect, teams.length]);
 
   async function save(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const form = new FormData(event.currentTarget);
+    const teamIdRaw = String(form.get("teamId") || "");
     const payload = {
       name: String(form.get("name")),
       phone: String(form.get("phone")),
       email: String(form.get("email") || ""),
       notes: String(form.get("notes") || ""),
       pricingTier: String(form.get("pricingTier") || "retail"),
+      ...(showTeamSelect ? { teamId: teamIdRaw ? teamIdRaw : null } : {}),
       ...(isEdit
         ? {}
         : {
@@ -52,7 +71,14 @@ export function CustomerFormDialog({ open, customer, onClose, onSaved }: Custome
     try {
       if (isEdit && customer) {
         const updated = await httpClient.put<Customer>(`/customers/${customer.id}`, payload);
-        toast.success("Cliente actualizado con éxito");
+        // El editor de ubicaciones maneja su propio estado: persistir aquí los
+        // drafts sucios para que el Guardar del diálogo no los descarte.
+        const locationsOk = (await locationsEditorRef.current?.saveAll()) ?? true;
+        if (locationsOk) {
+          toast.success("Cliente actualizado con éxito");
+        } else {
+          toast.warning("Cliente actualizado, pero alguna ubicación no se pudo guardar.");
+        }
         onSaved(updated);
       } else {
         const created = await httpClient.post<Customer>("/customers", payload);
@@ -134,9 +160,30 @@ export function CustomerFormDialog({ open, customer, onClose, onSaved }: Custome
             <MenuItem value="retail">Menudeo</MenuItem>
             <MenuItem value="wholesale">Mayoreo</MenuItem>
           </TextField>
+          {showTeamSelect ? (
+            <TextField
+              select
+              name="teamId"
+              label="Equipo"
+              defaultValue={customer?.teamId || ""}
+              fullWidth
+              helperText="Define qué equipo ve a este cliente."
+            >
+              <MenuItem value="">Sin equipo</MenuItem>
+              {teams.map((team) => (
+                <MenuItem key={team.id} value={team.id}>
+                  {team.name}
+                </MenuItem>
+              ))}
+            </TextField>
+          ) : null}
           {isEdit && customer ? (
             <Box sx={{ gridColumn: "1 / -1" }}>
-              <CustomerLocationsEditor customerId={customer.id} onChanged={() => onSaved()} />
+              <CustomerLocationsEditor
+                ref={locationsEditorRef}
+                customerId={customer.id}
+                onChanged={() => onSaved()}
+              />
             </Box>
           ) : null}
 

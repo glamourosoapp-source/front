@@ -11,6 +11,14 @@ export interface Profile {
   updatedAt?: string;
 }
 
+export interface Team {
+  id: string;
+  organizationId?: string;
+  name: string;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
 export interface User {
   id: string;
   name: string;
@@ -20,6 +28,8 @@ export interface User {
   isActive?: boolean;
   profileId?: string | null;
   profile?: Profile | null;
+  teamId?: string | null;
+  team?: Team | null;
   /** Resumen de la organización que cualquier rol necesita (viene de /auth/me). */
   organization?: { timezone: string };
 }
@@ -40,6 +50,10 @@ export interface Customer {
   pricingTier?: "retail" | "wholesale";
   totalOrders?: number;
   totalSpent?: string | number;
+  createdBy?: string | null;
+  creator?: { id: string; name: string } | null;
+  teamId?: string | null;
+  team?: Team | null;
   tags?: Array<{ id: string; name: string; color: string }>;
   locations?: CustomerLocation[];
 }
@@ -99,7 +113,7 @@ export interface Order {
   createdAt: string;
   source?: string;
   createdBy?: string | null;
-  creator?: { id: string; name: string } | null;
+  creator?: { id: string; name: string; teamId?: string | null; team?: { id: string; name: string } | null } | null;
   customer?: Customer;
   items?: Array<{
     id: string;

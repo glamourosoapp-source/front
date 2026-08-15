@@ -8,15 +8,17 @@ import { DataTable } from "@/components/ui/DataTable";
 import { ListPagination } from "@/components/ui/ListPagination";
 import { httpClient } from "@/services/http-client";
 import { usePermissions } from "@/lib/permissions";
-import { Customer, ListResponse } from "@/types";
+import { Customer, ListResponse, Team } from "@/types";
 import { toast } from "sonner";
 
 export default function CustomersPage() {
   const router = useRouter();
-  const { can } = usePermissions();
+  const { can, isAdmin } = usePermissions();
   const [customers, setCustomers] = useState<Customer[]>([]);
+  const [teams, setTeams] = useState<Team[]>([]);
   const [search, setSearch] = useState("");
   const [zone, setZone] = useState("");
+  const [teamId, setTeamId] = useState("");
   const [page, setPage] = useState(1);
   const [limit, setLimit] = useState(25);
   const [total, setTotal] = useState(0);
@@ -35,6 +37,7 @@ export default function CustomersPage() {
         const r = await httpClient.get<ListResponse<Customer>>("/customers", {
           search,
           zone,
+          teamId,
           page: targetPage,
           limit,
         });
@@ -50,13 +53,22 @@ export default function CustomersPage() {
         if (seq === loadSeq.current) setLoading(false);
       }
     },
-    [search, zone, limit]
+    [search, zone, teamId, limit]
   );
 
   useEffect(() => {
     load(page);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [page, limit]);
+
+  // El filtro por equipo solo aplica para admins (los perfiles team-scoped ya vienen filtrados).
+  useEffect(() => {
+    if (!isAdmin) return;
+    httpClient
+      .get<ListResponse<Team>>("/teams", { limit: 200 })
+      .then((r) => setTeams(r.items))
+      .catch(() => undefined);
+  }, [isAdmin]);
 
   function applyFilters() {
     if (page === 1) {
@@ -105,7 +117,13 @@ export default function CustomersPage() {
           </div>
           <span className="pill">{total.toLocaleString("es-MX")} clientes</span>
         </div>
-        <div className="mb-4 grid gap-3 md:grid-cols-[minmax(220px,1fr)_180px_auto]">
+        <div
+          className={`mb-4 grid gap-3 ${
+            isAdmin
+              ? "md:grid-cols-[minmax(220px,1fr)_180px_180px_auto]"
+              : "md:grid-cols-[minmax(220px,1fr)_180px_auto]"
+          }`}
+        >
           <input
             className="input"
             placeholder="Buscar nombre o WhatsApp"
@@ -116,6 +134,16 @@ export default function CustomersPage() {
             }}
           />
           <input className="input" placeholder="Zona" value={zone} onChange={(e) => setZone(e.target.value)} />
+          {isAdmin ? (
+            <select className="input" value={teamId} onChange={(e) => setTeamId(e.target.value)}>
+              <option value="">Todos los equipos</option>
+              {teams.map((team) => (
+                <option key={team.id} value={team.id}>
+                  {team.name}
+                </option>
+              ))}
+            </select>
+          ) : null}
           <Button variant="outlined" onClick={applyFilters} disabled={loading}>{loading ? "Cargando..." : "Filtrar"}</Button>
         </div>
         <DataTable
@@ -131,6 +159,7 @@ export default function CustomersPage() {
             { key: "colony", label: "Colonia" },
             { key: "postalCode", label: "CP" },
             { key: "zone", label: "Zona" },
+            { key: "team", label: "Equipo", render: (r) => r.team?.name ?? "—" },
             {
               key: "pricingTier",
               label: "Precio",

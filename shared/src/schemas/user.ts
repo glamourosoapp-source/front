@@ -8,6 +8,7 @@ const userPayload = {
   email: z.string().email(),
   password: z.string().min(6).max(72),
   profileId: z.union([z.string().uuid(), z.null()]).optional(),
+  teamId: z.union([z.string().uuid(), z.null()]).optional(),
   role: z.enum(assignableRoles).optional(),
 };
 
@@ -18,6 +19,7 @@ export const updateUserSchema = z.object({
   email: userPayload.email.optional(),
   password: z.union([userPayload.password, z.literal(""), z.null()]).optional(),
   profileId: userPayload.profileId,
+  teamId: userPayload.teamId,
   isActive: z.boolean().optional(),
   role: userPayload.role,
 });

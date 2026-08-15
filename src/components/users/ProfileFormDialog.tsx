@@ -64,11 +64,11 @@ export function ProfileFormDialog({ open, profile, onClose, onSaved }: ProfileFo
     });
   };
 
-  const orderScope: OrderScope =
-    permissions.orders?.scope === ORDER_SCOPES.OWN ? ORDER_SCOPES.OWN : ORDER_SCOPES.ALL;
+  const effectiveScope = (scope: OrderScope | undefined): OrderScope =>
+    scope === ORDER_SCOPES.OWN || scope === ORDER_SCOPES.TEAM ? scope : ORDER_SCOPES.ALL;
 
-  const customerScope: OrderScope =
-    permissions.customers?.scope === ORDER_SCOPES.OWN ? ORDER_SCOPES.OWN : ORDER_SCOPES.ALL;
+  const orderScope = effectiveScope(permissions.orders?.scope);
+  const customerScope = effectiveScope(permissions.customers?.scope);
 
   const setOrderScope = (value: OrderScope) => {
     setPermissions((prev) => ({ ...prev, orders: { ...(prev.orders ?? {}), scope: value } }));
@@ -156,6 +156,7 @@ export function ProfileFormDialog({ open, profile, onClose, onSaved }: ProfileFo
           </Typography>
           <RadioGroup row value={orderScope} onChange={(e) => setOrderScope(e.target.value as OrderScope)}>
             <FormControlLabel value={ORDER_SCOPES.ALL} control={<Radio size="small" />} label="Todos los pedidos" />
+            <FormControlLabel value={ORDER_SCOPES.TEAM} control={<Radio size="small" />} label="Solo su equipo" />
             <FormControlLabel value={ORDER_SCOPES.OWN} control={<Radio size="small" />} label="Solo los suyos" />
           </RadioGroup>
 
@@ -164,6 +165,7 @@ export function ProfileFormDialog({ open, profile, onClose, onSaved }: ProfileFo
           </Typography>
           <RadioGroup row value={customerScope} onChange={(e) => setCustomerScope(e.target.value as OrderScope)}>
             <FormControlLabel value={ORDER_SCOPES.ALL} control={<Radio size="small" />} label="Todos los clientes" />
+            <FormControlLabel value={ORDER_SCOPES.TEAM} control={<Radio size="small" />} label="Solo su equipo" />
             <FormControlLabel value={ORDER_SCOPES.OWN} control={<Radio size="small" />} label="Solo los suyos" />
           </RadioGroup>
         </DialogContent>

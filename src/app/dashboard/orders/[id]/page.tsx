@@ -17,7 +17,7 @@ import {
 import { ArrowLeft, Download, Pencil, Printer } from "lucide-react";
 import { OrderEditDialog } from "@/components/orders/OrderEditDialog";
 import { OrderPrintSheet } from "@/components/orders/OrderPrintSheet";
-import { orderCreatorLabel, paymentMethodLabel, paymentStatusLabel } from "@/constants/orders";
+import { orderCreatorLabel, orderTeamLabel, paymentMethodLabel, paymentStatusLabel } from "@/constants/orders";
 import { DetailField } from "@/components/ui/DetailField";
 import { httpClient } from "@/services/http-client";
 import { usePermissions } from "@/lib/permissions";
@@ -170,6 +170,7 @@ export default function OrderDetailPage() {
           />
           <DetailField label="Ventana horaria" value={order.deliveryTimeWindow || "—"} />
           <DetailField label="Creado por" value={orderCreatorLabel(order)} />
+          <DetailField label="Equipo" value={orderTeamLabel(order)} />
           <DetailField label="Total" value={money(order.total)} />
         </div>
       </section>

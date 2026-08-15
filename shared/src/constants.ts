@@ -128,10 +128,11 @@ export const MAX_CUSTOMER_LOCATIONS = 3;
 /** Acciones disponibles por módulo para perfiles de permisos. */
 export const PERMISSION_ACTIONS = ["view", "create", "update", "delete"] as const;
 
-/** Alcance de lectura/edición: todos los de la org o solo los creados por el usuario. */
+/** Alcance de lectura/edición: toda la org, solo su equipo, o solo lo creado por el usuario. */
 export const ORDER_SCOPES = {
   ALL: "all",
   OWN: "own",
+  TEAM: "team",
 } as const;
 
 /** Módulos del Dashboard sobre los que un perfil define permisos. */

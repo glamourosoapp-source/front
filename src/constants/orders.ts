@@ -33,3 +33,12 @@ export function orderCreatorLabel(order: {
   if (order.source === "whatsapp") return "Agente IA";
   return order.creator?.name ?? "—";
 }
+
+/** Equipo del creador; los pedidos históricos de WhatsApp sin creador caen a "Glamouroso IA". */
+export function orderTeamLabel(order: {
+  source?: string;
+  creator?: { team?: { name: string } | null } | null;
+}) {
+  if (order.creator?.team?.name) return order.creator.team.name;
+  return order.source === "whatsapp" ? "Glamouroso IA" : "—";
+}

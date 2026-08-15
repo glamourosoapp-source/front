@@ -36,9 +36,12 @@ export const updateCustomerSchema = z.object({
   source: optionalString,
   pricingTier: customerPayload.pricingTier.optional(),
   tagIds: customerPayload.tagIds.optional(),
+  /** Reasignación de equipo; el router solo la acepta para roles admin. */
+  teamId: z.union([z.string().uuid(), z.null()]).optional(),
 });
 
 export const queryCustomerSchema = paginationSchema.extend({
   tag: optionalString,
   zone: optionalString,
+  teamId: z.union([z.string().uuid(), z.literal(""), z.null()]).optional(),
 });

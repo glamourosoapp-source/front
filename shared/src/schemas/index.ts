@@ -13,3 +13,4 @@ export * from "./conversation";
 export * from "./notification";
 export * from "./profile";
 export * from "./user";
+export * from "./team";

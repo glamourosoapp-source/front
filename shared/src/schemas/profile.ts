@@ -9,7 +9,7 @@ const modulePermissionsSchema = z
     create: z.boolean().optional(),
     update: z.boolean().optional(),
     delete: z.boolean().optional(),
-    scope: z.enum([ORDER_SCOPES.ALL, ORDER_SCOPES.OWN]).optional(),
+    scope: z.enum([ORDER_SCOPES.ALL, ORDER_SCOPES.OWN, ORDER_SCOPES.TEAM]).optional(),
   })
   .strict();
 

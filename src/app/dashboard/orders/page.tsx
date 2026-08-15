@@ -8,7 +8,7 @@ import { OrderEditDialog } from "@/components/orders/OrderEditDialog";
 import { DataTable } from "@/components/ui/DataTable";
 import { DateFilterField } from "@/components/ui/DateFilterField";
 import { ListPagination } from "@/components/ui/ListPagination";
-import { PAYMENT_STATUS_OPTIONS, orderCreatorLabel, paymentStatusLabel } from "@/constants/orders";
+import { PAYMENT_STATUS_OPTIONS, orderCreatorLabel, orderTeamLabel, paymentStatusLabel } from "@/constants/orders";
 import { httpClient } from "@/services/http-client";
 import { usePermissions } from "@/lib/permissions";
 import { useAuthStore } from "@/stores/auth.store";
@@ -339,6 +339,7 @@ export default function OrdersPage() {
             },
             { key: "customer", label: "Cliente", render: (r) => r.customer?.name || "" },
             { key: "creator", label: "Creado por", render: (r) => orderCreatorLabel(r) },
+            { key: "team", label: "Equipo", render: (r) => orderTeamLabel(r) },
             {
               key: "status",
               label: "Estado",

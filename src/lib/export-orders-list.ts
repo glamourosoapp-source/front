@@ -1,4 +1,4 @@
-import { paymentStatusLabel } from "@/constants/orders";
+import { orderCreatorLabel, orderTeamLabel, paymentStatusLabel } from "@/constants/orders";
 import { formatDateOnly } from "@/lib/format-date-only";
 import type { Order } from "@/types";
 
@@ -43,10 +43,15 @@ export const ORDERS_EXPORT_HEADERS = [
   "Ventana",
   "Cliente",
   "Teléfono",
+  "Creado por",
+  "Equipo",
   "Estado",
   "Pago",
   "Total",
 ];
+
+/** Índice (0-based) de la columna Total; los formatos numéricos dependen de él. */
+export const ORDERS_EXPORT_TOTAL_INDEX = ORDERS_EXPORT_HEADERS.length - 1;
 
 export function orderToExportRow(order: Order): (string | number)[] {
   return [
@@ -56,6 +61,8 @@ export function orderToExportRow(order: Order): (string | number)[] {
     order.deliveryTimeWindow || "",
     order.customer?.name || "",
     order.customer?.phone || "",
+    orderCreatorLabel(order),
+    orderTeamLabel(order),
     ORDER_STATUS_LABELS[order.status] || order.status,
     paymentStatusLabel(order.paymentStatus),
     Number(order.total || 0),
@@ -138,6 +145,8 @@ export async function exportOrdersToXlsx(orders: Order[], context: OrdersExportC
     { width: 14 },
     { width: 26 },
     { width: 16 },
+    { width: 18 },
+    { width: 16 },
     { width: 12 },
     { width: 14 },
     { width: 12 },
@@ -151,12 +160,12 @@ export async function exportOrdersToXlsx(orders: Order[], context: OrdersExportC
       ext: { width: 180, height: Math.round(180 / LOGO_ASPECT) },
     });
   }
-  sheet.mergeCells("D2:I2");
+  sheet.mergeCells("D2:K2");
   const titleCell = sheet.getCell("D2");
   titleCell.value = `Pedidos — ${context.scopeLabel}`;
   titleCell.font = { name: "Calibri", size: 16, bold: true, color: { argb: argb(BRAND.navy) } };
   titleCell.alignment = { horizontal: "right", vertical: "middle" };
-  sheet.mergeCells("D3:I3");
+  sheet.mergeCells("D3:K3");
   const subtitleCell = sheet.getCell("D3");
   subtitleCell.value = `Generado: ${generatedAt} · ${orders.length} pedidos`;
   subtitleCell.font = { name: "Calibri", size: 10, color: { argb: argb(BRAND.textMuted) } };
@@ -164,7 +173,7 @@ export async function exportOrdersToXlsx(orders: Order[], context: OrdersExportC
   sheet.getRow(2).height = 22;
 
   // Fila 5: franja amarilla de marca.
-  sheet.mergeCells("A5:I5");
+  sheet.mergeCells("A5:K5");
   sheet.getCell("A5").fill = {
     type: "pattern",
     pattern: "solid",
@@ -179,7 +188,7 @@ export async function exportOrdersToXlsx(orders: Order[], context: OrdersExportC
     cell.value = header;
     cell.font = { name: "Calibri", size: 11, bold: true, color: { argb: "FFFFFFFF" } };
     cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: argb(BRAND.navy) } };
-    cell.alignment = { vertical: "middle", horizontal: index === 8 ? "right" : "left" };
+    cell.alignment = { vertical: "middle", horizontal: index === ORDERS_EXPORT_TOTAL_INDEX ? "right" : "left" };
   });
   headerRow.height = 20;
 
@@ -195,18 +204,18 @@ export async function exportOrdersToXlsx(orders: Order[], context: OrdersExportC
       }
       cell.border = { bottom: { style: "thin", color: { argb: argb(BRAND.divider) } } };
     });
-    const totalCell = row.getCell(9);
+    const totalCell = row.getCell(ORDERS_EXPORT_TOTAL_INDEX + 1);
     totalCell.numFmt = '"$"#,##0.00';
     totalCell.alignment = { horizontal: "right" };
   });
 
   // Fila de total general.
   const totalRow = sheet.getRow(7 + orders.length);
-  const totalLabelCell = totalRow.getCell(8);
+  const totalLabelCell = totalRow.getCell(ORDERS_EXPORT_TOTAL_INDEX);
   totalLabelCell.value = "Total";
   totalLabelCell.font = { name: "Calibri", size: 11, bold: true, color: { argb: argb(BRAND.navy) } };
   totalLabelCell.alignment = { horizontal: "right" };
-  const totalValueCell = totalRow.getCell(9);
+  const totalValueCell = totalRow.getCell(ORDERS_EXPORT_TOTAL_INDEX + 1);
   totalValueCell.value = Number(ordersTotalSum(orders).toFixed(2));
   totalValueCell.numFmt = '"$"#,##0.00';
   totalValueCell.font = { name: "Calibri", size: 11, bold: true, color: { argb: argb(BRAND.navy) } };
@@ -262,10 +271,16 @@ export async function exportOrdersToPdf(orders: Order[], context: OrdersExportCo
     head: [ORDERS_EXPORT_HEADERS],
     body: orders.map((order) => {
       const row = orderToExportRow(order);
-      row[8] = `$${Number(row[8]).toFixed(2)}`;
+      row[ORDERS_EXPORT_TOTAL_INDEX] = `$${Number(row[ORDERS_EXPORT_TOTAL_INDEX]).toFixed(2)}`;
       return row.map(String);
     }),
-    foot: [["", "", "", "", "", "", "", "Total", `$${ordersTotalSum(orders).toFixed(2)}`]],
+    foot: [
+      [
+        ...Array.from({ length: ORDERS_EXPORT_TOTAL_INDEX - 1 }, () => ""),
+        "Total",
+        `$${ordersTotalSum(orders).toFixed(2)}`,
+      ],
+    ],
     styles: { fontSize: 8, textColor: hexToRgb(BRAND.text) },
     headStyles: { fillColor: hexToRgb(BRAND.navy), textColor: [255, 255, 255], fontStyle: "bold" },
     alternateRowStyles: { fillColor: hexToRgb(BRAND.rowAlt) },
@@ -274,7 +289,7 @@ export async function exportOrdersToPdf(orders: Order[], context: OrdersExportCo
       textColor: hexToRgb(BRAND.navy),
       fontStyle: "bold",
     },
-    columnStyles: { 8: { halign: "right" } },
+    columnStyles: { [ORDERS_EXPORT_TOTAL_INDEX]: { halign: "right" } },
     didDrawPage: () => {
       const pageHeight = doc.internal.pageSize.getHeight();
       doc.setFontSize(8);
