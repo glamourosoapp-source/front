@@ -84,9 +84,12 @@ export function ProductFormDialog({ open, editing, categories, saving = false, o
           <TextField name="sku" label="SKU" defaultValue={editing?.sku || ""} fullWidth />
           <TextField select name="categoryId" label="Categoria" defaultValue={editing?.category?.id || ""} fullWidth>
             <MenuItem value="">Sin categoria</MenuItem>
-            {categories.map((category) => (
-              <MenuItem key={category.id} value={category.id}>{category.name}</MenuItem>
-            ))}
+            {categories
+              // Una categoría real llamada "Sin categoría" duplicaría la opción vacía de arriba.
+              .filter((category) => category.name.trim().toLowerCase().replace("í", "i") !== "sin categoria")
+              .map((category) => (
+                <MenuItem key={category.id} value={category.id}>{category.name}</MenuItem>
+              ))}
           </TextField>
           <TextField select name="isAvailable" label="Estado" defaultValue={String(editing?.isAvailable ?? true)} fullWidth>
             <MenuItem value="true">Disponible</MenuItem>

@@ -1,7 +1,15 @@
 "use client";
 
 import { FormEvent, useCallback, useEffect, useRef, useState } from "react";
-import { Button, TextField } from "@mui/material";
+import {
+  Button,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogContentText,
+  DialogTitle,
+  TextField,
+} from "@mui/material";
 import { httpClient, getApiErrorMessage } from "@/services/http-client";
 import { usePermissions } from "@/lib/permissions";
 import { useDebounce } from "@/hooks/useDebounce";
@@ -37,6 +45,8 @@ export function SuppressionListPanel() {
   const [newPhone, setNewPhone] = useState("");
   const [newNotes, setNewNotes] = useState("");
   const [busy, setBusy] = useState(false);
+  const [confirmRemove, setConfirmRemove] = useState<SuppressionRow | null>(null);
+  const [removing, setRemoving] = useState(false);
 
   // Debounce + seq guard: sin esto hay un request por tecla y una respuesta
   // fuera de orden deja la lista filtrada con un término anterior.
@@ -81,12 +91,16 @@ export function SuppressionListPanel() {
   }
 
   async function handleRemove(row: SuppressionRow) {
+    setRemoving(true);
     try {
       await httpClient.delete(`/outreach/suppressions/${row.id}`);
       toast.success(`${formatMxPhone(row.phone)} salió de la lista`);
+      setConfirmRemove(null);
       await load();
     } catch (error) {
       toast.error(getApiErrorMessage(error, "No se pudo quitar de la lista"));
+    } finally {
+      setRemoving(false);
     }
   }
 
@@ -156,7 +170,7 @@ export function SuppressionListPanel() {
                   {new Date(row.createdAt).toLocaleDateString("es-MX")}
                 </span>
                 {canManage && row.reason !== SUPPRESSION_REASON.OPT_OUT && (
-                  <Button size="small" color="error" variant="text" onClick={() => handleRemove(row)}>
+                  <Button size="small" color="error" variant="text" onClick={() => setConfirmRemove(row)}>
                     Quitar
                   </Button>
                 )}
@@ -165,6 +179,29 @@ export function SuppressionListPanel() {
           ))}
         </div>
       )}
+
+      <Dialog open={Boolean(confirmRemove)} onClose={() => (removing ? null : setConfirmRemove(null))}>
+        <DialogTitle>Quitar de la lista de exclusión</DialogTitle>
+        <DialogContent>
+          <DialogContentText>
+            {confirmRemove ? formatMxPhone(confirmRemove.phone) : ""} volverá a poder recibir
+            prospección y campañas de WhatsApp. ¿Quitarlo de la lista?
+          </DialogContentText>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setConfirmRemove(null)} disabled={removing}>
+            Cancelar
+          </Button>
+          <Button
+            color="error"
+            variant="contained"
+            disabled={removing}
+            onClick={() => confirmRemove && handleRemove(confirmRemove)}
+          >
+            {removing ? "Quitando..." : "Quitar"}
+          </Button>
+        </DialogActions>
+      </Dialog>
     </div>
   );
 }

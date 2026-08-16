@@ -75,6 +75,12 @@ export default function ProductsPage() {
     load(page);
   }, [load, page]);
 
+  // Deep-link ?search= (buscador global del header).
+  useEffect(() => {
+    const fromUrl = new URLSearchParams(window.location.search).get("search");
+    if (fromUrl) setSearch(fromUrl);
+  }, []);
+
   function applyFilters() {
     if (page === 1) {
       load(1);

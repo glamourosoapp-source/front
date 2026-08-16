@@ -119,6 +119,7 @@ export function CampaignsTab({
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingCampaign, setEditingCampaign] = useState<Campaign | null>(null);
   const [templateName, setTemplateName] = useState("");
+  const [templateValid, setTemplateValid] = useState(true);
   const [saving, setSaving] = useState(false);
 
   // Selector de destinatarios dentro del dialog (solo al crear).
@@ -275,6 +276,10 @@ export function CampaignsTab({
     const scheduledAt = localInputToIso(String(form.get("scheduledAt") || ""));
     if (!templateName.trim()) {
       toast.error("Elige o escribe una plantilla de WhatsApp");
+      return;
+    }
+    if (!templateValid) {
+      toast.error("Esa plantilla no existe en Meta: elige una del catálogo o créala con “Nueva”");
       return;
     }
     const payload = {
@@ -498,6 +503,7 @@ export function CampaignsTab({
             <TemplatePicker
               value={templateName}
               onChange={setTemplateName}
+              onValidityChange={setTemplateValid}
               helperText={
                 isReactivation
                   ? "Plantilla aprobada por Meta. Usa {{1}} para el nombre del cliente."

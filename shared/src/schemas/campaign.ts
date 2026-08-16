@@ -6,6 +6,20 @@ import {
   PROSPECT_STATUS,
   SUPPRESSION_REASON,
 } from "../constants";
+import { isValidMexicanPhone } from "../utils/phone";
+
+/** Teléfono opcional, pero si viene debe ser un número MX válido. */
+const optionalMxPhoneSchema = z
+  .union([z.string(), z.literal(""), z.null()])
+  .optional()
+  .superRefine((value, ctx) => {
+    if (typeof value === "string" && value.trim() && !isValidMexicanPhone(value)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Teléfono inválido: usa 10 dígitos (ej. 3312345678)",
+      });
+    }
+  });
 
 const prospectStatusValues = [
   PROSPECT_STATUS.NEW,
@@ -34,7 +48,7 @@ const outreachChannelRefine = (
 
 export const prospectSchema = z.object({
   name: z.string().min(2).max(160),
-  phone: z.union([z.string(), z.literal(""), z.null()]).optional(),
+  phone: optionalMxPhoneSchema,
   address: z.union([z.string(), z.literal(""), z.null()]).optional(),
   city: z.union([z.string(), z.literal(""), z.null()]).optional(),
   businessType: z.union([z.string(), z.literal(""), z.null()]).optional(),

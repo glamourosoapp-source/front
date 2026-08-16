@@ -8,4 +8,5 @@ export * from "./utils/customer-address";
 export * from "./utils/delivery-schedule";
 export * from "./utils/google-maps-url";
 export * from "./utils/outreach-settings";
+export * from "./utils/phone";
 export * as schemas from "./schemas/index";

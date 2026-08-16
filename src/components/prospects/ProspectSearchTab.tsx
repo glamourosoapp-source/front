@@ -24,6 +24,7 @@ import { usePermissions } from "@/lib/permissions";
 import { useDebounce } from "@/hooks/useDebounce";
 import { formatMxPhone } from "@/utils/format-phone";
 import { PROSPECT_STATUS } from "@glamouroso/shared/constants";
+import { isValidMexicanPhone } from "@glamouroso/shared/utils/phone";
 import type {
   ProspectBulkCreateResponse,
   ProspectBulkDeleteResponse,
@@ -92,6 +93,7 @@ const SOURCE_LABELS: Record<string, string> = {
   google_places: "Google Places",
   google_places_mock: "Google Places",
   manual: "Manual",
+  csv: "CSV",
 };
 
 interface ProspectSearchTabProps {
@@ -132,6 +134,7 @@ export function ProspectSearchTab({
   const canDelete = can("prospects", "delete");
   const [addOpen, setAddOpen] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [phoneError, setPhoneError] = useState<string | null>(null);
   const [importingCsv, setImportingCsv] = useState(false);
 
   // Solo la carga más reciente escribe estado: al importar/limpiar cambian los
@@ -240,6 +243,12 @@ export function ProspectSearchTab({
   async function handleAddManual(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const form = new FormData(event.currentTarget);
+    const phone = String(form.get("phone") || "").trim();
+    if (phone && !isValidMexicanPhone(phone)) {
+      setPhoneError("Teléfono inválido: usa 10 dígitos (ej. 3312345678)");
+      return;
+    }
+    setPhoneError(null);
     setSaving(true);
     try {
       await httpClient.post("/prospects", {
@@ -352,7 +361,7 @@ export function ProspectSearchTab({
               </Button>
               {lastResult && lastResult.imported.length > 0 && onGoToContact && (
                 <Button type="button" variant="outlined" onClick={onGoToContact}>
-                  Contactar {lastResult.imported.length} de esta busqueda
+                  Contactar {lastResult.imported.length} de esta búsqueda
                 </Button>
               )}
             </div>
@@ -396,7 +405,14 @@ export function ProspectSearchTab({
             )}
             {canCreate && (
               <>
-                <Button size="small" variant="outlined" onClick={() => setAddOpen(true)}>
+                <Button
+                  size="small"
+                  variant="outlined"
+                  onClick={() => {
+                    setPhoneError(null);
+                    setAddOpen(true);
+                  }}
+                >
                   Agregar negocio
                 </Button>
                 <Button size="small" variant="outlined" component="label" disabled={importingCsv}>
@@ -493,8 +509,11 @@ export function ProspectSearchTab({
             <TextField name="name" label="Nombre del negocio" fullWidth required autoFocus />
             <TextField
               name="phone"
+              type="tel"
               label="Teléfono (WhatsApp)"
-              helperText="10 dígitos, ej: 33 1234 5678"
+              error={Boolean(phoneError)}
+              helperText={phoneError ?? "10 dígitos, ej: 33 1234 5678"}
+              onChange={() => phoneError && setPhoneError(null)}
               fullWidth
             />
             <div className="grid gap-3 md:grid-cols-2">

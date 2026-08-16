@@ -31,6 +31,12 @@ interface TemplatePickerProps {
   helperText?: string;
   size?: "small" | "medium";
   required?: boolean;
+  /**
+   * Avisa si el nombre tecleado existe en el catálogo cargado. false solo
+   * cuando hay catálogo y el texto no coincide con ninguna plantilla; sin
+   * catálogo (error de Kapso) siempre true para no bloquear el envío.
+   */
+  onValidityChange?: (valid: boolean) => void;
 }
 
 /**
@@ -38,7 +44,14 @@ interface TemplatePickerProps {
  * WhatsApp Business de la organizacion, muestra su estado de aprobacion y
  * permite crear una nueva (texto simple) sin salir del CRM.
  */
-export function TemplatePicker({ value, onChange, helperText, size = "small", required }: TemplatePickerProps) {
+export function TemplatePicker({
+  value,
+  onChange,
+  helperText,
+  size = "small",
+  required,
+  onValidityChange,
+}: TemplatePickerProps) {
   const { can } = usePermissions();
   const [templates, setTemplates] = useState<WhatsAppTemplateDto[]>([]);
   const [loading, setLoading] = useState(false);
@@ -66,6 +79,13 @@ export function TemplatePicker({ value, onChange, helperText, size = "small", re
   }, [load]);
 
   const selected = templates.find((t) => t.name === value) || null;
+  const unknownTemplate = Boolean(
+    !loadError && templates.length > 0 && value.trim() && !selected
+  );
+
+  useEffect(() => {
+    onValidityChange?.(!unknownTemplate);
+  }, [unknownTemplate, onValidityChange]);
 
   async function handleCreate(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -147,6 +167,7 @@ export function TemplatePicker({ value, onChange, helperText, size = "small", re
               {...params}
               label="Plantilla de WhatsApp"
               required={required}
+              error={unknownTemplate}
               placeholder="Elige o escribe el nombre"
               InputProps={{
                 ...params.InputProps,
@@ -182,6 +203,11 @@ export function TemplatePicker({ value, onChange, helperText, size = "small", re
         )}
       </div>
 
+      {unknownTemplate && (
+        <span className="page-kicker" style={{ margin: 0, color: "var(--glam-danger, #b3261e)" }}>
+          Esta plantilla no existe en Meta: elige una del catálogo o créala con “Nueva”.
+        </span>
+      )}
       {selected && selected.status !== "APPROVED" && (
         <span className="page-kicker" style={{ margin: 0, color: "var(--glam-navy)" }}>
           Esta plantilla aun no esta aprobada por Meta; el envio fallara hasta que lo este.

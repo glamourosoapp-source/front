@@ -45,6 +45,7 @@ const SOURCE_LABELS: Record<string, string> = {
   google_places: "Google Places",
   google_places_mock: "Google Places",
   manual: "Manual",
+  csv: "CSV",
 };
 
 function formatDateTime(value?: string | null) {
@@ -106,7 +107,7 @@ export default function ProspectDetailPage() {
     return (
       <div className="page-stack">
         <Link href="/dashboard/prospeccion" className="flex items-center gap-1" style={{ color: "var(--glam-blue)" }}>
-          <ArrowLeft size={16} /> Volver a Prospeccion
+          <ArrowLeft size={16} /> Volver a Prospección
         </Link>
         <section className="panel p-5">
           <p className="page-kicker">No se encontro el prospecto.</p>
@@ -127,7 +128,7 @@ export default function ProspectDetailPage() {
             className="flex items-center gap-1"
             style={{ color: "var(--glam-blue)", fontSize: 13, fontWeight: 600 }}
           >
-            <ArrowLeft size={16} /> Volver a Prospeccion
+            <ArrowLeft size={16} /> Volver a Prospección
           </Link>
           <h1 className="page-title" style={{ marginTop: 8 }}>
             {prospect.name}
@@ -192,14 +193,14 @@ export default function ProspectDetailPage() {
       <section className="panel p-5">
         <h2>Datos del negocio</h2>
         <div className="grid grid-4" style={{ marginTop: 12 }}>
-          <DetailField label="Telefono" value={formatMxPhone(prospect.phone) || "—"} />
+          <DetailField label="Teléfono" value={formatMxPhone(prospect.phone) || "—"} />
           <DetailField label="Ciudad" value={prospect.city || "—"} />
           <DetailField label="Giro" value={prospect.businessType || "—"} />
           <DetailField
             label="Origen"
             value={SOURCE_LABELS[prospect.source || ""] || prospect.source || "—"}
           />
-          <DetailField label="Direccion" value={prospect.address || "—"} />
+          <DetailField label="Dirección" value={prospect.address || "—"} />
           <DetailField label="Importado" value={formatDateTime(prospect.createdAt)} />
           <DetailField label="Convertido" value={formatDateTime(prospect.convertedAt)} />
           <DetailField

@@ -40,25 +40,11 @@ const emptyMetrics: ProspectMetricsResponse = {
   followupDue: 0,
 };
 
-function initialTab(visible: TabKey[]): TabKey {
-  if (typeof window !== "undefined") {
-    const fromUrl = new URLSearchParams(window.location.search).get("tab") as TabKey | null;
-    if (fromUrl && visible.includes(fromUrl)) return fromUrl;
-  }
-  return visible[0] ?? "buscar";
-}
-
-/** Las campañas se mudaron al módulo Reactivación; avisar a quien traiga la URL vieja. */
-function cameFromCampaignsUrl(): boolean {
-  if (typeof window === "undefined") return false;
-  return new URLSearchParams(window.location.search).get("tab") === "campanas";
-}
-
 export default function ProspeccionPage() {
   const { can } = usePermissions();
   const [metrics, setMetrics] = useState<ProspectMetricsResponse>(emptyMetrics);
   const [metricsError, setMetricsError] = useState<string | null>(null);
-  const [showCampaignsMoved] = useState(() => cameFromCampaignsUrl());
+  const [showCampaignsMoved, setShowCampaignsMoved] = useState(false);
 
   const visibleTabs = useMemo(() => {
     const tabs: TabKey[] = [];
@@ -67,7 +53,22 @@ export default function ProspeccionPage() {
     return tabs;
   }, [can]);
 
-  const [tab, setTab] = useState<TabKey>(() => initialTab(visibleTabs));
+  // Estado inicial determinista para que servidor y cliente rendericen lo
+  // mismo (leer window en el initializer causaba errores de hidratación).
+  const [tab, setTab] = useState<TabKey>("buscar");
+
+  // Deep-link ?tab= aplicado tras montar, y re-aplicado cuando los permisos
+  // hidratan (visibleTabs pasa de [] a la lista real y el tab pedido recién
+  // se vuelve válido). "campanas" es la URL vieja del módulo mudado.
+  useEffect(() => {
+    const fromUrl = new URLSearchParams(window.location.search).get("tab") as TabKey | "campanas" | null;
+    if (fromUrl === "campanas") setShowCampaignsMoved(true);
+    setTab((current) => {
+      if (fromUrl && fromUrl !== "campanas" && visibleTabs.includes(fromUrl)) return fromUrl;
+      if (visibleTabs.length && !visibleTabs.includes(current)) return visibleTabs[0];
+      return current;
+    });
+  }, [visibleTabs]);
 
   const loadMetrics = useCallback(async () => {
     try {
@@ -200,6 +201,7 @@ export default function ProspeccionPage() {
           {visibleTabs.includes("seguimiento") && (
             <Tab
               value="seguimiento"
+              aria-label="Seguimiento"
               label={
                 <Badge
                   color="warning"

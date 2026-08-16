@@ -6,63 +6,15 @@
    - Encabezado líder:     Flama Bold Italic (700 italic)
    - Encabezado 2do:       Neue Extra Bold (sin archivo; fallback a Flama Bold)
 
-   Coloca los archivos en Front/public/fonts/:
-   - Flama-Book.woff2
-   - Flama-BookItalic.woff2
+   Flama es una fuente comercial y sus .woff2/.woff NO están en el repo, así
+   que hoy todo cae al fallback del sistema (el look actual). Los @font-face
+   se quitaron para no disparar diez 404 en cada carga; cuando existan los
+   archivos licenciados, colócalos en Front/public/fonts/ y restaura los
+   bloques @font-face de este archivo desde el historial de git:
+   - Flama-Book.woff2 / Flama-BookItalic.woff2
    - Flama-Medium.woff2
-   - Flama-Bold.woff2
-   - Flama-BoldItalic.woff2
+   - Flama-Bold.woff2 / Flama-BoldItalic.woff2
 */
-
-@font-face {
-  font-family: "Flama";
-  src:
-    url("/fonts/Flama-Book.woff2") format("woff2"),
-    url("/fonts/Flama-Book.woff") format("woff");
-  font-weight: 400;
-  font-style: normal;
-  font-display: swap;
-}
-
-@font-face {
-  font-family: "Flama";
-  src:
-    url("/fonts/Flama-BookItalic.woff2") format("woff2"),
-    url("/fonts/Flama-BookItalic.woff") format("woff");
-  font-weight: 400;
-  font-style: italic;
-  font-display: swap;
-}
-
-@font-face {
-  font-family: "Flama";
-  src:
-    url("/fonts/Flama-Medium.woff2") format("woff2"),
-    url("/fonts/Flama-Medium.woff") format("woff");
-  font-weight: 500;
-  font-style: normal;
-  font-display: swap;
-}
-
-@font-face {
-  font-family: "Flama";
-  src:
-    url("/fonts/Flama-Bold.woff2") format("woff2"),
-    url("/fonts/Flama-Bold.woff") format("woff");
-  font-weight: 700;
-  font-style: normal;
-  font-display: swap;
-}
-
-@font-face {
-  font-family: "Flama";
-  src:
-    url("/fonts/Flama-BoldItalic.woff2") format("woff2"),
-    url("/fonts/Flama-BoldItalic.woff") format("woff");
-  font-weight: 700;
-  font-style: italic;
-  font-display: swap;
-}
 
 :root {
   --font-body: "Flama", ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;

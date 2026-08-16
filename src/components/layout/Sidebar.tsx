@@ -10,7 +10,6 @@ import {
   ChevronDown,
   ChevronLeft,
   ChevronRight,
-  Headphones,
   LogOut,
   Bell,
   MessageCircle,
@@ -97,7 +96,6 @@ const sections: NavSection[] = [
       { href: "/dashboard/notifications", label: "Notificaciones", icon: Bell, module: "notifications" },
       { href: "/dashboard/users", label: "Usuarios", icon: UserCog, module: "users" },
       { href: "/dashboard/settings", label: "Configuración", icon: Settings, module: "settings" },
-      { href: "#", label: "Soporte", icon: Headphones },
     ],
   },
 ];

@@ -57,6 +57,7 @@ export function FollowupTab({ onContacted }: { onContacted?: () => void }) {
   const [config, setConfig] = useState<{ waitDays: number; maxTouches: number } | null>(null);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [templateName, setTemplateName] = useState("");
+  const [templateValid, setTemplateValid] = useState(true);
   const [listLoading, setListLoading] = useState(true);
   const [sending, setSending] = useState(false);
 
@@ -109,6 +110,10 @@ export function FollowupTab({ onContacted }: { onContacted?: () => void }) {
       toast.error("Elige la plantilla del seguimiento");
       return;
     }
+    if (!templateValid) {
+      toast.error("Esa plantilla no existe en Meta: elige una del catálogo o créala con “Nueva”");
+      return;
+    }
     setSending(true);
     const toastId = toast.loading(`Encolando ${selectedIds.size} seguimientos...`);
     try {
@@ -121,7 +126,9 @@ export function FollowupTab({ onContacted }: { onContacted?: () => void }) {
       const queued = response.whatsapp?.queued ?? 0;
       toast.success(
         queued > 0
-          ? `${queued} seguimientos en cola (${response.whatsapp?.scheduledToday ?? 0} salen hoy)`
+          ? `${queued} ${queued === 1 ? "seguimiento" : "seguimientos"} en cola (${
+              response.whatsapp?.scheduledToday ?? 0
+            } ${(response.whatsapp?.scheduledToday ?? 0) === 1 ? "sale hoy" : "salen hoy"})`
           : "Nada nuevo por enviar",
         { id: toastId }
       );
@@ -150,7 +157,11 @@ export function FollowupTab({ onContacted }: { onContacted?: () => void }) {
             trae la mayoría de las respuestas.
           </p>
         </div>
-        {canSend && <span className="pill">{selectedIds.size} seleccionados</span>}
+        {canSend && (
+          <span className="pill">
+            {selectedIds.size} {selectedIds.size === 1 ? "seleccionado" : "seleccionados"}
+          </span>
+        )}
       </div>
 
       {listLoading ? (
@@ -171,6 +182,7 @@ export function FollowupTab({ onContacted }: { onContacted?: () => void }) {
             <TemplatePicker
               value={templateName}
               onChange={setTemplateName}
+              onValidityChange={setTemplateValid}
               helperText="Usa una plantilla DISTINTA a la del primer mensaje: recordar sin repetir funciona mejor."
               required
             />

@@ -3,8 +3,9 @@
 import Link from "next/link";
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { CirclePlus, Search, Sparkles } from "lucide-react";
+import { CirclePlus, Sparkles } from "lucide-react";
 import { Sidebar } from "@/components/layout/Sidebar";
+import { GlobalSearch } from "@/components/layout/GlobalSearch";
 import { NotificationsMenu } from "@/components/notifications/NotificationsMenu";
 import { ForcePasswordChangeDialog } from "@/components/auth/ForcePasswordChangeDialog";
 import { useAuthStore } from "@/stores/auth.store";
@@ -32,10 +33,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       <Sidebar />
       <main className="content">
         <header className="topbar">
-          <label className="topbar-search">
-            <Search size={17} />
-            <input placeholder="Buscar pedidos, clientes o productos..." />
-          </label>
+          <GlobalSearch />
           <div className="topbar-actions">
             {can("orders", "create") ? (
               <Link className="create-action" href="/dashboard/orders/new" aria-label="Nuevo pedido">

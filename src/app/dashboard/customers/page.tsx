@@ -29,6 +29,7 @@ export default function CustomersPage() {
 
   // Solo la carga más reciente escribe estado (filtros/página en cambio rápido).
   const loadSeq = useRef(0);
+  const pendingUrlSearch = useRef(false);
   const load = useCallback(
     async (targetPage: number) => {
       const seq = ++loadSeq.current;
@@ -60,6 +61,24 @@ export default function CustomersPage() {
     load(page);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [page, limit]);
+
+  // Deep-link ?search= (buscador global del header). La lista solo busca al
+  // "Filtrar", así que la primera carga con el término se dispara a mano.
+  useEffect(() => {
+    const fromUrl = new URLSearchParams(window.location.search).get("search");
+    if (fromUrl) {
+      pendingUrlSearch.current = true;
+      setSearch(fromUrl);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (pendingUrlSearch.current && search) {
+      pendingUrlSearch.current = false;
+      load(1);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [search]);
 
   // El filtro por equipo solo aplica para admins (los perfiles team-scoped ya vienen filtrados).
   useEffect(() => {

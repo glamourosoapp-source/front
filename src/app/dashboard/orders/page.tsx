@@ -163,6 +163,16 @@ export default function OrdersPage() {
     load();
   }, [load]);
 
+  // Deep-link ?search= (buscador global del header). En efecto para no leer
+  // window durante el render (hidratación).
+  useEffect(() => {
+    const fromUrl = new URLSearchParams(window.location.search).get("search");
+    if (fromUrl) {
+      setSearch(fromUrl);
+      setAppliedSearch(fromUrl.trim());
+    }
+  }, []);
+
   // Filtros o tab nuevos vuelven a la página 1 (el seq guard evita el doble render).
   useEffect(() => {
     setPage(1);

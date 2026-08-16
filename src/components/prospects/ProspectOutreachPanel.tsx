@@ -93,6 +93,7 @@ export function ProspectOutreachPanel({ onSelectionChange, onContacted }: Prospe
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [channel, setChannel] = useState<OutreachChannel>(OUTREACH_CHANNEL.WHATSAPP);
   const [templateName, setTemplateName] = useState("");
+  const [templateValid, setTemplateValid] = useState(true);
   const [voiceScript, setVoiceScript] = useState(DEFAULT_PROSPECT_VOICE_SCRIPT);
   const [loading, setLoading] = useState(false);
   const [listLoading, setListLoading] = useState(true);
@@ -226,6 +227,10 @@ export function ProspectOutreachPanel({ onSelectionChange, onContacted }: Prospe
       toast.error("Indica una plantilla Meta para WhatsApp");
       return;
     }
+    if (showWhatsApp && !templateValid) {
+      toast.error("Esa plantilla no existe en Meta: elige una del catálogo o créala con “Nueva”");
+      return;
+    }
 
     const nameById = new Map(prospects.map((p) => [p.id, p.name]));
 
@@ -297,7 +302,9 @@ export function ProspectOutreachPanel({ onSelectionChange, onContacted }: Prospe
           <h2>Contactar prospectos</h2>
           <p className="page-kicker">Elige a quién contactar y el canal (WhatsApp, llamada o ambos).</p>
         </div>
-        <span className="pill">{selectedIds.size} seleccionados</span>
+        <span className="pill">
+          {selectedIds.size} {selectedIds.size === 1 ? "seleccionado" : "seleccionados"}
+        </span>
       </div>
 
       <form onSubmit={handleOutreach} className="mb-4 grid gap-4">
@@ -322,6 +329,7 @@ export function ProspectOutreachPanel({ onSelectionChange, onContacted }: Prospe
             <TemplatePicker
               value={templateName}
               onChange={setTemplateName}
+              onValidityChange={setTemplateValid}
               helperText="WhatsApp solo permite iniciar conversación con una plantilla aprobada por Meta."
               required
             />
@@ -437,7 +445,9 @@ export function ProspectOutreachPanel({ onSelectionChange, onContacted }: Prospe
           }}
         >
           <span className="page-kicker" style={{ margin: 0 }}>
-            {selectedIds.size} prospecto(s) seleccionados · canal {channelLabel(channel)}
+            {selectedIds.size}{" "}
+            {selectedIds.size === 1 ? "prospecto seleccionado" : "prospectos seleccionados"} · canal{" "}
+            {channelLabel(channel)}
           </span>
           <Button type="submit" variant="contained" disabled={loading || selectedIds.size === 0}>
             {loading ? "Enviando..." : `Contactar seleccionados (${selectedIds.size})`}
@@ -491,11 +501,16 @@ export function ProspectOutreachPanel({ onSelectionChange, onContacted }: Prospe
             <div className="grid gap-3">
               {result.whatsapp && (
                 <div>
-                  <strong>WhatsApp: {result.whatsapp.queued} mensajes en cola</strong>
+                  <strong>
+                    WhatsApp: {result.whatsapp.queued}{" "}
+                    {result.whatsapp.queued === 1 ? "mensaje en cola" : "mensajes en cola"}
+                  </strong>
                   <p className="page-kicker" style={{ margin: "4px 0 0" }}>
                     {result.whatsapp.queued === 0
                       ? "Nada nuevo por enviar (revisa los omitidos abajo)."
-                      : `${result.whatsapp.scheduledToday} salen hoy` +
+                      : `${result.whatsapp.scheduledToday} ${
+                          result.whatsapp.scheduledToday === 1 ? "sale hoy" : "salen hoy"
+                        }` +
                         (result.whatsapp.scheduledLater > 0
                           ? ` y ${result.whatsapp.scheduledLater} en los próximos días (cupo diario para cuidar el número).`
                           : ".") +
