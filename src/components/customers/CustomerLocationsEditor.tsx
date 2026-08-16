@@ -1,6 +1,13 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import {
+  forwardRef,
+  useCallback,
+  useEffect,
+  useImperativeHandle,
+  useRef,
+  useState,
+} from "react";
 import {
   Box,
   Button,
@@ -72,20 +79,46 @@ function payloadFromDraft(draft: LocationDraft) {
   };
 }
 
+function isEmptyDraft(draft: LocationDraft): boolean {
+  return !(
+    draft.label ||
+    draft.street ||
+    draft.colony ||
+    draft.postalCode ||
+    draft.city ||
+    draft.zone ||
+    draft.reference ||
+    draft.googleMapsUrl
+  );
+}
+
 interface CustomerLocationsEditorProps {
   customerId: string;
   onChanged?: () => void;
 }
 
-export function CustomerLocationsEditor({ customerId, onChanged }: CustomerLocationsEditorProps) {
+export interface CustomerLocationsEditorHandle {
+  /** Persiste todos los drafts con cambios; devuelve false si alguno falló. */
+  saveAll: () => Promise<boolean>;
+}
+
+export const CustomerLocationsEditor = forwardRef<
+  CustomerLocationsEditorHandle,
+  CustomerLocationsEditorProps
+>(function CustomerLocationsEditor({ customerId, onChanged }, ref) {
   const [drafts, setDrafts] = useState<LocationDraft[]>([]);
   const [loading, setLoading] = useState(true);
   const [savingId, setSavingId] = useState<string | null>(null);
+  // Snapshot de lo último persistido por ubicación para detectar drafts sucios.
+  const savedSnapshots = useRef<Map<string, string>>(new Map());
 
   const load = useCallback(async () => {
     setLoading(true);
     try {
       const locations = await httpClient.get<CustomerLocation[]>(`/customers/${customerId}/locations`);
+      savedSnapshots.current = new Map(
+        locations.map((location) => [location.id, JSON.stringify(payloadFromDraft(fromApi(location)))]),
+      );
       setDrafts(locations.length ? locations.map(fromApi) : [emptyDraft(true)]);
     } catch {
       toast.error("No se pudieron cargar las ubicaciones");
@@ -154,6 +187,37 @@ export function CustomerLocationsEditor({ customerId, onChanged }: CustomerLocat
     if (drafts.length >= MAX_CUSTOMER_LOCATIONS) return;
     setDrafts((prev) => [...prev, emptyDraft(prev.length === 0)]);
   }
+
+  const saveAll = useCallback(async () => {
+    let allOk = true;
+    let savedAny = false;
+    for (const draft of drafts) {
+      const payload = payloadFromDraft(draft);
+      const dirty = draft.id
+        ? savedSnapshots.current.get(draft.id) !== JSON.stringify(payload)
+        : !isEmptyDraft(draft);
+      if (!dirty) continue;
+      try {
+        if (draft.id) {
+          await httpClient.put(`/customers/${customerId}/locations/${draft.id}`, payload);
+          savedSnapshots.current.set(draft.id, JSON.stringify(payload));
+        } else {
+          const created = await httpClient.post<CustomerLocation>(
+            `/customers/${customerId}/locations`,
+            payload,
+          );
+          savedSnapshots.current.set(created.id, JSON.stringify(payloadFromDraft(fromApi(created))));
+        }
+        savedAny = true;
+      } catch {
+        allOk = false;
+      }
+    }
+    if (savedAny) onChanged?.();
+    return allOk;
+  }, [drafts, customerId, onChanged]);
+
+  useImperativeHandle(ref, () => ({ saveAll }), [saveAll]);
 
   if (loading) {
     return <Typography variant="body2">Cargando ubicaciones...</Typography>;
@@ -302,4 +366,4 @@ export function CustomerLocationsEditor({ customerId, onChanged }: CustomerLocat
       })}
     </Box>
   );
-}
+});
