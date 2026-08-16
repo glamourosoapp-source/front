@@ -53,7 +53,7 @@ function PriceCard({ label, value }: { label: string; value: string }) {
 }
 
 export function ProductDetailDialog({ product, loading, open, onClose, onEdit }: ProductDetailDialogProps) {
-  const { isAdmin } = usePermissions();
+  const { can } = usePermissions();
   const presentation = product?.variants?.presentacion;
   const productGroupKey = product?.variants?.productGroupKey;
   const showPackaging =
@@ -105,7 +105,7 @@ export function ProductDetailDialog({ product, loading, open, onClose, onEdit }:
               <div className="product-price-grid">
                 <PriceCard label="Menudeo" value={formatMoney(product.price)} />
                 <PriceCard label="Mayoreo" value={formatMoney(product.wholesalePrice)} />
-                {isAdmin ? <PriceCard label="Costo" value={formatMoney(product.cost)} /> : null}
+                {can("productCosts") ? <PriceCard label="Costo" value={formatMoney(product.cost)} /> : null}
               </div>
             </DetailSection>
 

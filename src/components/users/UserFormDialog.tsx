@@ -115,7 +115,7 @@ export function UserFormDialog({ open, user, profiles, teams, onClose, onSaved }
               value={accessType}
               onChange={(e) => setAccessType(e.target.value as AccessType)}
               fullWidth
-              helperText="Los administradores tienen acceso total y pueden ver costos de productos."
+              helperText="Los administradores tienen acceso total. El costo de productos se controla por perfil (Catalogo: precio de costo)."
               sx={{ gridColumn: "1 / -1" }}
             >
               <MenuItem value="admin">Administrador</MenuItem>

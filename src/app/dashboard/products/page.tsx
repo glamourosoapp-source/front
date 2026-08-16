@@ -20,7 +20,7 @@ interface ProductCategory {
 const PAGE_SIZE_OPTIONS = [25, 50, 100];
 
 export default function ProductsPage() {
-  const { can, isAdmin } = usePermissions();
+  const { can } = usePermissions();
   const [products, setProducts] = useState<Product[]>([]);
   const [categories, setCategories] = useState<ProductCategory[]>([]);
   const [search, setSearch] = useState("");
@@ -149,7 +149,7 @@ export default function ProductsPage() {
       isAvailable: String(form.get("isAvailable") || "true") === "true",
       variants,
     };
-    if (isAdmin) payload.cost = Number(form.get("cost") || 0);
+    if (can("productCosts", "update")) payload.cost = Number(form.get("cost") || 0);
     setSaving(true);
     try {
       if (editing) {

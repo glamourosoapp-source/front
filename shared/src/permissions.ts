@@ -19,11 +19,11 @@ const FULL_ACCESS: PermissionMap = Object.fromEntries(
   ])
 ) as PermissionMap;
 
-/** Usuarios sin perfil asignado conservan el comportamiento histórico: todo excepto configuración y usuarios. */
+/** Usuarios sin perfil asignado conservan el comportamiento histórico: todo excepto configuración, usuarios y costo de productos. */
 const LEGACY_FALLBACK: PermissionMap = Object.fromEntries(
   PERMISSION_MODULES.map((module) => [
     module.key,
-    module.key === "settings" || module.key === "users"
+    module.key === "settings" || module.key === "users" || module.key === "productCosts"
       ? {}
       : { view: true, create: true, update: true, delete: true, scope: ORDER_SCOPES.ALL },
   ])
@@ -58,7 +58,7 @@ export function getCustomerScope(permissions: PermissionMap | null | undefined):
   return scope === ORDER_SCOPES.OWN || scope === ORDER_SCOPES.TEAM ? scope : ORDER_SCOPES.ALL;
 }
 
-/** Indica si el rol del usuario es administrador (acceso total y datos sensibles como costo). */
+/** Indica si el rol del usuario es administrador (bypass total: FULL_ACCESS incluye productCosts). */
 export function isAdminRole(role: string | null | undefined): boolean {
   return Boolean(role && ADMIN_ROLES.includes(role));
 }

@@ -43,6 +43,14 @@ const ACTION_LABELS: Record<PermissionAction, string> = {
   delete: "Eliminar",
 };
 
+/** Módulos donde solo aplican algunas acciones; el resto de la fila se deja vacío. */
+const MODULE_ACTIONS: Partial<Record<PermissionModule, readonly PermissionAction[]>> = {
+  productCosts: ["view", "update"],
+};
+
+const actionApplies = (module: PermissionModule, action: PermissionAction) =>
+  (MODULE_ACTIONS[module] ?? PERMISSION_ACTIONS).includes(action);
+
 export function ProfileFormDialog({ open, profile, onClose, onSaved }: ProfileFormDialogProps) {
   const isEdit = Boolean(profile);
   const [permissions, setPermissions] = useState<PermissionMap>(() => ({ ...(profile?.permissions ?? {}) }));
@@ -139,11 +147,13 @@ export function ProfileFormDialog({ open, profile, onClose, onSaved }: ProfileFo
                   <TableCell>{module.label}</TableCell>
                   {PERMISSION_ACTIONS.map((action) => (
                     <TableCell key={action} align="center" padding="none">
-                      <Checkbox
-                        size="small"
-                        checked={isChecked(module.key, action)}
-                        onChange={() => toggle(module.key, action)}
-                      />
+                      {actionApplies(module.key, action) ? (
+                        <Checkbox
+                          size="small"
+                          checked={isChecked(module.key, action)}
+                          onChange={() => toggle(module.key, action)}
+                        />
+                      ) : null}
                     </TableCell>
                   ))}
                 </TableRow>

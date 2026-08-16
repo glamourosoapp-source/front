@@ -141,6 +141,7 @@ export const PERMISSION_MODULES = [
   { key: "orders", label: "Pedidos" },
   { key: "customers", label: "Clientes" },
   { key: "products", label: "Catalogo" },
+  { key: "productCosts", label: "Catalogo: precio de costo" },
   { key: "conversations", label: "Conversaciones" },
   { key: "prospects", label: "Prospección: buscar negocios" },
   { key: "outreach", label: "Prospección: contactar y seguimiento" },

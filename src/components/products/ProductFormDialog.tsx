@@ -36,7 +36,7 @@ interface ProductFormDialogProps {
 }
 
 export function ProductFormDialog({ open, editing, categories, saving = false, onClose, onSubmit }: ProductFormDialogProps) {
-  const { isAdmin } = usePermissions();
+  const { can } = usePermissions();
   const presentation = editing?.variants?.presentacion;
   const productGroupKey = editing?.variants?.productGroupKey;
   const [description, setDescription] = useState("");
@@ -125,7 +125,7 @@ export function ProductFormDialog({ open, editing, categories, saving = false, o
           <p className="form-section-title">Precios</p>
           <TextField name="price" label="Precio menudeo" type="number" inputProps={{ min: 0, step: "0.01" }} defaultValue={editing?.price ?? ""} fullWidth required />
           <TextField name="wholesalePrice" label="Precio mayoreo" type="number" inputProps={{ min: 0, step: "0.01" }} defaultValue={editing?.wholesalePrice ?? ""} fullWidth />
-          {isAdmin ? (
+          {can("productCosts", "update") ? (
             <TextField name="cost" label="Costo" type="number" inputProps={{ min: 0, step: "0.01" }} defaultValue={editing?.cost ?? 0} fullWidth />
           ) : null}
 
