@@ -12,6 +12,7 @@ interface AuthState {
   login: (email: string, password: string) => Promise<boolean>;
   register: (payload: { name: string; email: string; password: string; organizationName?: string }) => Promise<boolean>;
   hydrate: () => void;
+  applySession: (token: string, user: User) => void;
   logout: () => void;
 }
 
@@ -47,6 +48,12 @@ export const useAuthStore = create<AuthState>((set) => ({
         })
         .catch(() => undefined);
     }
+  },
+  // El back devuelve token + usuario frescos tras cambiar la contraseña.
+  applySession: (token, user) => {
+    localStorage.setItem("token", token);
+    localStorage.setItem("user", JSON.stringify(user));
+    set({ token, user, isAuthenticated: true });
   },
   logout: () => {
     localStorage.removeItem("token");

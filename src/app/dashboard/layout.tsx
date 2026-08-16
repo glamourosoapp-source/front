@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { CirclePlus, Search, Sparkles } from "lucide-react";
 import { Sidebar } from "@/components/layout/Sidebar";
 import { NotificationsMenu } from "@/components/notifications/NotificationsMenu";
+import { ForcePasswordChangeDialog } from "@/components/auth/ForcePasswordChangeDialog";
 import { useAuthStore } from "@/stores/auth.store";
 import { usePermissions } from "@/lib/permissions";
 import "./shell.css";
@@ -13,6 +14,7 @@ import "./shell.css";
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const hydrate = useAuthStore((s) => s.hydrate);
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
+  const mustChangePassword = useAuthStore((s) => s.user?.mustChangePassword ?? false);
   const { can } = usePermissions();
   const router = useRouter();
 
@@ -61,6 +63,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         </header>
         {children}
       </main>
+      <ForcePasswordChangeDialog open={mustChangePassword} />
     </div>
   );
 }

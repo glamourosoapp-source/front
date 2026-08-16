@@ -105,6 +105,7 @@ export function UserFormDialog({ open, user, profiles, teams, onClose, onSaved }
             required={!isEdit}
             inputProps={{ minLength: 6 }}
             placeholder={isEdit ? "Dejar en blanco para no cambiarla" : undefined}
+            helperText="Es temporal: el usuario tendrá que elegir una propia al entrar."
           />
           {isAdmin ? (
             <TextField

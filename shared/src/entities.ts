@@ -30,6 +30,10 @@ export interface User {
   profile?: Profile | null;
   teamId?: string | null;
   team?: Team | null;
+  /** true mientras el usuario siga usando la contraseña que le puso el admin. */
+  mustChangePassword?: boolean;
+  /** Última vez que el usuario eligió su propia contraseña. */
+  passwordChangedAt?: string | null;
   /** Resumen de la organización que cualquier rol necesita (viene de /auth/me). */
   organization?: { timezone: string };
 }
@@ -153,6 +157,18 @@ export interface ConversationMessage {
   metadata?: { media?: MessageMedia } & Record<string, unknown>;
 }
 
+/**
+ * Resumen que deja el agente al escalar a una persona: por que escalo, que
+ * paso y que conviene hacer. Lo escribe `handoff_to_human` en
+ * `conversations.metadata`.
+ */
+export interface HandoffBrief {
+  reason?: string;
+  summary?: string;
+  customerMessage?: string;
+  suggestedAction?: string;
+}
+
 export interface Conversation {
   id: string;
   contactName?: string;
@@ -160,7 +176,9 @@ export interface Conversation {
   status: string;
   isAgentActive: boolean;
   needsHumanReview: boolean;
+  derivationReason?: string;
   lastMessageAt?: string;
+  metadata?: { handoffBrief?: HandoffBrief; handoffBriefAt?: string } & Record<string, unknown>;
   customer?: Customer;
   messages?: ConversationMessage[];
 }
