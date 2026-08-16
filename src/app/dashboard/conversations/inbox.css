@@ -732,6 +732,38 @@
   padding-bottom: 8px;
 }
 
+/* Brief del handoff: lo primero que debe leer quien toma el chat. */
+.side-card.handoff-card {
+  background: #fffaf3;
+  border-color: #f6d9ae;
+}
+
+.side-card.handoff-card h4 {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: #a35b06;
+  border-bottom-color: #f6d9ae;
+}
+
+.side-card.handoff-card p {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--glam-navy);
+}
+
+.side-card.handoff-card .handoff-action strong {
+  color: #a35b06;
+}
+
+.side-card.handoff-card .handoff-quote {
+  font-style: italic;
+  color: var(--muted);
+  border-left: 2px solid #f6d9ae;
+  padding-left: 10px;
+}
+
 .side-card p.muted {
   margin: 0;
   font-size: 13px;

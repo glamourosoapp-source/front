@@ -2,6 +2,7 @@
 
 import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
+  AlertTriangle,
   Bot,
   CheckCircle2,
   Clock,
@@ -460,6 +461,13 @@ export default function ConversationsPage() {
   const pendingCount = conversations.filter((conversation) => conversation.needsHumanReview || !conversation.isAgentActive).length;
   const selectedName = selected?.contactName || selected?.customer?.name || selected?.contactPhone || "Sin conversacion";
 
+  // Brief del handoff: solo mientras el chat siga necesitando a una persona
+  // (al devolverlo a la IA deja de ser accionable).
+  const handoffBrief =
+    selected?.needsHumanReview || selected?.status === "human"
+      ? selected?.metadata?.handoffBrief
+      : undefined;
+
   const connLabel =
     connState === "open" ? "En vivo" : connState === "connecting" ? "Conectando..." : "Reconectando...";
 
@@ -687,6 +695,24 @@ export default function ConversationsPage() {
             <strong>{formatTime(selected?.lastMessageAt) || "N/A"}</strong>
           </div>
         </div>
+
+        {handoffBrief && (
+          <div className="side-card handoff-card">
+            <h4>
+              <AlertTriangle size={15} />
+              Por que se escalo
+            </h4>
+            {handoffBrief.summary && <p className="handoff-summary">{handoffBrief.summary}</p>}
+            {handoffBrief.suggestedAction && (
+              <p className="handoff-action">
+                <strong>Siguiente paso:</strong> {handoffBrief.suggestedAction}
+              </p>
+            )}
+            {handoffBrief.customerMessage && (
+              <p className="handoff-quote">&ldquo;{handoffBrief.customerMessage}&rdquo;</p>
+            )}
+          </div>
+        )}
 
         <div className="side-card">
           <h4>Sugerencias</h4>
