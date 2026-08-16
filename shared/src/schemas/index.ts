@@ -8,6 +8,7 @@ export * from "./faq";
 export * from "./campaign";
 export * from "./webhook";
 export * from "./customer-tag";
+export * from "./dashboard";
 export * from "./settings";
 export * from "./conversation";
 export * from "./notification";

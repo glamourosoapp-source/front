@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { DataTable } from "@/components/ui/DataTable";
+import { SalesByPeriodChart } from "@/components/dashboard/SalesByPeriodChart";
 import { httpClient } from "@/services/http-client";
 import {
   ResponsiveContainer,
@@ -178,6 +179,9 @@ export default function DashboardPage() {
           <small>Facturación total</small>
         </div>
       </section>
+
+      {/* Gráfica grande de ventas por mes / semanas del mes */}
+      <SalesByPeriodChart />
 
       {/* Grid de Gráficos de Alta Fidelidad */}
       <section className="grid grid-2" style={{ gap: "20px" }}>
