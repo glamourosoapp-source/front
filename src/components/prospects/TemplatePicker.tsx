@@ -15,14 +15,10 @@ import {
 import { Plus, RefreshCw } from "lucide-react";
 import { httpClient, getApiErrorMessage } from "@/services/http-client";
 import { usePermissions } from "@/lib/permissions";
+import type { PermissionModule } from "@glamouroso/shared";
 import type { WhatsAppTemplateDto } from "@glamouroso/shared/schemas/campaign";
+import { templateStatusMeta } from "@/constants/whatsapp-templates";
 import { toast } from "sonner";
-
-const STATUS_META: Record<string, { label: string; className: string }> = {
-  APPROVED: { label: "Aprobada", className: "pill-success" },
-  PENDING: { label: "En revision", className: "pill warning" },
-  REJECTED: { label: "Rechazada", className: "pill-danger" },
-};
 
 interface TemplatePickerProps {
   value: string;
@@ -37,6 +33,11 @@ interface TemplatePickerProps {
    * catálogo (error de Kapso) siempre true para no bloquear el envío.
    */
   onValidityChange?: (valid: boolean) => void;
+  /**
+   * Módulo contra el que se gatea el botón "Nueva". El Back acepta
+   * outreach o reactivation (checkAnyPermission) en POST /campaigns/templates.
+   */
+  permissionModule?: PermissionModule;
 }
 
 /**
@@ -51,6 +52,7 @@ export function TemplatePicker({
   size = "small",
   required,
   onValidityChange,
+  permissionModule = "outreach",
 }: TemplatePickerProps) {
   const { can } = usePermissions();
   const [templates, setTemplates] = useState<WhatsAppTemplateDto[]>([]);
@@ -136,7 +138,7 @@ export function TemplatePicker({
           }}
           getOptionLabel={(option) => (typeof option === "string" ? option : option.name)}
           renderOption={(props, option) => {
-            const meta = STATUS_META[option.status] || { label: option.status, className: "pill" };
+            const meta = templateStatusMeta(option.status);
             return (
               <li {...props} key={option.id}>
                 <div className="grid gap-1" style={{ width: "100%", padding: "2px 0" }}>
@@ -190,7 +192,7 @@ export function TemplatePicker({
         >
           <RefreshCw size={16} />
         </Button>
-        {can("outreach", "create") && (
+        {can(permissionModule, "create") && (
           <Button
             variant="outlined"
             size="small"

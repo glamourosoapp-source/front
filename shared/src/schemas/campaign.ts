@@ -297,6 +297,8 @@ export const whatsappTemplateSchema = z.object({
   status: z.string(),
   category: z.string(),
   bodyText: z.string().nullable(),
+  /** Motivo que devuelve Meta cuando la plantilla queda en REJECTED. */
+  rejectedReason: z.string().nullable().default(null),
 });
 
 export const createWhatsappTemplateSchema = z.object({
@@ -310,8 +312,27 @@ export const createWhatsappTemplateSchema = z.object({
   bodyText: z.string().min(10).max(1024),
 });
 
+/**
+ * Meta no permite renombrar ni cambiar el idioma de una plantilla existente:
+ * la edición solo toca el cuerpo y (opcionalmente) la categoría.
+ */
+export const updateWhatsappTemplateSchema = z.object({
+  category: z.enum(["MARKETING", "UTILITY"]).optional(),
+  bodyText: z.string().min(10).max(1024),
+});
+
+/** Meta borra por nombre (todos los idiomas) o por nombre + hsm_id (uno solo). */
+export const deleteWhatsappTemplateQuerySchema = z.object({
+  name: z
+    .string()
+    .min(3)
+    .max(120)
+    .regex(/^[a-z0-9_]+$/, "Nombre de plantilla invalido"),
+});
+
 export type WhatsAppTemplateDto = z.infer<typeof whatsappTemplateSchema>;
 export type CreateWhatsAppTemplateInput = z.infer<typeof createWhatsappTemplateSchema>;
+export type UpdateWhatsAppTemplateInput = z.infer<typeof updateWhatsappTemplateSchema>;
 
 export const prospectMetricsResponseSchema = z.object({
   total: z.number().int(),

@@ -13,6 +13,7 @@ import {
   LogOut,
   Bell,
   MessageCircle,
+  MessageSquareText,
   PackageCheck,
   RotateCcw,
   Settings,
@@ -85,6 +86,12 @@ const sections: NavSection[] = [
         links: [
           { href: "/dashboard/agent", label: "Métricas IA", icon: BarChart3, module: "agent" },
           { href: "/dashboard/faqs", label: "FAQs IA", icon: Bot, module: "faqs" },
+          {
+            href: "/dashboard/plantillas",
+            label: "Plantillas WhatsApp",
+            icon: MessageSquareText,
+            anyModule: ["outreach", "reactivation"],
+          },
         ],
       },
     ],
