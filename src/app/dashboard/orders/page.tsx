@@ -10,6 +10,7 @@ import { DateFilterField } from "@/components/ui/DateFilterField";
 import { ListPagination } from "@/components/ui/ListPagination";
 import { PAYMENT_STATUS_OPTIONS, orderCreatorLabel, orderTeamLabel, paymentStatusLabel } from "@/constants/orders";
 import { httpClient } from "@/services/http-client";
+import { useRealtime } from "@/components/realtime/RealtimeProvider";
 import { usePermissions } from "@/lib/permissions";
 import { useAuthStore } from "@/stores/auth.store";
 import { DEFAULT_DELIVERY_SCHEDULE } from "@glamouroso/shared";
@@ -162,6 +163,23 @@ export default function OrdersPage() {
   useEffect(() => {
     load();
   }, [load]);
+
+  // Refresco en vivo: otra sesión, un compañero o el agente creó/cambió un
+  // pedido. Señal sin datos → refetch con los filtros y scope actuales; el
+  // debounce agrupa ráfagas y el seq guard de load absorbe el resto.
+  const { subscribe } = useRealtime();
+  useEffect(() => {
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    const off = subscribe((event) => {
+      if (event.type !== "orders_changed") return;
+      if (timer) clearTimeout(timer);
+      timer = setTimeout(() => void load(), 500);
+    });
+    return () => {
+      if (timer) clearTimeout(timer);
+      off();
+    };
+  }, [subscribe, load]);
 
   // Deep-link ?search= (buscador global del header). En efecto para no leer
   // window durante el render (hidratación).

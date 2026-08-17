@@ -20,6 +20,7 @@ import { OrderPrintSheet } from "@/components/orders/OrderPrintSheet";
 import { orderCreatorLabel, orderTeamLabel, paymentMethodLabel, paymentStatusLabel } from "@/constants/orders";
 import { DetailField } from "@/components/ui/DetailField";
 import { httpClient } from "@/services/http-client";
+import { useRealtime } from "@/components/realtime/RealtimeProvider";
 import { usePermissions } from "@/lib/permissions";
 import { exportOrderToXlsx } from "@/lib/export-order-xlsx";
 import { formatDateOnly } from "@/lib/format-date-only";
@@ -93,6 +94,21 @@ export default function OrderDetailPage() {
   useEffect(() => {
     load();
   }, [load]);
+
+  // Refresco en vivo si ESTE pedido cambió en otra sesión: recarga silenciosa
+  // (sin spinner ni redirect en error) y nunca mientras el diálogo de edición
+  // está abierto, para no pisar el formulario.
+  const { subscribe } = useRealtime();
+  useEffect(() => {
+    return subscribe((event) => {
+      if (event.type !== "orders_changed" || event.orderId !== params.id) return;
+      if (editOpen) return;
+      httpClient
+        .get<OrderDetail>(`/orders/${params.id}`)
+        .then(setOrder)
+        .catch(() => undefined);
+    });
+  }, [subscribe, params.id, editOpen]);
 
   function handleDownload() {
     if (!order) return;

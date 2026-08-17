@@ -1,10 +1,11 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { DataTable } from "@/components/ui/DataTable";
 import { SalesByPeriodChart } from "@/components/dashboard/SalesByPeriodChart";
 import { httpClient } from "@/services/http-client";
+import { useRealtime } from "@/components/realtime/RealtimeProvider";
 import {
   ResponsiveContainer,
   AreaChart,
@@ -73,6 +74,35 @@ export default function DashboardPage() {
       .catch(() => setData(null))
       .finally(() => setLoading(false));
   }, [canSeeOverview]);
+
+  // Métricas en vivo: ante pedidos nuevos/cambiados o notificaciones se
+  // refresca el overview en silencio, con throttle para absorber ráfagas.
+  const { subscribe } = useRealtime();
+  const lastRefreshRef = useRef(0);
+  useEffect(() => {
+    if (!canSeeOverview) return;
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    const refresh = () => {
+      lastRefreshRef.current = Date.now();
+      httpClient
+        .get("/dashboard/overview")
+        .then(setData)
+        .catch(() => undefined);
+    };
+    const off = subscribe((event) => {
+      if (event.type !== "orders_changed" && !("notification" in event)) return;
+      if (timer) return;
+      const wait = Math.max(0, 5_000 - (Date.now() - lastRefreshRef.current));
+      timer = setTimeout(() => {
+        timer = null;
+        refresh();
+      }, wait);
+    });
+    return () => {
+      if (timer) clearTimeout(timer);
+      off();
+    };
+  }, [canSeeOverview, subscribe]);
 
   const totals = data?.totals || {};
   const products = data?.topProducts || [];
