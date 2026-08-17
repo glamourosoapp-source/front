@@ -179,6 +179,7 @@ export default function NewOrderPage() {
         )
       );
       setSelectedProduct(null);
+      setProductInput("");
       return;
     }
 
@@ -194,6 +195,7 @@ export default function NewOrderPage() {
       },
     ]);
     setSelectedProduct(null);
+    setProductInput("");
   }
 
   function updateLineItem(key: string, patch: Partial<Pick<OrderLineItem, "quantity" | "unitPrice">>) {
@@ -271,7 +273,7 @@ export default function NewOrderPage() {
 
   return (
     <>
-    <form className="page-stack" onSubmit={submit}>
+    <form className="page-stack has-bottom-actions" onSubmit={submit}>
       <div className="toolbar">
         <div>
           <Link
@@ -286,8 +288,8 @@ export default function NewOrderPage() {
             Agrega productos y asigna el cliente. La fecha de entrega se asigna automáticamente según la hora de corte.
           </p>
         </div>
-        <Box sx={{ display: "flex", gap: 1.5, alignItems: "center" }}>
-          <Box sx={{ mr: 1, textAlign: "right" }}>
+        <Box className="order-actions" sx={{ display: "flex", gap: 1.5, alignItems: "center" }}>
+          <Box className="order-actions-summary" sx={{ mr: 1, textAlign: "right" }}>
             <Typography variant="caption" sx={{ color: "var(--muted)", display: "block" }}>
               {itemCount} {itemCount === 1 ? "artículo" : "artículos"}
             </Typography>
@@ -331,7 +333,9 @@ export default function NewOrderPage() {
                   loadingProducts
                     ? "Buscando productos…"
                     : productOptions.length === 0
-                      ? "Sin resultados en el catálogo"
+                      ? productInput.trim()
+                        ? "Sin resultados en el catálogo"
+                        : "Escribe para buscar en el catálogo"
                       : "Tip: presiona Enter para agregar"
                 }
                 onKeyDown={(e) => {
@@ -360,7 +364,7 @@ export default function NewOrderPage() {
             Aún no hay productos. Selecciona uno del catálogo para comenzar.
           </Typography>
         ) : (
-          <TableContainer>
+          <TableContainer className="order-items-table">
             <Table size="small">
               <TableHead>
                 <TableRow>
@@ -465,7 +469,15 @@ export default function NewOrderPage() {
                   {...params}
                   label="Buscar cliente"
                   required
-                  helperText={loadingCustomers ? "Buscando clientes…" : customerOptions.length === 0 ? "Sin resultados" : " "}
+                  helperText={
+                    loadingCustomers
+                      ? "Buscando clientes…"
+                      : customerOptions.length === 0
+                        ? customerInput.trim()
+                          ? "Sin resultados"
+                          : "Escribe para buscar clientes"
+                        : " "
+                  }
                 />
               )}
               sx={{ flex: 1, minWidth: 0 }}

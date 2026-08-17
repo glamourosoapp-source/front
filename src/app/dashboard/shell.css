@@ -631,16 +631,63 @@
   font-size: 11px;
 }
 
+/* Hamburguesa del drawer móvil: oculta en desktop. */
+.menu-toggle {
+  display: none;
+  width: 42px;
+  height: 42px;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: #ffffff;
+  color: var(--glam-navy);
+  cursor: pointer;
+}
+
+.sidebar-backdrop {
+  display: none;
+}
+
+body.nav-open {
+  overflow: hidden;
+}
+
 @media (max-width: 900px) {
   .shell {
     grid-template-columns: 1fr;
   }
 
+  /* Drawer: fuera de pantalla por defecto, entra al abrir la hamburguesa. */
   .sidebar {
-    position: static;
-    height: auto;
-    width: 100% !important;
+    position: fixed;
+    top: 0;
+    left: 0;
+    bottom: 0;
+    height: 100dvh;
+    width: min(300px, 85vw) !important;
     padding: 18px 14px !important;
+    transform: translateX(-105%);
+    transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+    z-index: 60;
+  }
+
+  .sidebar.mobile-open {
+    transform: translateX(0);
+    box-shadow: 0 24px 60px rgba(13, 18, 48, 0.35);
+  }
+
+  .sidebar-backdrop {
+    display: block;
+    position: fixed;
+    inset: 0;
+    z-index: 55;
+    background: rgba(13, 18, 48, 0.45);
+  }
+
+  .menu-toggle {
+    display: inline-flex;
   }
 
   .collapse-toggle {
@@ -710,13 +757,50 @@
   }
 
   .topbar {
-    grid-template-columns: 1fr;
+    grid-template-columns: auto minmax(0, 1fr);
     margin: 0 -16px 18px;
     padding: 14px 16px;
   }
 
   .topbar-actions {
+    grid-column: 1 / -1;
     justify-content: space-between;
     overflow-x: auto;
+  }
+
+  /* Nuevo pedido: acciones fijas abajo para no scrollear de vuelta al header. */
+  .order-actions {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 40;
+    padding: 10px 16px calc(10px + env(safe-area-inset-bottom));
+    background: rgba(255, 255, 255, 0.96);
+    backdrop-filter: blur(12px);
+    border-top: 1px solid var(--border);
+  }
+
+  .order-actions .order-actions-summary {
+    margin-right: auto !important;
+    text-align: left !important;
+  }
+
+  .has-bottom-actions {
+    padding-bottom: 88px;
+  }
+
+  /* Items del pedido: la columna Quitar queda visible sobre el scroll horizontal. */
+  .order-items-table th:last-child,
+  .order-items-table td:last-child {
+    position: sticky;
+    right: 0;
+    background: #ffffff;
+    box-shadow: -8px 0 8px -8px rgba(13, 18, 48, 0.18);
+  }
+
+  .order-items-table th:last-child {
+    background: #f8fafc;
+    z-index: 3;
   }
 }

@@ -189,7 +189,13 @@ function readCollapsedPreference() {
   return localStorage.getItem("sidebar-collapsed") === "true";
 }
 
-export function Sidebar() {
+type SidebarProps = {
+  /** Drawer móvil (<=900px): abierto/cerrado. En desktop no tiene efecto. */
+  mobileOpen?: boolean;
+  onNavigate?: () => void;
+};
+
+export function Sidebar({ mobileOpen = false, onNavigate }: SidebarProps) {
   const pathname = usePathname();
   const router = useRouter();
   const logout = useAuthStore((s) => s.logout);
@@ -263,6 +269,7 @@ export function Sidebar() {
         href={item.href}
         key={item.href}
         title={isCollapsed ? item.label : undefined}
+        onClick={onNavigate}
       >
         <Icon size={18} style={{ minWidth: "18px" }} />
         <span className="nav-label">{item.label}</span>
@@ -270,8 +277,16 @@ export function Sidebar() {
     );
   };
 
+  const sidebarClass = [
+    "sidebar",
+    isCollapsed ? "collapsed" : "",
+    mobileOpen ? "mobile-open" : "",
+  ]
+    .filter(Boolean)
+    .join(" ");
+
   return (
-    <aside className={isCollapsed ? "sidebar collapsed" : "sidebar"}>
+    <aside className={sidebarClass}>
       <button
         className="collapse-toggle"
         onClick={handleToggle}
@@ -280,7 +295,7 @@ export function Sidebar() {
         {isCollapsed ? <ChevronRight size={14} /> : <ChevronLeft size={14} />}
       </button>
 
-      <Link className="brand" href="/dashboard" title="Glamouroso CRM">
+      <Link className="brand" href="/dashboard" title="Glamouroso CRM" onClick={onNavigate}>
         <img
           className="brand-logo brand-logo-full"
           src="/branding/glamouroso-logo-azul-sobre-blanco.svg"
