@@ -8,6 +8,7 @@ import { Sidebar } from "@/components/layout/Sidebar";
 import { GlobalSearch } from "@/components/layout/GlobalSearch";
 import { NotificationsMenu } from "@/components/notifications/NotificationsMenu";
 import { ForcePasswordChangeDialog } from "@/components/auth/ForcePasswordChangeDialog";
+import { RealtimeProvider } from "@/components/realtime/RealtimeProvider";
 import { useAuthStore } from "@/stores/auth.store";
 import { usePermissions } from "@/lib/permissions";
 import "./shell.css";
@@ -29,6 +30,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   }, [isAuthenticated, router]);
 
   return (
+    <RealtimeProvider>
     <div className="shell">
       <Sidebar />
       <main className="content">
@@ -63,5 +65,6 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       </main>
       <ForcePasswordChangeDialog open={mustChangePassword} />
     </div>
+    </RealtimeProvider>
   );
 }

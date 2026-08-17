@@ -7,7 +7,6 @@ import { Badge, Popover } from "@mui/material";
 import { Bell, Inbox } from "lucide-react";
 import { httpClient } from "@/services/http-client";
 import { useNotificationStore } from "@/stores/notification.store";
-import { useNotificationStream } from "@/hooks/useNotificationStream";
 import { NotificationListItem } from "./NotificationListItem";
 import { hrefForNotification } from "./notification-ui";
 import type { Notification } from "@/types";
@@ -23,8 +22,6 @@ export function NotificationsMenu() {
   const setUnreadCount = useNotificationStore((s) => s.setUnreadCount);
   const setPreview = useNotificationStore((s) => s.setPreview);
   const markReadLocal = useNotificationStore((s) => s.markReadLocal);
-
-  useNotificationStream(true);
 
   const refresh = useCallback(async () => {
     setLoading(true);

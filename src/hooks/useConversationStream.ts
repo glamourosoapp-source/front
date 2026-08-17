@@ -1,109 +1,42 @@
 "use client";
 
 import { useEffect, useRef } from "react";
-import { config } from "@/config";
 import type { ConversationStreamEvent } from "@glamouroso/shared/entities";
+import { useRealtime } from "@/components/realtime/RealtimeProvider";
+import type { ConnectionState } from "@/lib/realtime-client";
 
-const MIN_BACKOFF_MS = 3_000;
-const MAX_BACKOFF_MS = 30_000;
-
-export type ConnectionState = "connecting" | "open" | "closed";
+export type { ConnectionState };
 
 interface Options {
   onEvent: (event: ConversationStreamEvent) => void;
   onState?: (state: ConnectionState) => void;
 }
 
-function parseChunk(buffer: string): { events: ConversationStreamEvent[]; rest: string } {
-  const events: ConversationStreamEvent[] = [];
-  const parts = buffer.split("\n\n");
-  const rest = parts.pop() || "";
-
-  for (const part of parts) {
-    for (const line of part.split("\n")) {
-      if (!line.startsWith("data: ")) continue;
-      try {
-        const payload = JSON.parse(line.slice(6)) as { type?: string };
-        if (
-          payload.type === "message_created" ||
-          payload.type === "agent_typing" ||
-          payload.type === "conversation_updated"
-        ) {
-          events.push(payload as ConversationStreamEvent);
-        }
-      } catch {
-        /* ignore malformed */
-      }
-    }
-  }
-
-  return { events, rest };
-}
+const CONVERSATION_EVENT_TYPES = new Set(["message_created", "agent_typing", "conversation_updated"]);
 
 /**
- * Consume el stream SSE de `/notifications/stream` y entrega los eventos de
- * conversación (message_created / agent_typing) en tiempo real. Reconecta con
- * backoff exponencial. Espejo de useNotificationStream pero para mensajes.
+ * Entrega los eventos de conversación (message_created / agent_typing /
+ * conversation_updated) en tiempo real desde el WebSocket compartido del
+ * dashboard (RealtimeProvider). La reconexión con backoff y el watchdog viven
+ * en el RealtimeClient; el estado de conexión se propaga por onState igual que
+ * cuando este hook manejaba su propia conexión SSE.
  */
 export function useConversationStream({ onEvent, onState }: Options) {
+  const { subscribe, connectionState } = useRealtime();
   const onEventRef = useRef(onEvent);
   const onStateRef = useRef(onState);
   onEventRef.current = onEvent;
   onStateRef.current = onState;
 
   useEffect(() => {
-    if (typeof window === "undefined") return;
-    let cancelled = false;
-    let controller: AbortController | null = null;
-    let backoff = MIN_BACKOFF_MS;
-
-    async function connect() {
-      const token = localStorage.getItem("token");
-      if (!token || cancelled) return;
-
-      controller?.abort();
-      controller = new AbortController();
-      onStateRef.current?.("connecting");
-
-      try {
-        const response = await fetch(`${config.apiBaseUrl}/notifications/stream`, {
-          headers: { Authorization: `Bearer ${token}` },
-          signal: controller.signal,
-        });
-        if (!response.ok || !response.body) throw new Error(`SSE failed: ${response.status}`);
-
-        backoff = MIN_BACKOFF_MS;
-        onStateRef.current?.("open");
-        const reader = response.body.getReader();
-        const decoder = new TextDecoder();
-        let buffer = "";
-
-        while (!cancelled) {
-          const { done, value } = await reader.read();
-          // Cierre limpio del server/proxy (p. ej. corte de conexión idle):
-          // tratarlo como caída para entrar al mismo reintento con backoff.
-          if (done) throw new Error("SSE stream closed by server");
-          buffer += decoder.decode(value, { stream: true });
-          const { events, rest } = parseChunk(buffer);
-          buffer = rest;
-          for (const event of events) onEventRef.current(event);
-        }
-      } catch {
-        if (cancelled || controller?.signal.aborted) return;
-        onStateRef.current?.("closed");
-        const delay = backoff;
-        backoff = Math.min(backoff * 2, MAX_BACKOFF_MS);
-        await new Promise((r) => setTimeout(r, delay));
-        if (!cancelled) void connect();
+    return subscribe((event) => {
+      if (CONVERSATION_EVENT_TYPES.has(event.type)) {
+        onEventRef.current(event as ConversationStreamEvent);
       }
-    }
+    });
+  }, [subscribe]);
 
-    void connect();
-
-    return () => {
-      cancelled = true;
-      controller?.abort();
-      onStateRef.current?.("closed");
-    };
-  }, []);
+  useEffect(() => {
+    onStateRef.current?.(connectionState);
+  }, [connectionState]);
 }

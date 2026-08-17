@@ -111,6 +111,9 @@ export const NOTIFICATION_TYPES = {
   WHATSAPP_QUALITY_ALERT: "whatsapp_quality_alert",
 } as const;
 
+/** Path del gateway WebSocket del Back (mismo host que la API). */
+export const REALTIME_WS_PATH = "/api/ws";
+
 export const NOTIFICATION_ENTITY_TYPES = {
   CONVERSATION: "conversation",
   ORDER: "order",

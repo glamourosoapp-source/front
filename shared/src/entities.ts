@@ -1,4 +1,4 @@
-import type { Role } from "./constants";
+import type { NotificationType, Role } from "./constants";
 import type { PermissionMap } from "./permissions";
 
 export interface Profile {
@@ -210,3 +210,26 @@ export interface Notification {
   readAt?: string | null;
   createdAt: string;
 }
+
+/** Señal de refetch de pedidos: sin datos del pedido para respetar los scopes own/team del server. */
+export interface OrdersChangedEvent {
+  type: "orders_changed";
+  action: "created" | "updated" | "deleted";
+  orderId: string;
+}
+
+/** Eventos de control del transporte realtime (no llegan a los subscribers de la app). */
+export type RealtimeControlEvent = { type: "connected" } | { type: "heartbeat" };
+
+/** Notificación tal como viaja por el stream (validable con notificationEventSchema). */
+export interface NotificationStreamEvent {
+  type: NotificationType;
+  notification: Notification;
+}
+
+/** Todo lo que el server puede empujar por el canal realtime (WS, y SSE durante la transición). */
+export type RealtimeServerEvent =
+  | ConversationStreamEvent
+  | OrdersChangedEvent
+  | NotificationStreamEvent
+  | RealtimeControlEvent;
