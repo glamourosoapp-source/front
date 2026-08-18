@@ -156,6 +156,7 @@ export default function ProductsPage() {
       wholesalePrice: Number(form.get("wholesalePrice") || 0),
       stock: Number(form.get("stock") || 0),
       minStock: Number(form.get("minStock") || 0),
+      unlimitedStock: String(form.get("unlimitedStock") || "true") === "true",
       description: String(form.get("description") || ""),
       categoryId: String(form.get("categoryId") || "") || null,
       isAvailable: String(form.get("isAvailable") || "true") === "true",
@@ -253,7 +254,11 @@ export default function ProductsPage() {
               label: "Mayoreo",
               render: (r) => (r.wholesalePrice ? `$${Number(r.wholesalePrice).toFixed(2)}` : "—"),
             },
-            { key: "stock", label: "Stock" },
+            {
+              key: "stock",
+              label: "Stock",
+              render: (r) => (r.unlimitedStock !== false ? "Ilimitado" : Number(r.stock || 0).toLocaleString("es-MX")),
+            },
             { key: "isAvailable", label: "Estado", render: (r) => <span className="pill">{r.isAvailable ? "Disponible" : "Inactivo"}</span> },
           ]}
         />

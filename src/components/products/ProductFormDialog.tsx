@@ -41,9 +41,14 @@ export function ProductFormDialog({ open, editing, categories, saving = false, o
   const productGroupKey = editing?.variants?.productGroupKey;
   const [description, setDescription] = useState("");
   const [improving, setImproving] = useState(false);
+  // Productos nuevos nacen ilimitados: el catalogo de Glamouroso no depende del inventario.
+  const [unlimitedStock, setUnlimitedStock] = useState(true);
 
   useEffect(() => {
-    if (open) setDescription(editing?.description || "");
+    if (open) {
+      setDescription(editing?.description || "");
+      setUnlimitedStock(editing ? editing.unlimitedStock !== false : true);
+    }
   }, [open, editing]);
 
   async function improveDescription(event: MouseEvent<HTMLButtonElement>) {
@@ -138,8 +143,40 @@ export function ProductFormDialog({ open, editing, categories, saving = false, o
               <MenuItem key={unit} value={unit}>{unit}</MenuItem>
             ))}
           </TextField>
-          <TextField name="stock" label="Stock actual" type="number" inputProps={{ min: 0, step: "0.01" }} defaultValue={editing?.stock ?? 0} fullWidth />
-          <TextField name="minStock" label="Stock minimo" type="number" inputProps={{ min: 0, step: "0.01" }} defaultValue={editing?.minStock ?? 0} fullWidth />
+          <TextField
+            select
+            name="unlimitedStock"
+            label="Control de inventario"
+            value={unlimitedStock ? "true" : "false"}
+            onChange={(event) => setUnlimitedStock(event.target.value === "true")}
+            fullWidth
+            helperText={
+              unlimitedStock
+                ? "Existencias infinitas: se puede vender siempre, sin mirar el stock"
+                : "Se valida contra las existencias registradas"
+            }
+          >
+            <MenuItem value="true">Stock ilimitado</MenuItem>
+            <MenuItem value="false">Llevar inventario</MenuItem>
+          </TextField>
+          <TextField
+            name="stock"
+            label="Stock actual"
+            type="number"
+            inputProps={{ min: 0, step: "0.01" }}
+            defaultValue={editing?.stock ?? 0}
+            fullWidth
+            helperText={unlimitedStock ? "Solo informativo: este producto es ilimitado" : " "}
+          />
+          <TextField
+            name="minStock"
+            label="Stock minimo"
+            type="number"
+            inputProps={{ min: 0, step: "0.01" }}
+            defaultValue={editing?.minStock ?? 0}
+            fullWidth
+            helperText={unlimitedStock ? "Solo informativo: este producto es ilimitado" : " "}
+          />
 
           <p className="form-section-title">Empaque y presentacion</p>
           <TextField name="unitType" label="Tipo de empaque" placeholder="Ej. caja, botella" defaultValue={editing?.unitType || ""} fullWidth />

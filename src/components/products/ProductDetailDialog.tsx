@@ -111,8 +111,14 @@ export function ProductDetailDialog({ product, loading, open, onClose, onEdit }:
 
             <DetailSection title="Inventario y venta">
               <DetailField label="Unidad de venta" value={product.unit} />
-              <DetailField label="Stock actual" value={Number(product.stock || 0).toLocaleString("es-MX")} />
-              <DetailField label="Stock minimo" value={Number(product.minStock || 0).toLocaleString("es-MX")} />
+              <DetailField
+                label="Stock actual"
+                value={product.unlimitedStock !== false ? "Ilimitado" : Number(product.stock || 0).toLocaleString("es-MX")}
+              />
+              <DetailField
+                label="Stock minimo"
+                value={product.unlimitedStock !== false ? "—" : Number(product.minStock || 0).toLocaleString("es-MX")}
+              />
             </DetailSection>
 
             {showPackaging ? (

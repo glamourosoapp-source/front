@@ -21,6 +21,8 @@ export const createProductSchema = z.object({
   cost: z.number().min(0).default(0),
   stock: z.number().min(0).default(0),
   minStock: z.number().min(0).default(0),
+  // Exento del control de existencias: se puede vender aunque stock sea 0.
+  unlimitedStock: z.boolean().default(true),
   isAvailable: z.boolean().default(true),
   imageUrl: z.union([z.string().url(), z.literal(""), z.null()]).optional(),
   variants: z.record(z.unknown()).optional(),

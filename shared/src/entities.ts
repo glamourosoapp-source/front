@@ -93,6 +93,8 @@ export interface Product {
   cost?: string | number;
   stock: string | number;
   minStock?: string | number;
+  /** true = no depende del inventario: existencias infinitas. */
+  unlimitedStock?: boolean;
   isAvailable: boolean;
   variants?: Record<string, unknown>;
   category?: { id: string; name: string; externalCode?: string };
