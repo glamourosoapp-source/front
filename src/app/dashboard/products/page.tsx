@@ -6,6 +6,7 @@ import { DataTable } from "@/components/ui/DataTable";
 import { ListPagination } from "@/components/ui/ListPagination";
 import { ProductDetailDialog } from "@/components/products/ProductDetailDialog";
 import { ProductFormDialog } from "@/components/products/ProductFormDialog";
+import { ProductImportDialog } from "@/components/products/ProductImportDialog";
 import { httpClient } from "@/services/http-client";
 import { usePermissions } from "@/lib/permissions";
 import { ListResponse, Product } from "@/types";
@@ -32,6 +33,7 @@ export default function ProductsPage() {
   const [totalPages, setTotalPages] = useState(1);
   const [loading, setLoading] = useState(false);
   const [open, setOpen] = useState(false);
+  const [importOpen, setImportOpen] = useState(false);
   const [editing, setEditing] = useState<Product | null>(null);
   const [detailOpen, setDetailOpen] = useState(false);
   const [detailLoading, setDetailLoading] = useState(false);
@@ -67,9 +69,13 @@ export default function ProductsPage() {
     [available, categoryId, limit, search]
   );
 
-  useEffect(() => {
+  const loadCategories = useCallback(() => {
     httpClient.get<ProductCategory[]>("/products/categories").then(setCategories).catch(() => setCategories([]));
   }, []);
+
+  useEffect(() => {
+    loadCategories();
+  }, [loadCategories]);
 
   useEffect(() => {
     load(page);
@@ -196,9 +202,14 @@ export default function ProductsPage() {
           <h1 className="page-title">Catalogo</h1>
           <p className="page-kicker">Control de productos, precios, unidades y disponibilidad para ventas.</p>
         </div>
-        {can("products", "create") ? (
-          <Button variant="contained" onClick={openCreate}>Nuevo producto</Button>
-        ) : null}
+        <div className="flex gap-2">
+          {can("products", "update") ? (
+            <Button variant="outlined" onClick={() => setImportOpen(true)}>Importar Excel</Button>
+          ) : null}
+          {can("products", "create") ? (
+            <Button variant="contained" onClick={openCreate}>Nuevo producto</Button>
+          ) : null}
+        </div>
       </div>
       <section className="panel p-4">
         <div className="mb-4 flex flex-wrap items-end justify-between gap-3">
@@ -272,6 +283,15 @@ export default function ProductsPage() {
         saving={saving}
         onClose={() => setOpen(false)}
         onSubmit={save}
+      />
+
+      <ProductImportDialog
+        open={importOpen}
+        onClose={() => setImportOpen(false)}
+        onImported={() => {
+          void load(page);
+          loadCategories();
+        }}
       />
     </div>
   );
