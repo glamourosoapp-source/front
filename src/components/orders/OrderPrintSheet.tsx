@@ -1,6 +1,7 @@
 "use client";
 
-import { Fragment, type CSSProperties } from "react";
+import { Fragment, useEffect, useState, type CSSProperties } from "react";
+import { createPortal } from "react-dom";
 import {
   orderCreatorLabel,
   orderStatusLabel,
@@ -80,8 +81,16 @@ const productCell: CSSProperties = {
  * Replica el acomodo de la nota de remisión física de Glamouroso. Sin logo ni
  * folio de remisión: se imprime sobre hojas membretadas que ya los traen
  * preimpresos, por eso el bloque de datos arranca con espacio arriba.
+ *
+ * Se monta por portal como hijo directo de <body> para que al imprimir el resto
+ * del dashboard se pueda sacar del flujo (ver @media print en globals.css) y la
+ * hoja ocupe solo su propio alto, sin páginas en blanco al final.
  */
 export function OrderPrintSheet({ order }: { order: PrintableOrder }) {
+  // El portal solo existe en cliente; en SSR no se renderiza nada.
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
+
   const items = order.items || [];
   const customer = order.customer;
   const deliveryDate = order.scheduledDeliveryDate
@@ -122,7 +131,9 @@ export function OrderPrintSheet({ order }: { order: PrintableOrder }) {
     ],
   ];
 
-  return (
+  if (!mounted) return null;
+
+  const sheet = (
     <div
       className="print-only"
       style={{
@@ -276,4 +287,6 @@ export function OrderPrintSheet({ order }: { order: PrintableOrder }) {
       </table>
     </div>
   );
+
+  return createPortal(sheet, document.body);
 }

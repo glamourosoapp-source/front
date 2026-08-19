@@ -865,18 +865,31 @@ textarea.input {
 }
 
 @media print {
-  body * {
-    visibility: hidden;
+  /* La hoja se monta como hijo directo de <body> (portal) y todo lo demás sale
+     del flujo con display:none: ocultarlo con visibility dejaba el alto del
+     dashboard en el documento y salía una segunda página en blanco. */
+  body > *:not(.print-only) {
+    display: none !important;
   }
-  .print-only,
-  .print-only * {
-    visibility: visible;
+  html,
+  body {
+    height: auto !important;
+    overflow: visible !important;
+    background: #fff;
   }
   .print-only {
     display: block;
-    position: absolute;
-    inset: 0;
     padding: 24px;
     background: #fff;
+  }
+  /* Las bandas grises y el encabezado oscuro de la tabla son parte del formato
+     de la nota: deben salir aunque el usuario no active "gráficos de fondo". */
+  .print-only,
+  .print-only * {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+  .print-only tr {
+    break-inside: avoid;
   }
 }
