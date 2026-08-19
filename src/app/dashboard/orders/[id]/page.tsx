@@ -17,22 +17,21 @@ import {
 import { ArrowLeft, Download, Pencil, Printer } from "lucide-react";
 import { OrderEditDialog } from "@/components/orders/OrderEditDialog";
 import { OrderPrintSheet } from "@/components/orders/OrderPrintSheet";
-import { orderCreatorLabel, orderTeamLabel, paymentMethodLabel, paymentStatusLabel } from "@/constants/orders";
+import {
+  orderCreatorLabel,
+  orderStatusLabel,
+  orderTeamLabel,
+  paymentMethodLabel,
+  paymentStatusLabel,
+} from "@/constants/orders";
 import { DetailField } from "@/components/ui/DetailField";
-import { httpClient } from "@/services/http-client";
+import { httpClient, getApiErrorMessage } from "@/services/http-client";
 import { useRealtime } from "@/components/realtime/RealtimeProvider";
 import { usePermissions } from "@/lib/permissions";
 import { exportOrderToXlsx } from "@/lib/export-order-xlsx";
 import { formatDateOnly } from "@/lib/format-date-only";
 import { Order } from "@/types";
 import { toast } from "sonner";
-
-const statusLabels: Record<string, string> = {
-  new: "Nuevo",
-  processing: "En proceso",
-  delivered: "Entregado",
-  cancelled: "Cancelado",
-};
 
 function formatOrderDate(value: string | Date | undefined) {
   if (!value) return "—";
@@ -77,6 +76,7 @@ export default function OrderDetailPage() {
   const [order, setOrder] = useState<OrderDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [editOpen, setEditOpen] = useState(false);
+  const [confirming, setConfirming] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -116,6 +116,34 @@ export default function OrderDetailPage() {
     toast.success("Archivo Excel descargado");
   }
 
+  async function confirmDraft() {
+    if (!order) return;
+    setConfirming(true);
+    try {
+      const confirmed = await httpClient.post<OrderDetail>(`/orders/${order.id}/confirm`, {});
+      toast.success(
+        `Pedido ${confirmed.orderNumber} creado${
+          confirmed.scheduledDeliveryDate
+            ? ` · entrega ${formatDateOnly(confirmed.scheduledDeliveryDate)}`
+            : ""
+        }`
+      );
+      setOrder(confirmed);
+    } catch (err) {
+      const status = (err as { response?: { status?: number } })?.response?.status;
+      if (status === 409) {
+        toast.info("Este borrador ya fue confirmado.");
+        await load();
+      } else {
+        toast.error(getApiErrorMessage(err, "No se pudo convertir el borrador."));
+      }
+    } finally {
+      setConfirming(false);
+    }
+  }
+
+  const isDraft = order?.status === "draft";
+
   if (loading) {
     return (
       <div className="page-stack">
@@ -139,11 +167,31 @@ export default function OrderDetailPage() {
             <ArrowLeft size={16} />
             Volver a pedidos
           </Link>
-          <h1 className="page-title">Pedido {order.orderNumber}</h1>
-          <p className="page-kicker">Detalle completo del pedido y Productos.</p>
+          <h1 className="page-title">
+            {isDraft ? "Borrador" : "Pedido"} {order.orderNumber}
+          </h1>
+          <p className="page-kicker">
+            {isDraft
+              ? "Borrador sin confirmar: edítalo o conviértelo en pedido."
+              : "Detalle completo del pedido y Productos."}
+          </p>
         </div>
         <Box sx={{ display: "flex", gap: 1.5, alignItems: "center", flexWrap: "wrap" }}>
-          {can("orders", "update") ? (
+          {isDraft && can("orders", "update") ? (
+            <>
+              <Button
+                variant="outlined"
+                startIcon={<Pencil size={16} />}
+                onClick={() => router.push(`/dashboard/orders/new?draftId=${order.id}`)}
+              >
+                Editar borrador
+              </Button>
+              <Button variant="contained" disabled={confirming} onClick={() => void confirmDraft()}>
+                {confirming ? "Convirtiendo..." : "Convertir en pedido"}
+              </Button>
+            </>
+          ) : null}
+          {!isDraft && can("orders", "update") ? (
             <Button variant="outlined" startIcon={<Pencil size={16} />} onClick={() => setEditOpen(true)}>
               Editar
             </Button>
@@ -163,7 +211,7 @@ export default function OrderDetailPage() {
             <h2>Resumen</h2>
             <p className="page-kicker">Informacion general del pedido.</p>
           </div>
-          <span className="pill">{statusLabels[order.status] || order.status}</span>
+          <span className="pill">{orderStatusLabel(order.status)}</span>
         </div>
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           <DetailField label="Folio" value={order.orderNumber} />

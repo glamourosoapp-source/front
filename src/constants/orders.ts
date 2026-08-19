@@ -14,6 +14,20 @@ export const PAYMENT_STATUS_OPTIONS = [
   { value: "refunded", label: "Reembolsado" },
 ] as const;
 
+/** Estados elegibles en selects; "draft" queda fuera: solo se entra/sale por guardar borrador y confirmar. */
+export const ORDER_STATUS_OPTIONS = [
+  { value: "new", label: "Nuevo" },
+  { value: "processing", label: "En proceso" },
+  { value: "delivered", label: "Entregado" },
+  { value: "cancelled", label: "Cancelado" },
+] as const;
+
+export function orderStatusLabel(value: string | null | undefined) {
+  if (value === "draft") return "Borrador";
+  if (!value) return "—";
+  return ORDER_STATUS_OPTIONS.find((o) => o.value === value)?.label ?? value;
+}
+
 export function paymentMethodLabel(value: string | null | undefined) {
   if (!value) return "—";
   const found = PAYMENT_METHOD_OPTIONS.find((o) => o.value === value);

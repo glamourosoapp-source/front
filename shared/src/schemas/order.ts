@@ -2,7 +2,19 @@ import { z } from "zod";
 import { ORDER_STATUS, PAYMENT_STATUS } from "../constants";
 import { paginationSchema } from "./common";
 
+// Estados "activos": los únicos aceptados como destino en el PUT genérico.
+// El paso draft -> new es exclusivo de POST /orders/:id/confirm, y un pedido
+// confirmado nunca regresa a borrador.
 const orderStatus = z.enum([
+  ORDER_STATUS.NEW,
+  ORDER_STATUS.PROCESSING,
+  ORDER_STATUS.DELIVERED,
+  ORDER_STATUS.CANCELLED,
+]);
+
+// Para filtros de listado (incluye borradores).
+const orderStatusFilter = z.enum([
+  ORDER_STATUS.DRAFT,
   ORDER_STATUS.NEW,
   ORDER_STATUS.PROCESSING,
   ORDER_STATUS.DELIVERED,
@@ -60,6 +72,7 @@ export const createOrderSchema = z
     scheduledDeliveryDate: isoDate,
     deliveryTimeWindow: z.union([z.string().max(50), z.literal(""), z.null()]).optional(),
     source: z.string().default("manual"),
+    asDraft: z.boolean().default(false),
   })
   .refine((data) => Boolean(data.customerId) !== Boolean(data.customer), {
     message: "Provide customerId or customer, not both",
@@ -75,10 +88,36 @@ export const updateOrderSchema = z.object({
   deliveryTimeWindow: z.union([z.string().max(50), z.literal(""), z.null()]).optional(),
   customerNotes: z.union([z.string(), z.literal(""), z.null()]).optional(),
   internalNotes: z.union([z.string(), z.literal(""), z.null()]).optional(),
+  // Solo válidos mientras el pedido es borrador; el server responde 409 en
+  // cualquier otro estado.
+  items: z.array(itemSchema).min(1).optional(),
+  deliveryFee: z.number().min(0).optional(),
+  discount: z.number().min(0).optional(),
+  containersCount: z.number().int().min(0).max(999).optional(),
+});
+
+/**
+ * Body de POST /orders/:id/confirm (draft -> new). Todo opcional: `{}`
+ * convierte el borrador tal cual está; los campos presentes sobreescriben
+ * el contenido del borrador en el mismo paso.
+ */
+export const confirmOrderSchema = z.object({
+  items: z.array(itemSchema).min(1).optional(),
+  deliveryFee: z.number().min(0).optional(),
+  discount: z.number().min(0).optional(),
+  containersCount: z.number().int().min(0).max(999).optional(),
+  paymentMethod: z.union([z.string(), z.literal(""), z.null()]).optional(),
+  paymentStatus: paymentStatus.optional(),
+  deliveryAddress: z.union([z.string(), z.literal(""), z.null()]).optional(),
+  deliveryZone: z.union([z.string(), z.literal(""), z.null()]).optional(),
+  scheduledDeliveryDate: isoDate,
+  deliveryTimeWindow: z.union([z.string().max(50), z.literal(""), z.null()]).optional(),
+  customerNotes: z.union([z.string(), z.literal(""), z.null()]).optional(),
+  internalNotes: z.union([z.string(), z.literal(""), z.null()]).optional(),
 });
 
 export const queryOrderSchema = paginationSchema.extend({
-  status: z.union([orderStatus, z.literal(""), z.null()]).optional(),
+  status: z.union([orderStatusFilter, z.literal(""), z.null()]).optional(),
   paymentStatus: z.union([paymentStatus, z.literal(""), z.null()]).optional(),
   customerId: z.union([z.string().uuid(), z.literal(""), z.null()]).optional(),
   dateFrom: isoDate,

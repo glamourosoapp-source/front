@@ -11,6 +11,8 @@ export const ROLES = {
 export const ADMIN_ROLES: string[] = [ROLES.ADMIN, ROLES.ORG_ADMIN, ROLES.SYSTEM_ADMIN];
 
 export const ORDER_STATUS = {
+  /** Pedido guardado sin confirmar (pendiente de aprobación del cliente); folio serie BOR-. */
+  DRAFT: "draft",
   NEW: "new",
   PROCESSING: "processing",
   DELIVERED: "delivered",

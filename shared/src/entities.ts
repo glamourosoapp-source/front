@@ -132,10 +132,20 @@ export interface Order {
   customer?: Customer;
   items?: Array<{
     id: string;
+    productId?: string | null;
     productName: string;
+    unit?: string;
     quantity: string | number;
     unitPrice: string | number;
     total: string | number;
+    notes?: string | null;
+    product?: {
+      id: string;
+      name: string;
+      unit: string;
+      price: string | number;
+      wholesalePrice?: string | number | null;
+    } | null;
   }>;
 }
 

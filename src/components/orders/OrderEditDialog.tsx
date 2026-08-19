@@ -10,21 +10,12 @@ import {
   MenuItem,
   TextField,
 } from "@mui/material";
-import { PAYMENT_METHOD_OPTIONS, PAYMENT_STATUS_OPTIONS } from "@/constants/orders";
+import { ORDER_STATUS_OPTIONS, PAYMENT_METHOD_OPTIONS, PAYMENT_STATUS_OPTIONS } from "@/constants/orders";
 import { httpClient } from "@/services/http-client";
 import { Order } from "@/types";
 import { toast } from "sonner";
 
-const orderStatuses = ["new", "processing", "delivered", "cancelled"];
-
 const DELIVERY_WINDOWS = ["09:00-13:00", "13:00-17:00", "17:00-20:00"];
-
-const statusLabels: Record<string, string> = {
-  new: "Nuevo",
-  processing: "En proceso",
-  delivered: "Entregado",
-  cancelled: "Cancelado",
-};
 
 interface OrderEditDialogProps {
   open: boolean;
@@ -70,9 +61,9 @@ export function OrderEditDialog({ open, order, onClose, onSaved }: OrderEditDial
         <DialogTitle>Editar pedido {order?.orderNumber}</DialogTitle>
         <DialogContent className="form-grid" dividers>
           <TextField select name="status" label="Estado" defaultValue={order?.status || "new"} fullWidth>
-            {orderStatuses.map((item) => (
-              <MenuItem key={item} value={item}>
-                {statusLabels[item] || item}
+            {ORDER_STATUS_OPTIONS.map((item) => (
+              <MenuItem key={item.value} value={item.value}>
+                {item.label}
               </MenuItem>
             ))}
           </TextField>

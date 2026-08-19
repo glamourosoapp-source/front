@@ -1,13 +1,6 @@
-import { orderCreatorLabel, orderTeamLabel, paymentStatusLabel } from "@/constants/orders";
+import { orderCreatorLabel, orderStatusLabel, orderTeamLabel, paymentStatusLabel } from "@/constants/orders";
 import { formatDateOnly } from "@/lib/format-date-only";
 import type { Order } from "@/types";
-
-export const ORDER_STATUS_LABELS: Record<string, string> = {
-  new: "Nuevo",
-  processing: "En proceso",
-  delivered: "Entregado",
-  cancelled: "Cancelado",
-};
 
 /** Paleta de marca Glamouroso (misma que AppThemeProvider). */
 export const BRAND = {
@@ -72,7 +65,7 @@ export function orderToExportRow(order: Order): (string | number)[] {
     order.customer?.phone || "",
     orderCreatorLabel(order),
     orderTeamLabel(order),
-    ORDER_STATUS_LABELS[order.status] || order.status,
+    orderStatusLabel(order.status),
     paymentStatusLabel(order.paymentStatus),
     // Pedidos previos a la columna subtotal caen al total (mismo criterio que el detalle).
     Number(order.subtotal ?? order.total ?? 0),

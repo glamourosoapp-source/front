@@ -3,12 +3,20 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Button, Checkbox, FormControlLabel, Tab, Tabs } from "@mui/material";
+import { Badge, Button, Checkbox, FormControlLabel, Tab, Tabs } from "@mui/material";
 import { OrderEditDialog } from "@/components/orders/OrderEditDialog";
 import { DataTable } from "@/components/ui/DataTable";
 import { DateFilterField } from "@/components/ui/DateFilterField";
 import { ListPagination } from "@/components/ui/ListPagination";
-import { PAYMENT_STATUS_OPTIONS, orderCreatorLabel, orderTeamLabel, paymentStatusLabel } from "@/constants/orders";
+import {
+  ORDER_STATUS_OPTIONS,
+  PAYMENT_STATUS_OPTIONS,
+  orderCreatorLabel,
+  orderStatusLabel,
+  orderTeamLabel,
+  paymentStatusLabel,
+} from "@/constants/orders";
+import { getApiErrorMessage } from "@/services/http-client";
 import { httpClient } from "@/services/http-client";
 import { useRealtime } from "@/components/realtime/RealtimeProvider";
 import { usePermissions } from "@/lib/permissions";
@@ -19,14 +27,17 @@ import { exportOrdersToPdf, exportOrdersToXlsx } from "@/lib/export-orders-list"
 import { ListResponse, Order } from "@/types";
 import { toast } from "sonner";
 
-type DeliveryTab = "today" | "tomorrow" | "upcoming" | "all";
+type DeliveryTab = "today" | "tomorrow" | "upcoming" | "all" | "drafts";
 
 const TAB_LABELS: Record<DeliveryTab, string> = {
   today: "Hoy",
   tomorrow: "Mañana",
   upcoming: "Próximos",
   all: "Todos",
+  drafts: "Borradores",
 };
+
+const TAB_VALUES: DeliveryTab[] = ["today", "tomorrow", "upcoming", "all", "drafts"];
 
 /**
  * Params de fecha de entrega según el tab activo. "Hoy"/"Mañana" se calculan
@@ -42,17 +53,10 @@ function deliveryParams(tab: DeliveryTab, unscheduledOnly: boolean, timeZone: st
       return { deliveryFrom: localDateOnly(2, timeZone), sortBy: "deliveryDate" };
     case "all":
       return unscheduledOnly ? { unscheduled: true } : {};
+    case "drafts":
+      return {};
   }
 }
-
-const orderStatuses = ["new", "processing", "delivered", "cancelled"];
-
-const statusLabels: Record<string, string> = {
-  new: "Nuevo",
-  processing: "En proceso",
-  delivered: "Entregado",
-  cancelled: "Cancelado",
-};
 
 function formatOrderDate(value: string | Date | undefined) {
   if (!value) return "";
@@ -85,15 +89,19 @@ export default function OrdersPage() {
   const [loading, setLoading] = useState(false);
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<Order | null>(null);
+  const [draftCount, setDraftCount] = useState(0);
+  const [confirmingId, setConfirmingId] = useState<string | null>(null);
 
+  // En el tab Borradores el estado va fijo a "draft" y no aplican los filtros
+  // de entrega ni "sin entregar" (el server excluye drafts de esos listados).
   const buildParams = useCallback(
     () => ({
       search: appliedSearch || undefined,
-      status: status || undefined,
+      status: tab === "drafts" ? "draft" : status || undefined,
       paymentStatus: paymentStatus || undefined,
       dateFrom: dateFrom || undefined,
       dateTo: dateTo || undefined,
-      undelivered: undelivered || undefined,
+      undelivered: (tab !== "drafts" && undelivered) || undefined,
       ...deliveryParams(tab, unscheduledOnly, orgTimezone),
     }),
     [appliedSearch, dateFrom, dateTo, paymentStatus, status, tab, undelivered, unscheduledOnly, orgTimezone]
@@ -122,6 +130,20 @@ export default function OrdersPage() {
       if (seq === loadSeq.current) setLoading(false);
     }
   }, [buildParams, page, limit]);
+
+  // Conteo del badge del tab Borradores: pide 1 fila y lee el total (el
+  // scope own/team lo aplica el server).
+  const loadDraftCount = useCallback(async () => {
+    try {
+      const response = await httpClient.get<ListResponse<Order>>("/orders", {
+        status: "draft",
+        limit: 1,
+      });
+      setDraftCount(response.total);
+    } catch {
+      // Silencioso: el badge es informativo, la lista ya reporta sus errores.
+    }
+  }, []);
 
   /** Trae TODO lo filtrado paginando (el tope del API es 200 por página). */
   const fetchAllFiltered = useCallback(async () => {
@@ -164,6 +186,10 @@ export default function OrdersPage() {
     load();
   }, [load]);
 
+  useEffect(() => {
+    loadDraftCount();
+  }, [loadDraftCount]);
+
   // Refresco en vivo: otra sesión, un compañero o el agente creó/cambió un
   // pedido. Señal sin datos → refetch con los filtros y scope actuales; el
   // debounce agrupa ráfagas y el seq guard de load absorbe el resto.
@@ -173,22 +199,29 @@ export default function OrdersPage() {
     const off = subscribe((event) => {
       if (event.type !== "orders_changed") return;
       if (timer) clearTimeout(timer);
-      timer = setTimeout(() => void load(), 500);
+      timer = setTimeout(() => {
+        void load();
+        void loadDraftCount();
+      }, 500);
     });
     return () => {
       if (timer) clearTimeout(timer);
       off();
     };
-  }, [subscribe, load]);
+  }, [subscribe, load, loadDraftCount]);
 
-  // Deep-link ?search= (buscador global del header). En efecto para no leer
-  // window durante el render (hidratación).
+  // Deep-links ?search= (buscador global del header) y ?tab= (p. ej. al volver
+  // de guardar un borrador). En efecto para no leer window durante el render
+  // (hidratación).
   useEffect(() => {
-    const fromUrl = new URLSearchParams(window.location.search).get("search");
+    const params = new URLSearchParams(window.location.search);
+    const fromUrl = params.get("search");
     if (fromUrl) {
       setSearch(fromUrl);
       setAppliedSearch(fromUrl.trim());
     }
+    const tabFromUrl = params.get("tab") as DeliveryTab | null;
+    if (tabFromUrl && TAB_VALUES.includes(tabFromUrl)) setTab(tabFromUrl);
   }, []);
 
   // Filtros o tab nuevos vuelven a la página 1 (el seq guard evita el doble render).
@@ -201,8 +234,34 @@ export default function OrdersPage() {
   }
 
   function openEdit(order: Order) {
+    // Un borrador se edita en la pantalla completa de captura (permite
+    // agregar productos); los demás pedidos, en el diálogo de metadatos.
+    if (order.status === "draft") {
+      router.push(`/dashboard/orders/new?draftId=${order.id}`);
+      return;
+    }
     setEditing(order);
     setOpen(true);
+  }
+
+  async function confirmDraft(order: Order) {
+    setConfirmingId(order.id);
+    try {
+      const confirmed = await httpClient.post<Order>(`/orders/${order.id}/confirm`, {});
+      toast.success(
+        `Pedido ${confirmed.orderNumber} creado${
+          confirmed.scheduledDeliveryDate
+            ? ` · entrega ${formatDateOnly(confirmed.scheduledDeliveryDate)}`
+            : ""
+        }`
+      );
+    } catch (error) {
+      toast.error(getApiErrorMessage(error, "No se pudo convertir el borrador."));
+    } finally {
+      setConfirmingId(null);
+      await load();
+      await loadDraftCount();
+    }
   }
 
   function clearFilters() {
@@ -255,11 +314,29 @@ export default function OrdersPage() {
           <Tab value="tomorrow" label="Mañana" />
           <Tab value="upcoming" label="Próximos" />
           <Tab value="all" label="Todos" />
+          <Tab
+            value="drafts"
+            label={
+              <Badge badgeContent={draftCount} color="warning" max={99} sx={{ "& .MuiBadge-badge": { right: -10 } }}>
+                Borradores
+              </Badge>
+            }
+          />
         </Tabs>
         <div className="mb-4 flex flex-wrap items-end justify-between gap-3">
           <div>
-            <h2>{tab === "all" ? "Pedidos recientes" : `Pedidos con entrega: ${TAB_LABELS[tab]}`}</h2>
-            <p className="page-kicker">Busca por folio o cliente; combina con fechas, estado y pago.</p>
+            <h2>
+              {tab === "drafts"
+                ? "Borradores de pedido"
+                : tab === "all"
+                  ? "Pedidos recientes"
+                  : `Pedidos con entrega: ${TAB_LABELS[tab]}`}
+            </h2>
+            <p className="page-kicker">
+              {tab === "drafts"
+                ? "Pedidos guardados sin confirmar; edítalos o conviértelos en pedido."
+                : "Busca por folio o cliente; combina con fechas, estado y pago."}
+            </p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
             <Button size="small" variant="outlined" disabled={exporting || !orders.length} onClick={() => handleExport("xlsx")}>
@@ -291,14 +368,14 @@ export default function OrdersPage() {
             <DateFilterField label="Creado hasta" value={dateTo} onChange={setDateTo} min={dateFrom || undefined} />
             <select
               className="input"
-              value={status}
-              disabled={undelivered}
+              value={tab === "drafts" ? "" : status}
+              disabled={undelivered || tab === "drafts"}
               onChange={(e) => setStatus(e.target.value)}
             >
-              <option value="">Todos los estados</option>
-              {orderStatuses.map((item) => (
-                <option key={item} value={item}>
-                  {statusLabels[item] || item}
+              <option value="">{tab === "drafts" ? "Borradores" : "Todos los estados"}</option>
+              {ORDER_STATUS_OPTIONS.map((item) => (
+                <option key={item.value} value={item.value}>
+                  {item.label}
                 </option>
               ))}
             </select>
@@ -312,18 +389,20 @@ export default function OrdersPage() {
             </select>
           </div>
           <div className="flex flex-wrap items-center gap-4">
-            <FormControlLabel
-              control={
-                <Checkbox
-                  checked={undelivered}
-                  onChange={(e) => {
-                    setUndelivered(e.target.checked);
-                    if (e.target.checked) setStatus("");
-                  }}
-                />
-              }
-              label="Solo sin entregar"
-            />
+            {tab !== "drafts" ? (
+              <FormControlLabel
+                control={
+                  <Checkbox
+                    checked={undelivered}
+                    onChange={(e) => {
+                      setUndelivered(e.target.checked);
+                      if (e.target.checked) setStatus("");
+                    }}
+                  />
+                }
+                label="Solo sin entregar"
+              />
+            ) : null}
             {tab === "all" ? (
               <FormControlLabel
                 control={
@@ -371,7 +450,7 @@ export default function OrdersPage() {
             {
               key: "status",
               label: "Estado",
-              render: (r) => <span className="pill">{statusLabels[r.status] || r.status}</span>,
+              render: (r) => <span className="pill">{orderStatusLabel(r.status)}</span>,
             },
             {
               key: "paymentStatus",
@@ -379,6 +458,27 @@ export default function OrdersPage() {
               render: (r) => <span className="pill">{paymentStatusLabel(r.paymentStatus)}</span>,
             },
             { key: "total", label: "Total", render: (r) => `$${Number(r.total).toFixed(2)}` },
+            ...(tab === "drafts" && can("orders", "update")
+              ? [
+                  {
+                    key: "confirm",
+                    label: "",
+                    render: (r: Order) => (
+                      <Button
+                        size="small"
+                        variant="contained"
+                        disabled={confirmingId !== null}
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          void confirmDraft(r);
+                        }}
+                      >
+                        {confirmingId === r.id ? "Convirtiendo..." : "Convertir en pedido"}
+                      </Button>
+                    ),
+                  },
+                ]
+              : []),
           ]}
         />
         <ListPagination

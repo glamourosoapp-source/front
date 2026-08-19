@@ -34,7 +34,7 @@ import { useAuthStore } from "@/stores/auth.store";
 import { usePermissions } from "@/lib/permissions";
 import { useDebounce } from "@/hooks/useDebounce";
 import { formatDateOnly } from "@/lib/format-date-only";
-import { Customer, ListResponse, Product } from "@/types";
+import { Customer, ListResponse, Order, Product } from "@/types";
 import { toast } from "sonner";
 
 interface OrderLineItem {
@@ -69,7 +69,13 @@ export default function NewOrderPage() {
   const user = useAuthStore((s) => s.user);
   const { can } = usePermissions();
   const canCreate = can("orders", "create");
+  const canUpdate = can("orders", "update");
   const [submitting, setSubmitting] = useState(false);
+  // Modo edición de borrador (?draftId=): misma pantalla, prellenada; guarda
+  // con PUT y convierte con POST /confirm en lugar de crear.
+  const [draftId, setDraftId] = useState<string | null>(null);
+  const [draftNumber, setDraftNumber] = useState("");
+  const [loadingDraft, setLoadingDraft] = useState(false);
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
   const [loadingCustomers, setLoadingCustomers] = useState(true);
@@ -191,8 +197,64 @@ export default function NewOrderPage() {
   const total = subtotal + containersFee;
 
   const itemCount = useMemo(() => lineItems.reduce((sum, item) => sum + item.quantity, 0), [lineItems]);
-  const canSubmit = Boolean(selectedCustomer) && lineItems.length > 0 && !submitting;
+  const canSubmit = Boolean(selectedCustomer) && lineItems.length > 0 && !submitting && !loadingDraft;
   const canAddProduct = Boolean(selectedProduct) && !loadingProducts;
+
+  // Carga del borrador a editar. ?draftId= se lee de window en efecto (mismo
+  // patrón que el ?search= de la lista: useSearchParams exigiría <Suspense>).
+  useEffect(() => {
+    if (!user) return;
+    const fromUrl = new URLSearchParams(window.location.search).get("draftId");
+    if (!fromUrl || fromUrl === draftId) return;
+    setDraftId(fromUrl);
+    setLoadingDraft(true);
+    httpClient
+      .get<Order>(`/orders/${fromUrl}`)
+      .then((order) => {
+        if (order.status !== "draft") {
+          toast.info("Este pedido ya no es un borrador.");
+          router.replace(`/dashboard/orders/${order.id}`);
+          return;
+        }
+        setDraftNumber(order.orderNumber);
+        setSelectedCustomer((order.customer as Customer) ?? null);
+        setLineItems(
+          (order.items ?? []).map((item) => {
+            // Producto eliminado del catálogo: stub con los datos congelados de
+            // la partida; el payload manda productName en vez de productId.
+            const product: Product =
+              (item.product as Product | null) ??
+              ({
+                id: item.productId ?? crypto.randomUUID(),
+                name: item.productName,
+                unit: item.unit ?? "pieza",
+                price: Number(item.unitPrice),
+              } as Product);
+            return {
+              key: crypto.randomUUID(),
+              productId: item.productId ?? "",
+              product,
+              quantity: Number(item.quantity),
+              // priceOverridden preserva el precio pactado del borrador aunque
+              // cambie la lista de precios del cliente o del catálogo.
+              unitPrice: Number(item.unitPrice),
+              priceOverridden: true,
+            };
+          })
+        );
+        setManualContainersCount(Number(order.containersCount ?? 0));
+        setContainersOverridden(true);
+        setOrderNote(order.customerNotes ?? "");
+        setPaymentMethod(order.paymentMethod ?? "");
+        setPaymentStatus(order.paymentStatus || "unpaid");
+      })
+      .catch(() => {
+        toast.error("No se pudo cargar el borrador.");
+        router.replace("/dashboard/orders?tab=drafts");
+      })
+      .finally(() => setLoadingDraft(false));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user, draftId]);
 
   function addProduct() {
     if (!selectedProduct) {
@@ -246,44 +308,112 @@ export default function NewOrderPage() {
     setLineItems((items) => items.filter((item) => item.key !== key));
   }
 
-  async function submit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-
+  function validateForm() {
     if (lineItems.length === 0) {
       toast.error("Agrega al menos un producto al pedido");
-      return;
+      return false;
     }
-
     if (!selectedCustomer) {
       toast.error("Selecciona un cliente");
-      return;
+      return false;
     }
+    return true;
+  }
 
+  // Partidas con producto eliminado del catálogo (prefill de borrador) viajan
+  // por nombre; el resto por productId, con el precio solo si fue editado.
+  function buildItemsPayload() {
+    return lineItems.map((item) => ({
+      ...(item.productId
+        ? { productId: item.productId }
+        : { productName: item.product.name, unit: item.product.unit }),
+      quantity: item.quantity,
+      ...(item.priceOverridden ? { unitPrice: item.unitPrice } : {}),
+    }));
+  }
+
+  async function createOrder(asDraft: boolean) {
+    if (!validateForm()) return;
     setSubmitting(true);
     try {
       const created = await httpClient.post<{ scheduledDeliveryDate?: string | null }>("/orders", {
-        customerId: selectedCustomer.id,
+        customerId: selectedCustomer!.id,
         customerNotes: orderNote.trim() || undefined,
         paymentMethod: paymentMethod || undefined,
         paymentStatus,
-        items: lineItems.map((item) => ({
-          productId: item.productId,
-          quantity: item.quantity,
-          ...(item.priceOverridden ? { unitPrice: item.unitPrice } : {}),
-        })),
+        items: buildItemsPayload(),
         containersCount,
         source: "panel",
+        asDraft,
       });
+      if (asDraft) {
+        toast.success("Borrador guardado. Conviértelo en pedido cuando el cliente apruebe.");
+        router.push("/dashboard/orders?tab=drafts");
+        return;
+      }
       const deliveryLabel = created?.scheduledDeliveryDate
         ? ` Entrega asignada: ${formatDateOnly(created.scheduledDeliveryDate, { weekday: "long", day: "2-digit", month: "long" })}.`
         : "";
       toast.success(`Nuevo pedido creado con éxito.${deliveryLabel}`);
       router.push("/dashboard/orders");
     } catch (err) {
-      toast.error(getApiErrorMessage(err, "Error al crear el pedido"));
+      toast.error(getApiErrorMessage(err, asDraft ? "Error al guardar el borrador" : "Error al crear el pedido"));
     } finally {
       setSubmitting(false);
     }
+  }
+
+  function draftPayload() {
+    return {
+      customerNotes: orderNote.trim() || null,
+      paymentMethod: paymentMethod || null,
+      paymentStatus,
+      items: buildItemsPayload(),
+      containersCount,
+    };
+  }
+
+  async function saveDraft() {
+    if (!draftId || !validateForm()) return;
+    setSubmitting(true);
+    try {
+      await httpClient.put<Order>(`/orders/${draftId}`, draftPayload());
+      toast.success(`Borrador ${draftNumber} guardado.`);
+      router.push("/dashboard/orders?tab=drafts");
+    } catch (err) {
+      toast.error(getApiErrorMessage(err, "Error al guardar el borrador"));
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  async function confirmDraft() {
+    if (!draftId || !validateForm()) return;
+    setSubmitting(true);
+    try {
+      const confirmed = await httpClient.post<Order>(`/orders/${draftId}/confirm`, draftPayload());
+      const deliveryLabel = confirmed?.scheduledDeliveryDate
+        ? ` Entrega asignada: ${formatDateOnly(confirmed.scheduledDeliveryDate, { weekday: "long", day: "2-digit", month: "long" })}.`
+        : "";
+      toast.success(`Pedido ${confirmed.orderNumber} creado con éxito.${deliveryLabel}`);
+      router.push("/dashboard/orders");
+    } catch (err) {
+      const status = (err as { response?: { status?: number } })?.response?.status;
+      if (status === 409) {
+        toast.info("Este borrador ya fue confirmado.");
+        router.replace(`/dashboard/orders/${draftId}`);
+        return;
+      }
+      toast.error(getApiErrorMessage(err, "Error al convertir el borrador"));
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  async function submit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (draftId) await confirmDraft();
+    else await createOrder(false);
   }
 
   if (user && !canCreate) {
@@ -309,15 +439,17 @@ export default function NewOrderPage() {
       <div className="toolbar">
         <div>
           <Link
-            href="/dashboard/orders"
+            href={draftId ? "/dashboard/orders?tab=drafts" : "/dashboard/orders"}
             className="mb-2 inline-flex items-center gap-1 text-sm text-[var(--muted)] hover:text-[var(--glam-navy)]"
           >
             <ArrowLeft size={16} />
-            Volver a pedidos
+            {draftId ? "Volver a borradores" : "Volver a pedidos"}
           </Link>
-          <h1 className="page-title">Nuevo pedido</h1>
+          <h1 className="page-title">{draftId ? `Editar borrador ${draftNumber}` : "Nuevo pedido"}</h1>
           <p className="page-kicker">
-            Agrega productos y asigna el cliente. La fecha de entrega se asigna automáticamente según la hora de corte.
+            {draftId
+              ? "Ajusta productos y datos; guarda el borrador o conviértelo en pedido."
+              : "Agrega productos y asigna el cliente. La fecha de entrega se asigna automáticamente según la hora de corte."}
           </p>
         </div>
         <Box className="order-actions" sx={{ display: "flex", gap: 1.5, alignItems: "center" }}>
@@ -329,11 +461,20 @@ export default function NewOrderPage() {
               ${total.toFixed(2)}
             </Typography>
           </Box>
-          <Button component={Link} href="/dashboard/orders" variant="outlined">
+          <Button component={Link} href={draftId ? "/dashboard/orders?tab=drafts" : "/dashboard/orders"} variant="outlined">
             Cancelar
           </Button>
-          <Button type="submit" variant="contained" disabled={!canSubmit}>
-            {submitting ? "Guardando..." : "Crear pedido"}
+          {draftId ? (
+            <Button variant="outlined" disabled={!canSubmit || !canUpdate} onClick={() => void saveDraft()}>
+              {submitting ? "Guardando..." : "Guardar borrador"}
+            </Button>
+          ) : (
+            <Button variant="outlined" disabled={!canSubmit} onClick={() => void createOrder(true)}>
+              {submitting ? "Guardando..." : "Guardar borrador"}
+            </Button>
+          )}
+          <Button type="submit" variant="contained" disabled={!canSubmit || (Boolean(draftId) && !canUpdate)}>
+            {submitting ? "Guardando..." : draftId ? "Confirmar pedido" : "Crear pedido"}
           </Button>
         </Box>
       </div>
@@ -533,6 +674,9 @@ export default function NewOrderPage() {
             <Autocomplete
               options={customerOptions}
               value={selectedCustomer}
+              // El contrato de borradores no permite cambiar el cliente: se
+              // congela al guardar (crea otro borrador si es para otro cliente).
+              disabled={Boolean(draftId)}
               onChange={(_, value) => setSelectedCustomer(value)}
               onInputChange={(_, value, reason) => {
                 if (reason !== "reset") setCustomerInput(value);
@@ -559,9 +703,11 @@ export default function NewOrderPage() {
               )}
               sx={{ flex: 1, minWidth: 0 }}
             />
-            <Button variant="outlined" onClick={openCreateCustomer} sx={{ mt: 0.5, whiteSpace: "nowrap" }}>
-              Nuevo cliente
-            </Button>
+            {!draftId ? (
+              <Button variant="outlined" onClick={openCreateCustomer} sx={{ mt: 0.5, whiteSpace: "nowrap" }}>
+                Nuevo cliente
+              </Button>
+            ) : null}
           </Box>
           <TextField
             select
