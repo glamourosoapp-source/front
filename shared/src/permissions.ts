@@ -19,11 +19,14 @@ const FULL_ACCESS: PermissionMap = Object.fromEntries(
   ])
 ) as PermissionMap;
 
-/** Usuarios sin perfil asignado conservan el comportamiento histórico: todo excepto configuración, usuarios y costo de productos. */
+/** Usuarios sin perfil asignado conservan el comportamiento histórico: todo excepto configuración, usuarios, costo de productos e impresión de notas. */
 const LEGACY_FALLBACK: PermissionMap = Object.fromEntries(
   PERMISSION_MODULES.map((module) => [
     module.key,
-    module.key === "settings" || module.key === "users" || module.key === "productCosts"
+    module.key === "settings" ||
+    module.key === "users" ||
+    module.key === "productCosts" ||
+    module.key === "orderPrint"
       ? {}
       : { view: true, create: true, update: true, delete: true, scope: ORDER_SCOPES.ALL },
   ])

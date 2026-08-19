@@ -77,20 +77,13 @@ const productCell: CSSProperties = {
 };
 
 /**
- * Hoja imprimible del pedido: solo visible al imprimir (clase print-only).
- * Replica el acomodo de la nota de remisión física de Glamouroso. Sin logo ni
- * folio de remisión: se imprime sobre hojas membretadas que ya los traen
- * preimpresos, por eso el bloque de datos arranca con espacio arriba.
- *
- * Se monta por portal como hijo directo de <body> para que al imprimir el resto
- * del dashboard se pueda sacar del flujo (ver @media print en globals.css) y la
- * hoja ocupe solo su propio alto, sin páginas en blanco al final.
+ * Cuerpo de la nota de remisión de un pedido. Replica el acomodo de la nota
+ * física de Glamouroso. Sin logo ni folio de remisión: se imprime sobre hojas
+ * membretadas que ya los traen preimpresos, por eso arranca con espacio arriba.
+ * No se monta solo: lo envuelven OrderPrintSheet (un pedido) u OrdersPrintSheets
+ * (varios, una nota por hoja).
  */
-export function OrderPrintSheet({ order }: { order: PrintableOrder }) {
-  // El portal solo existe en cliente; en SSR no se renderiza nada.
-  const [mounted, setMounted] = useState(false);
-  useEffect(() => setMounted(true), []);
-
+function OrderNote({ order }: { order: PrintableOrder }) {
   const items = order.items || [];
   const customer = order.customer;
   const deliveryDate = order.scheduledDeliveryDate
@@ -131,11 +124,8 @@ export function OrderPrintSheet({ order }: { order: PrintableOrder }) {
     ],
   ];
 
-  if (!mounted) return null;
-
-  const sheet = (
+  return (
     <div
-      className="print-only"
       style={{
         fontFamily: "Arial, sans-serif",
         color: "#111",
@@ -287,6 +277,51 @@ export function OrderPrintSheet({ order }: { order: PrintableOrder }) {
       </table>
     </div>
   );
+}
 
-  return createPortal(sheet, document.body);
+/** Solo en cliente: el portal necesita document.body. */
+function useMounted() {
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
+  return mounted;
+}
+
+/**
+ * Hoja imprimible de UN pedido: solo visible al imprimir (clase print-only).
+ * Se monta por portal como hijo directo de <body> para que al imprimir el resto
+ * del dashboard se pueda sacar del flujo (ver @media print en globals.css) y la
+ * hoja ocupe solo su propio alto, sin páginas en blanco al final.
+ */
+export function OrderPrintSheet({ order }: { order: PrintableOrder }) {
+  const mounted = useMounted();
+  if (!mounted) return null;
+  return createPortal(
+    <div className="print-only">
+      <OrderNote order={order} />
+    </div>,
+    document.body
+  );
+}
+
+/**
+ * Varias notas en una sola impresión (botón "Imprimir notas" del listado):
+ * una nota por hoja, salto de página entre notas y ninguno después de la
+ * última para no dejar una página en blanco al final.
+ */
+export function OrdersPrintSheets({ orders }: { orders: PrintableOrder[] }) {
+  const mounted = useMounted();
+  if (!mounted || !orders.length) return null;
+  return createPortal(
+    <div className="print-only">
+      {orders.map((order, index) => (
+        <div
+          key={order.id}
+          style={{ breakAfter: index < orders.length - 1 ? "page" : "auto" }}
+        >
+          <OrderNote order={order} />
+        </div>
+      ))}
+    </div>,
+    document.body
+  );
 }

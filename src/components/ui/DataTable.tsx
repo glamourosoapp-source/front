@@ -17,6 +17,7 @@ import {
   DialogContentText,
   DialogActions,
   Button,
+  Checkbox,
 } from "@mui/material";
 import { Edit3, Trash2 } from "lucide-react";
 
@@ -24,6 +25,16 @@ interface Column {
   key: string;
   label: string;
   render?: (row: any) => React.ReactNode;
+}
+
+/** Selección por fila (opcional): agrega una columna de checkboxes al inicio. */
+interface DataTableSelection {
+  isSelected: (row: any) => boolean;
+  onToggle: (row: any) => void;
+  allSelected: boolean;
+  someSelected: boolean;
+  onToggleAll: () => void;
+  label?: string;
 }
 
 interface DataTableProps {
@@ -34,6 +45,7 @@ interface DataTableProps {
   onEdit?: (row: any) => void;
   onDelete?: (row: any) => void;
   getDeleteLabel?: (row: any) => string;
+  selection?: DataTableSelection;
 }
 
 export function DataTable({
@@ -44,6 +56,7 @@ export function DataTable({
   onEdit,
   onDelete,
   getDeleteLabel,
+  selection,
 }: DataTableProps) {
   const [deleteTarget, setDeleteTarget] = useState<any>(null);
 
@@ -70,6 +83,16 @@ export function DataTable({
         <Table sx={{ minWidth: 650 }} aria-label="premium data table">
           <TableHead>
             <TableRow>
+              {selection ? (
+                <TableCell padding="checkbox" className="table-head-cell">
+                  <Checkbox
+                    checked={selection.allSelected}
+                    indeterminate={!selection.allSelected && selection.someSelected}
+                    onChange={selection.onToggleAll}
+                    inputProps={{ "aria-label": selection.label || "Seleccionar todo" }}
+                  />
+                </TableCell>
+              ) : null}
               {columns.map((col) => (
                 <TableCell key={col.key} className="table-head-cell">
                   {col.label}
@@ -86,7 +109,7 @@ export function DataTable({
             {rows.length === 0 ? (
               <TableRow>
                 <TableCell
-                  colSpan={columns.length + (onEdit || onDelete ? 1 : 0)}
+                  colSpan={columns.length + (onEdit || onDelete ? 1 : 0) + (selection ? 1 : 0)}
                   align="center"
                   sx={{ py: 6, color: "text.secondary" }}
                 >
@@ -110,6 +133,14 @@ export function DataTable({
                       },
                     }}
                   >
+                    {selection ? (
+                      <TableCell padding="checkbox" onClick={(event) => event.stopPropagation()}>
+                        <Checkbox
+                          checked={selection.isSelected(row)}
+                          onChange={() => selection.onToggle(row)}
+                        />
+                      </TableCell>
+                    ) : null}
                     {columns.map((col) => (
                       <TableCell key={col.key} className="table-body-cell">
                         {col.render ? col.render(row) : row[col.key] ?? "-"}

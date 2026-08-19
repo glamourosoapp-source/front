@@ -46,6 +46,7 @@ const ACTION_LABELS: Record<PermissionAction, string> = {
 /** Módulos donde solo aplican algunas acciones; el resto de la fila se deja vacío. */
 const MODULE_ACTIONS: Partial<Record<PermissionModule, readonly PermissionAction[]>> = {
   productCosts: ["view", "update"],
+  orderPrint: ["view"],
 };
 
 const actionApplies = (module: PermissionModule, action: PermissionAction) =>

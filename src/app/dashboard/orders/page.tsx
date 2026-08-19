@@ -4,7 +4,9 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Badge, Button, Checkbox, FormControlLabel, Tab, Tabs } from "@mui/material";
+import { Printer } from "lucide-react";
 import { OrderEditDialog } from "@/components/orders/OrderEditDialog";
+import { OrdersPrintSheets } from "@/components/orders/OrderPrintSheet";
 import { DataTable } from "@/components/ui/DataTable";
 import { DateFilterField } from "@/components/ui/DateFilterField";
 import { ListPagination } from "@/components/ui/ListPagination";
@@ -91,6 +93,11 @@ export default function OrdersPage() {
   const [editing, setEditing] = useState<Order | null>(null);
   const [draftCount, setDraftCount] = useState(0);
   const [confirmingId, setConfirmingId] = useState<string | null>(null);
+  // Selección para imprimir notas: se guarda el pedido completo (no solo el id)
+  // para poder imprimir lo marcado en páginas anteriores sin volver a pedirlo.
+  const [selected, setSelected] = useState<Record<string, Order>>({});
+  const [printing, setPrinting] = useState(false);
+  const [printBatch, setPrintBatch] = useState<Order[]>([]);
 
   // En el tab Borradores el estado va fijo a "draft" y no aplican los filtros
   // de entrega ni "sin entregar" (el server excluye drafts de esos listados).
@@ -182,6 +189,60 @@ export default function OrdersPage() {
     }
   }
 
+  const selectedOrders = Object.values(selected);
+
+  function toggleSelected(order: Order) {
+    setSelected((prev) => {
+      const next = { ...prev };
+      if (next[order.id]) delete next[order.id];
+      else next[order.id] = order;
+      return next;
+    });
+  }
+
+  const pageAllSelected = orders.length > 0 && orders.every((order) => selected[order.id]);
+
+  function toggleSelectedPage() {
+    setSelected((prev) => {
+      const next = { ...prev };
+      if (pageAllSelected) orders.forEach((order) => delete next[order.id]);
+      else orders.forEach((order) => (next[order.id] = order));
+      return next;
+    });
+  }
+
+  /**
+   * Notas de remisión en una sola impresión: lo marcado con checkbox o, si no
+   * hay nada marcado, todos los pedidos del tab/filtro actual (no solo la
+   * página visible). El diálogo del navegador permite guardarlas como PDF.
+   */
+  async function handlePrintNotes() {
+    setPrinting(true);
+    try {
+      const batch = selectedOrders.length ? selectedOrders : await fetchAllFiltered();
+      if (!batch.length) {
+        toast.info("No hay pedidos para imprimir con los filtros actuales.");
+        return;
+      }
+      setPrintBatch(batch);
+    } catch {
+      toast.error("No se pudieron cargar los pedidos para imprimir.");
+    } finally {
+      setPrinting(false);
+    }
+  }
+
+  // Las hojas se montan por portal: hay que esperar a que estén pintadas antes
+  // de abrir el diálogo de impresión, y desmontarlas al cerrarlo.
+  useEffect(() => {
+    if (!printBatch.length) return;
+    const timer = setTimeout(() => {
+      window.print();
+      setPrintBatch([]);
+    }, 150);
+    return () => clearTimeout(timer);
+  }, [printBatch]);
+
   useEffect(() => {
     load();
   }, [load]);
@@ -224,9 +285,11 @@ export default function OrdersPage() {
     if (tabFromUrl && TAB_VALUES.includes(tabFromUrl)) setTab(tabFromUrl);
   }, []);
 
-  // Filtros o tab nuevos vuelven a la página 1 (el seq guard evita el doble render).
+  // Filtros o tab nuevos vuelven a la página 1 (el seq guard evita el doble render)
+  // y descartan la selección: lo marcado ya no corresponde a lo que se ve.
   useEffect(() => {
     setPage(1);
+    setSelected({});
   }, [tab, appliedSearch, status, paymentStatus, dateFrom, dateTo, undelivered, unscheduledOnly]);
 
   function applySearch() {
@@ -345,6 +408,21 @@ export default function OrdersPage() {
             <Button size="small" variant="outlined" disabled={exporting || !orders.length} onClick={() => handleExport("pdf")}>
               PDF
             </Button>
+            {can("orderPrint") ? (
+              <Button
+                size="small"
+                variant="contained"
+                startIcon={<Printer size={16} />}
+                disabled={printing || (!orders.length && !selectedOrders.length)}
+                onClick={() => void handlePrintNotes()}
+              >
+                {printing
+                  ? "Preparando..."
+                  : selectedOrders.length
+                    ? `Imprimir pedidos (${selectedOrders.length})`
+                    : "Imprimir pedidos"}
+              </Button>
+            ) : null}
             <span className="pill">{total.toLocaleString("es-MX")} pedidos</span>
           </div>
         </div>
@@ -428,6 +506,18 @@ export default function OrdersPage() {
           onRowClick={(row) => router.push(`/dashboard/orders/${row.id}`)}
           onEdit={can("orders", "update") ? openEdit : undefined}
           onDelete={can("orders", "delete") ? remove : undefined}
+          selection={
+            can("orderPrint")
+              ? {
+                  isSelected: (row: Order) => Boolean(selected[row.id]),
+                  onToggle: toggleSelected,
+                  allSelected: pageAllSelected,
+                  someSelected: selectedOrders.length > 0,
+                  onToggleAll: toggleSelectedPage,
+                  label: "Seleccionar pedidos para imprimir",
+                }
+              : undefined
+          }
           columns={[
             { key: "orderNumber", label: "Folio" },
             { key: "createdAt", label: "Fecha", render: (r) => formatOrderDate(r.createdAt) },
@@ -500,6 +590,8 @@ export default function OrdersPage() {
         onClose={() => setOpen(false)}
         onSaved={() => void load()}
       />
+
+      <OrdersPrintSheets orders={printBatch} />
     </div>
   );
 }
