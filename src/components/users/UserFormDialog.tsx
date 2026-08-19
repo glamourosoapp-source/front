@@ -52,6 +52,7 @@ export function UserFormDialog({ open, user, profiles, teams, onClose, onSaved }
     const form = new FormData(event.currentTarget);
     const name = String(form.get("name") || "").trim();
     const email = String(form.get("email") || "").trim();
+    const phone = String(form.get("phone") || "").trim();
     const password = String(form.get("password") || "");
     const profileIdRaw = String(form.get("profileId") || "");
     const profileId = profileIdRaw ? profileIdRaw : null;
@@ -61,6 +62,7 @@ export function UserFormDialog({ open, user, profiles, teams, onClose, onSaved }
     const payload: Record<string, unknown> = {
       name,
       email,
+      phone: phone || null,
       profileId: selectedAccess === "profile" ? profileId : null,
       teamId: teamIdRaw ? teamIdRaw : null,
     };
@@ -97,6 +99,15 @@ export function UserFormDialog({ open, user, profiles, teams, onClose, onSaved }
         <DialogContent className="form-grid" dividers>
           <TextField name="name" label="Nombre" defaultValue={user?.name || ""} fullWidth required />
           <TextField name="email" label="Correo" type="email" defaultValue={user?.email || ""} fullWidth required />
+          <TextField
+            name="phone"
+            label="Teléfono (opcional)"
+            type="tel"
+            defaultValue={user?.phone || ""}
+            fullWidth
+            inputProps={{ minLength: 7, maxLength: 24 }}
+            helperText="Aparece junto a 'Creado por' en el Excel del pedido."
+          />
           <TextField
             name="password"
             label={isEdit ? "Nueva contraseña (opcional)" : "Contraseña"}
