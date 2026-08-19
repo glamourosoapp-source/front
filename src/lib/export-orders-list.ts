@@ -47,11 +47,20 @@ export const ORDERS_EXPORT_HEADERS = [
   "Equipo",
   "Estado",
   "Pago",
+  "Subtotal",
+  "Bidones",
   "Total",
 ];
 
 /** Índice (0-based) de la columna Total; los formatos numéricos dependen de él. */
 export const ORDERS_EXPORT_TOTAL_INDEX = ORDERS_EXPORT_HEADERS.length - 1;
+
+/** Columnas de dinero (Subtotal, Bidones, Total), en orden. */
+export const ORDERS_EXPORT_MONEY_INDEXES = [
+  ORDERS_EXPORT_TOTAL_INDEX - 2,
+  ORDERS_EXPORT_TOTAL_INDEX - 1,
+  ORDERS_EXPORT_TOTAL_INDEX,
+];
 
 export function orderToExportRow(order: Order): (string | number)[] {
   return [
@@ -65,12 +74,23 @@ export function orderToExportRow(order: Order): (string | number)[] {
     orderTeamLabel(order),
     ORDER_STATUS_LABELS[order.status] || order.status,
     paymentStatusLabel(order.paymentStatus),
+    // Pedidos previos a la columna subtotal caen al total (mismo criterio que el detalle).
+    Number(order.subtotal ?? order.total ?? 0),
+    Number(order.containersFee || 0),
     Number(order.total || 0),
   ];
 }
 
-export function ordersTotalSum(orders: Order[]) {
-  return orders.reduce((sum, order) => sum + Number(order.total || 0), 0);
+/** Sumas de las columnas de dinero, en el mismo orden que ORDERS_EXPORT_MONEY_INDEXES. */
+export function ordersMoneySums(orders: Order[]): [number, number, number] {
+  return orders.reduce<[number, number, number]>(
+    (sums, order) => [
+      sums[0] + Number(order.subtotal ?? order.total ?? 0),
+      sums[1] + Number(order.containersFee || 0),
+      sums[2] + Number(order.total || 0),
+    ],
+    [0, 0, 0]
+  );
 }
 
 export function exportFileStamp() {
@@ -150,6 +170,8 @@ export async function exportOrdersToXlsx(orders: Order[], context: OrdersExportC
     { width: 12 },
     { width: 14 },
     { width: 12 },
+    { width: 12 },
+    { width: 12 },
   ];
 
   // Filas 1-4: encabezado con logo y título.
@@ -160,12 +182,12 @@ export async function exportOrdersToXlsx(orders: Order[], context: OrdersExportC
       ext: { width: 180, height: Math.round(180 / LOGO_ASPECT) },
     });
   }
-  sheet.mergeCells("D2:K2");
+  sheet.mergeCells("D2:M2");
   const titleCell = sheet.getCell("D2");
   titleCell.value = `Pedidos — ${context.scopeLabel}`;
   titleCell.font = { name: "Calibri", size: 16, bold: true, color: { argb: argb(BRAND.navy) } };
   titleCell.alignment = { horizontal: "right", vertical: "middle" };
-  sheet.mergeCells("D3:K3");
+  sheet.mergeCells("D3:M3");
   const subtitleCell = sheet.getCell("D3");
   subtitleCell.value = `Generado: ${generatedAt} · ${orders.length} pedidos`;
   subtitleCell.font = { name: "Calibri", size: 10, color: { argb: argb(BRAND.textMuted) } };
@@ -173,7 +195,7 @@ export async function exportOrdersToXlsx(orders: Order[], context: OrdersExportC
   sheet.getRow(2).height = 22;
 
   // Fila 5: franja amarilla de marca.
-  sheet.mergeCells("A5:K5");
+  sheet.mergeCells("A5:M5");
   sheet.getCell("A5").fill = {
     type: "pattern",
     pattern: "solid",
@@ -188,7 +210,10 @@ export async function exportOrdersToXlsx(orders: Order[], context: OrdersExportC
     cell.value = header;
     cell.font = { name: "Calibri", size: 11, bold: true, color: { argb: "FFFFFFFF" } };
     cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: argb(BRAND.navy) } };
-    cell.alignment = { vertical: "middle", horizontal: index === ORDERS_EXPORT_TOTAL_INDEX ? "right" : "left" };
+    cell.alignment = {
+      vertical: "middle",
+      horizontal: ORDERS_EXPORT_MONEY_INDEXES.includes(index) ? "right" : "left",
+    };
   });
   headerRow.height = 20;
 
@@ -204,23 +229,29 @@ export async function exportOrdersToXlsx(orders: Order[], context: OrdersExportC
       }
       cell.border = { bottom: { style: "thin", color: { argb: argb(BRAND.divider) } } };
     });
-    const totalCell = row.getCell(ORDERS_EXPORT_TOTAL_INDEX + 1);
-    totalCell.numFmt = '"$"#,##0.00';
-    totalCell.alignment = { horizontal: "right" };
+    ORDERS_EXPORT_MONEY_INDEXES.forEach((moneyIndex) => {
+      const moneyCell = row.getCell(moneyIndex + 1);
+      moneyCell.numFmt = '"$"#,##0.00';
+      moneyCell.alignment = { horizontal: "right" };
+    });
   });
 
-  // Fila de total general.
+  // Fila de totales generales (Subtotal, Bidones, Total).
   const totalRow = sheet.getRow(7 + orders.length);
-  const totalLabelCell = totalRow.getCell(ORDERS_EXPORT_TOTAL_INDEX);
-  totalLabelCell.value = "Total";
+  const totalLabelCell = totalRow.getCell(ORDERS_EXPORT_MONEY_INDEXES[0]);
+  totalLabelCell.value = "Totales";
   totalLabelCell.font = { name: "Calibri", size: 11, bold: true, color: { argb: argb(BRAND.navy) } };
   totalLabelCell.alignment = { horizontal: "right" };
-  const totalValueCell = totalRow.getCell(ORDERS_EXPORT_TOTAL_INDEX + 1);
-  totalValueCell.value = Number(ordersTotalSum(orders).toFixed(2));
-  totalValueCell.numFmt = '"$"#,##0.00';
-  totalValueCell.font = { name: "Calibri", size: 11, bold: true, color: { argb: argb(BRAND.navy) } };
-  totalValueCell.alignment = { horizontal: "right" };
-  [totalLabelCell, totalValueCell].forEach((cell) => {
+  const sums = ordersMoneySums(orders);
+  const sumCells = ORDERS_EXPORT_MONEY_INDEXES.map((moneyIndex, position) => {
+    const cell = totalRow.getCell(moneyIndex + 1);
+    cell.value = Number(sums[position].toFixed(2));
+    cell.numFmt = '"$"#,##0.00';
+    cell.font = { name: "Calibri", size: 11, bold: true, color: { argb: argb(BRAND.navy) } };
+    cell.alignment = { horizontal: "right" };
+    return cell;
+  });
+  [totalLabelCell, ...sumCells].forEach((cell) => {
     cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: argb(BRAND.yellow) } };
     cell.border = { top: { style: "medium", color: { argb: argb(BRAND.navy) } } };
   });
@@ -271,14 +302,16 @@ export async function exportOrdersToPdf(orders: Order[], context: OrdersExportCo
     head: [ORDERS_EXPORT_HEADERS],
     body: orders.map((order) => {
       const row = orderToExportRow(order);
-      row[ORDERS_EXPORT_TOTAL_INDEX] = `$${Number(row[ORDERS_EXPORT_TOTAL_INDEX]).toFixed(2)}`;
+      ORDERS_EXPORT_MONEY_INDEXES.forEach((moneyIndex) => {
+        row[moneyIndex] = `$${Number(row[moneyIndex]).toFixed(2)}`;
+      });
       return row.map(String);
     }),
     foot: [
       [
-        ...Array.from({ length: ORDERS_EXPORT_TOTAL_INDEX - 1 }, () => ""),
-        "Total",
-        `$${ordersTotalSum(orders).toFixed(2)}`,
+        ...Array.from({ length: ORDERS_EXPORT_MONEY_INDEXES[0] - 1 }, () => ""),
+        "Totales",
+        ...ordersMoneySums(orders).map((sum) => `$${sum.toFixed(2)}`),
       ],
     ],
     styles: { fontSize: 8, textColor: hexToRgb(BRAND.text) },
@@ -289,7 +322,9 @@ export async function exportOrdersToPdf(orders: Order[], context: OrdersExportCo
       textColor: hexToRgb(BRAND.navy),
       fontStyle: "bold",
     },
-    columnStyles: { [ORDERS_EXPORT_TOTAL_INDEX]: { halign: "right" } },
+    columnStyles: Object.fromEntries(
+      ORDERS_EXPORT_MONEY_INDEXES.map((moneyIndex) => [moneyIndex, { halign: "right" as const }])
+    ),
     didDrawPage: () => {
       const pageHeight = doc.internal.pageSize.getHeight();
       doc.setFontSize(8);

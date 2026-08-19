@@ -254,6 +254,15 @@ export default function OrderDetailPage() {
           <Typography variant="body2" sx={{ color: "var(--muted)" }}>
             Subtotal: {money(order.subtotal ?? order.total)}
           </Typography>
+          {Number(order.containersFee || 0) > 0 ? (
+            <Typography variant="body2" sx={{ color: "var(--muted)" }}>
+              {/* Precio unitario derivado de fee/count: pedidos históricos siguen
+                  correctos aunque cambie CONTAINER_UNIT_PRICE. */}
+              Bidones ({Number(order.containersCount || 0)} ×{" "}
+              {money(Number(order.containersFee) / Math.max(1, Number(order.containersCount || 0)))}):{" "}
+              {money(order.containersFee)}
+            </Typography>
+          ) : null}
           {Number(order.deliveryFee || 0) > 0 ? (
             <Typography variant="body2" sx={{ color: "var(--muted)" }}>
               Envio: {money(order.deliveryFee)}

@@ -51,6 +51,7 @@ export const createOrderSchema = z
     deliveryAddress: z.union([z.string(), z.literal(""), z.null()]).optional(),
     deliveryZone: z.union([z.string(), z.literal(""), z.null()]).optional(),
     deliveryFee: z.number().min(0).default(0),
+    containersCount: z.number().int().min(0).max(999).default(0),
     discount: z.number().min(0).default(0),
     paymentMethod: z.union([z.string(), z.literal(""), z.null()]).optional(),
     paymentStatus: paymentStatus.default(PAYMENT_STATUS.UNPAID),

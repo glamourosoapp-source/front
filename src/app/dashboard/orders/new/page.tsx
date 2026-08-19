@@ -23,7 +23,12 @@ import {
 import { CustomerFormDialog } from "@/components/customers/CustomerFormDialog";
 import { PAYMENT_METHOD_OPTIONS, PAYMENT_STATUS_OPTIONS } from "@/constants/orders";
 import { ArrowLeft, Plus, ShieldAlert, Trash2 } from "lucide-react";
-import { resolveProductUnitPrice } from "@glamouroso/shared";
+import {
+  CONTAINER_UNIT_PRICE,
+  carriesReturnableContainer,
+  extractPresentation,
+  resolveProductUnitPrice,
+} from "@glamouroso/shared";
 import { httpClient, getApiErrorMessage } from "@/services/http-client";
 import { useAuthStore } from "@/stores/auth.store";
 import { usePermissions } from "@/lib/permissions";
@@ -43,6 +48,20 @@ interface OrderLineItem {
 
 function defaultUnitPrice(product: Product, pricingTier: Customer["pricingTier"]) {
   return resolveProductUnitPrice(product, pricingTier || "retail");
+}
+
+// Cada unidad 20L de una línea líquida trae bidón retornable que se cobra
+// aparte (los plásticos con "20 LITROS" en el nombre no llevan bidón).
+// `variants.presentacion` la puebla el importador; para catálogo capturado a
+// mano se deriva del nombre con la misma regla compartida.
+function addsContainer(product: Product): boolean {
+  const fromVariants = product.variants?.presentacion;
+  const presentation =
+    typeof fromVariants === "string" && fromVariants.trim()
+      ? fromVariants.trim()
+      : extractPresentation(product.name);
+  const categoryName = product.category?.name ?? product.category?.externalCode ?? null;
+  return carriesReturnableContainer(presentation, categoryName);
 }
 
 export default function NewOrderPage() {
@@ -159,6 +178,18 @@ export default function NewOrderPage() {
     [lineItems]
   );
 
+  // Bidones: auto (1 por unidad 20L) hasta que la capturista lo edita, p. ej.
+  // cuando el cliente entrega bidones vacíos a cambio y se cobran menos.
+  const [manualContainersCount, setManualContainersCount] = useState(0);
+  const [containersOverridden, setContainersOverridden] = useState(false);
+  const autoContainersCount = useMemo(
+    () => lineItems.reduce((sum, item) => sum + (addsContainer(item.product) ? item.quantity : 0), 0),
+    [lineItems]
+  );
+  const containersCount = containersOverridden ? manualContainersCount : autoContainersCount;
+  const containersFee = containersCount * CONTAINER_UNIT_PRICE;
+  const total = subtotal + containersFee;
+
   const itemCount = useMemo(() => lineItems.reduce((sum, item) => sum + item.quantity, 0), [lineItems]);
   const canSubmit = Boolean(selectedCustomer) && lineItems.length > 0 && !submitting;
   const canAddProduct = Boolean(selectedProduct) && !loadingProducts;
@@ -240,6 +271,7 @@ export default function NewOrderPage() {
           quantity: item.quantity,
           ...(item.priceOverridden ? { unitPrice: item.unitPrice } : {}),
         })),
+        containersCount,
         source: "panel",
       });
       const deliveryLabel = created?.scheduledDeliveryDate
@@ -291,10 +323,10 @@ export default function NewOrderPage() {
         <Box className="order-actions" sx={{ display: "flex", gap: 1.5, alignItems: "center" }}>
           <Box className="order-actions-summary" sx={{ mr: 1, textAlign: "right" }}>
             <Typography variant="caption" sx={{ color: "var(--muted)", display: "block" }}>
-              {itemCount} {itemCount === 1 ? "artículo" : "artículos"}
+              {itemCount} {itemCount === 1 ? "artículo" : "artículos"} · Subtotal ${subtotal.toFixed(2)}
             </Typography>
             <Typography variant="h6" sx={{ color: "var(--glam-navy)", fontWeight: 700, lineHeight: 1.15 }}>
-              ${subtotal.toFixed(2)}
+              ${total.toFixed(2)}
             </Typography>
           </Box>
           <Button component={Link} href="/dashboard/orders" variant="outlined">
@@ -434,10 +466,55 @@ export default function NewOrderPage() {
                 ))}
                 <TableRow>
                   <TableCell colSpan={4} align="right" sx={{ color: "var(--muted)" }}>
-                    Total
+                    Subtotal
                   </TableCell>
                   <TableCell align="right" sx={{ fontWeight: 700 }}>
                     ${subtotal.toFixed(2)}
+                  </TableCell>
+                  <TableCell />
+                </TableRow>
+                <TableRow>
+                  <TableCell colSpan={2} align="right" sx={{ color: "var(--muted)" }}>
+                    Bidones (envase 20L)
+                    {containersOverridden && manualContainersCount !== autoContainersCount ? (
+                      <Typography variant="caption" display="block" sx={{ color: "var(--muted)" }}>
+                        auto: {autoContainersCount}
+                      </Typography>
+                    ) : null}
+                  </TableCell>
+                  <TableCell align="right">
+                    <TextField
+                      type="number"
+                      size="small"
+                      value={containersCount}
+                      onChange={(e) => {
+                        setManualContainersCount(Math.max(0, Math.trunc(Number(e.target.value) || 0)));
+                        setContainersOverridden(true);
+                      }}
+                      inputProps={{ min: 0, step: 1, "aria-label": "Bidones" }}
+                      sx={{ width: 88 }}
+                    />
+                  </TableCell>
+                  <TableCell align="right" sx={{ color: "var(--muted)" }}>
+                    × ${CONTAINER_UNIT_PRICE.toFixed(2)}
+                  </TableCell>
+                  <TableCell align="right">${containersFee.toFixed(2)}</TableCell>
+                  <TableCell align="center">
+                    {containersOverridden ? (
+                      <Tooltip title="Volver al cálculo automático (1 bidón por unidad de 20L)">
+                        <Button size="small" onClick={() => setContainersOverridden(false)}>
+                          Auto
+                        </Button>
+                      </Tooltip>
+                    ) : null}
+                  </TableCell>
+                </TableRow>
+                <TableRow>
+                  <TableCell colSpan={4} align="right" sx={{ fontWeight: 700 }}>
+                    Total
+                  </TableCell>
+                  <TableCell align="right" sx={{ fontWeight: 700 }}>
+                    ${total.toFixed(2)}
                   </TableCell>
                   <TableCell />
                 </TableRow>

@@ -100,6 +100,35 @@ export function parseProductCatalogFields(name: string): ParsedProductCatalogFie
   };
 }
 
+/**
+ * Categorías cuyas presentaciones de 20 L salen en bidón retornable. Los
+ * plásticos/jarciería comparten la presentación "20 LITROS" (cesto papelero,
+ * cubeta, palangana) y no llevan bidón. Espejo de la regla del agente en
+ * `Agent/agent/lib/ops/bidon.ts` (carriesBidon): cambios van a ambos lados.
+ */
+const CONTAINER_CATEGORIES = new Set(["liquidos", "limpieza a granel"]);
+
+function normalizeCategory(value: string | null | undefined): string {
+  return (value ?? "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .trim()
+    .replace(/[_\s]+/g, " ")
+    .toLowerCase();
+}
+
+/**
+ * True si el producto agrega un bidón retornable al pedido: presentación 20L
+ * de una línea líquida. Acepta el nombre visible o el externalCode del POS.
+ */
+export function carriesReturnableContainer(
+  presentation: string | null | undefined,
+  categoryName: string | null | undefined
+): boolean {
+  if ((presentation ?? "").trim().toUpperCase() !== "20L") return false;
+  return CONTAINER_CATEGORIES.has(normalizeCategory(categoryName));
+}
+
 export function categoryDisplayName(externalCode: string): string {
   const code = externalCode.trim().toUpperCase();
   const labels: Record<string, string> = {

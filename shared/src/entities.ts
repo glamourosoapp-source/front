@@ -23,6 +23,7 @@ export interface User {
   id: string;
   name: string;
   email: string;
+  phone?: string | null;
   role: Role | string;
   organizationId?: string;
   isActive?: boolean;
@@ -115,11 +116,19 @@ export interface Order {
   internalNotes?: string | null;
   subtotal?: string | number;
   deliveryFee?: string | number;
+  containersCount?: number;
+  containersFee?: string | number;
   discount?: string | number;
   createdAt: string;
   source?: string;
   createdBy?: string | null;
-  creator?: { id: string; name: string; teamId?: string | null; team?: { id: string; name: string } | null } | null;
+  creator?: {
+    id: string;
+    name: string;
+    phone?: string | null;
+    teamId?: string | null;
+    team?: { id: string; name: string } | null;
+  } | null;
   customer?: Customer;
   items?: Array<{
     id: string;

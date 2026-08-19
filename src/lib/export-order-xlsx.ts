@@ -1,5 +1,5 @@
 import * as XLSX from "xlsx";
-import { paymentMethodLabel, paymentStatusLabel } from "@/constants/orders";
+import { orderCreatorLabel, orderTeamLabel, paymentMethodLabel, paymentStatusLabel } from "@/constants/orders";
 import type { Order } from "@/types";
 
 const statusLabels: Record<string, string> = {
@@ -36,6 +36,9 @@ export function exportOrderToXlsx(order: Order) {
     ["Estado", statusLabels[order.status] || order.status],
     ["Estado de pago", paymentStatusLabel(order.paymentStatus)],
     ["Metodo de pago", paymentMethodLabel(order.paymentMethod)],
+    ["Creado por", orderCreatorLabel(order)],
+    ["Teléfono de quien creó", order.creator?.phone || "—"],
+    ["Equipo", orderTeamLabel(order)],
     ["Cliente", customer?.name || "—"],
     ["WhatsApp", customer?.phone || "—"],
     ["Direccion de entrega", order.deliveryAddress || "—"],
@@ -56,6 +59,8 @@ export function exportOrderToXlsx(order: Order) {
 
   const subtotal = (order as { subtotal?: string | number }).subtotal;
   const deliveryFee = (order as { deliveryFee?: string | number }).deliveryFee;
+  const containersCount = (order as { containersCount?: number }).containersCount;
+  const containersFee = (order as { containersFee?: string | number }).containersFee;
   const discount = (order as { discount?: string | number }).discount;
 
   const totalsRows: (string | number)[][] = [
@@ -63,6 +68,9 @@ export function exportOrderToXlsx(order: Order) {
     ["", "", "", "Subtotal", money(subtotal ?? order.total)],
   ];
 
+  if (Number(containersFee || 0) > 0) {
+    totalsRows.push(["", "", "", `Bidones (${Number(containersCount || 0)})`, money(containersFee)]);
+  }
   if (Number(deliveryFee || 0) > 0) {
     totalsRows.push(["", "", "", "Envio", money(deliveryFee)]);
   }

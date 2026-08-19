@@ -132,6 +132,13 @@ export function OrderPrintSheet({ order }: { order: PrintableOrder }) {
 
       <div style={{ textAlign: "right", marginBottom: 12 }}>
         <div>Subtotal: {money(order.subtotal ?? order.total)}</div>
+        {Number(order.containersFee || 0) > 0 ? (
+          <div>
+            Bidones ({Number(order.containersCount || 0)} ×{" "}
+            {money(Number(order.containersFee) / Math.max(1, Number(order.containersCount || 0)))}):{" "}
+            {money(order.containersFee)}
+          </div>
+        ) : null}
         {Number(order.deliveryFee || 0) > 0 ? <div>Envío: {money(order.deliveryFee)}</div> : null}
         {Number(order.discount || 0) > 0 ? <div>Descuento: -{money(order.discount)}</div> : null}
         <div style={{ fontSize: 16, fontWeight: 700 }}>Total: {money(order.total)}</div>

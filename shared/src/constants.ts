@@ -128,6 +128,9 @@ export const PRICING_TIERS = {
 /** Máximo de ubicaciones de entrega guardadas por cliente. */
 export const MAX_CUSTOMER_LOCATIONS = 3;
 
+/** Precio del bidón (envase retornable de presentaciones 20L). Futuro: mover a organizations.brand_settings. */
+export const CONTAINER_UNIT_PRICE = 25;
+
 /** Acciones disponibles por módulo para perfiles de permisos. */
 export const PERMISSION_ACTIONS = ["view", "create", "update", "delete"] as const;
 
