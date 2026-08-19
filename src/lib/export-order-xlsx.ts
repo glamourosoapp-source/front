@@ -1,5 +1,6 @@
 import * as XLSX from "xlsx";
 import { orderCreatorLabel, orderTeamLabel, paymentMethodLabel, paymentStatusLabel } from "@/constants/orders";
+import { formatDateOnly } from "@/lib/format-date-only";
 import type { Order } from "@/types";
 
 const statusLabels: Record<string, string> = {
@@ -41,8 +42,24 @@ export function exportOrderToXlsx(order: Order) {
     ["Equipo", orderTeamLabel(order)],
     ["Cliente", customer?.name || "—"],
     ["WhatsApp", customer?.phone || "—"],
+    ["Calle y número", customer?.street || customer?.address || "—"],
+    ["Colonia", customer?.colony || "—"],
+    ["Municipio", customer?.city || "—"],
+    ["Código postal", customer?.postalCode || "—"],
     ["Direccion de entrega", order.deliveryAddress || "—"],
     ["Zona de entrega", (order as { deliveryZone?: string }).deliveryZone || "—"],
+    [
+      "Fecha de entrega",
+      order.scheduledDeliveryDate
+        ? formatDateOnly(order.scheduledDeliveryDate, {
+            weekday: "long",
+            day: "2-digit",
+            month: "long",
+            year: "numeric",
+          })
+        : "Sin fecha",
+    ],
+    ["Horario de entrega", order.deliveryTimeWindow || "—"],
     ["Notas del cliente", (order as { customerNotes?: string }).customerNotes || "—"],
     ["Notas internas", (order as { internalNotes?: string }).internalNotes || "—"],
     [],

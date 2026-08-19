@@ -1,15 +1,15 @@
 "use client";
 
-import { paymentMethodLabel, paymentStatusLabel } from "@/constants/orders";
+import { Fragment, type CSSProperties } from "react";
+import {
+  orderCreatorLabel,
+  orderStatusLabel,
+  orderTeamLabel,
+  paymentMethodLabel,
+  paymentStatusLabel,
+} from "@/constants/orders";
 import { formatDateOnly } from "@/lib/format-date-only";
 import type { Order } from "@/types";
-
-const statusLabels: Record<string, string> = {
-  new: "Nuevo",
-  processing: "En proceso",
-  delivered: "Entregado",
-  cancelled: "Cancelado",
-};
 
 function money(value: string | number | undefined) {
   return `$${Number(value || 0).toFixed(2)}`;
@@ -21,16 +21,14 @@ function formatCreatedAt(value: string | Date | undefined) {
   if (Number.isNaN(date.getTime())) return "—";
   return date.toLocaleDateString("es-MX", {
     day: "2-digit",
-    month: "short",
+    month: "2-digit",
     year: "numeric",
     hour: "2-digit",
     minute: "2-digit",
   });
 }
 
-interface PrintableOrder extends Order {
-  paymentMethod?: string | null;
-  customerNotes?: string | null;
+interface PrintableOrder extends Omit<Order, "items"> {
   items?: Array<{
     id: string;
     productName: string;
@@ -42,118 +40,240 @@ interface PrintableOrder extends Order {
   }>;
 }
 
-/** Hoja imprimible del pedido: solo visible al imprimir (clase print-only). */
+const labelCell: CSSProperties = {
+  background: "#d9d9d9",
+  border: "1px solid #111",
+  padding: "2px 6px",
+  fontWeight: 700,
+  fontSize: 9,
+  textTransform: "uppercase",
+  letterSpacing: 0.3,
+  textAlign: "center",
+};
+
+const valueCell: CSSProperties = {
+  border: "1px solid #111",
+  padding: "3px 6px",
+  fontSize: 11,
+  textAlign: "center",
+  minHeight: 18,
+};
+
+const productHeadCell: CSSProperties = {
+  background: "#404040",
+  color: "#fff",
+  border: "1px solid #111",
+  padding: "3px 6px",
+  fontWeight: 700,
+  fontSize: 9,
+  textTransform: "uppercase",
+};
+
+const productCell: CSSProperties = {
+  border: "1px solid #111",
+  padding: "3px 6px",
+  fontSize: 11,
+};
+
+/**
+ * Hoja imprimible del pedido: solo visible al imprimir (clase print-only).
+ * Replica el acomodo de la nota de remisión física de Glamouroso. Sin logo ni
+ * folio de remisión: se imprime sobre hojas membretadas que ya los traen
+ * preimpresos, por eso el bloque de datos arranca con espacio arriba.
+ */
 export function OrderPrintSheet({ order }: { order: PrintableOrder }) {
   const items = order.items || [];
+  const customer = order.customer;
+  const deliveryDate = order.scheduledDeliveryDate
+    ? formatDateOnly(order.scheduledDeliveryDate, {
+        weekday: "long",
+        day: "2-digit",
+        month: "long",
+        year: "numeric",
+      })
+    : "Sin fecha";
+
+  // Cada fila del bloque de datos es un par [etiqueta gris, valor], en 3 columnas.
+  const infoRows: Array<Array<[string, string]>> = [
+    [
+      ["Nombre", customer?.name || "—"],
+      ["Teléfono", customer?.phone || "—"],
+      ["Número de pedido", order.orderNumber],
+    ],
+    [
+      ["Calle y número", customer?.street || customer?.address || "—"],
+      ["Colonia", customer?.colony || "—"],
+      ["Fecha", formatCreatedAt(order.createdAt)],
+    ],
+    [
+      ["Municipio", customer?.city || "—"],
+      ["Código postal", customer?.postalCode || "—"],
+      ["Estatus", `${orderStatusLabel(order.status)} · ${paymentStatusLabel(order.paymentStatus)}`],
+    ],
+    [
+      ["Zona de entrega", order.deliveryZone || "—"],
+      ["Fecha de entrega", deliveryDate],
+      ["Horario", order.deliveryTimeWindow || "—"],
+    ],
+    [
+      ["Asesor", orderCreatorLabel(order)],
+      ["Teléfono asesor", order.creator?.phone || "—"],
+      ["Equipo", orderTeamLabel(order)],
+    ],
+  ];
+
   return (
-    <div className="print-only" style={{ fontFamily: "Arial, sans-serif", color: "#111", fontSize: 12 }}>
-      <div style={{ borderBottom: "2px solid #111", paddingBottom: 8, marginBottom: 12 }}>
-        <div style={{ fontSize: 20, fontWeight: 700 }}>Glamouroso</div>
-        <div style={{ fontSize: 16, fontWeight: 700, marginTop: 4 }}>Pedido {order.orderNumber}</div>
-        <div>Creado: {formatCreatedAt(order.createdAt)}</div>
-      </div>
-
-      <div
-        style={{
-          border: "2px solid #111",
-          padding: 10,
-          marginBottom: 12,
-          fontSize: 14,
-          fontWeight: 700,
-        }}
-      >
-        Entrega:{" "}
-        {order.scheduledDeliveryDate
-          ? formatDateOnly(order.scheduledDeliveryDate, {
-              weekday: "long",
-              day: "2-digit",
-              month: "long",
-              year: "numeric",
-            })
-          : "Sin fecha asignada"}
-        {order.deliveryTimeWindow ? ` · ${order.deliveryTimeWindow}` : ""}
-      </div>
-
-      <table style={{ width: "100%", marginBottom: 12 }}>
+    <div
+      className="print-only"
+      style={{
+        fontFamily: "Arial, sans-serif",
+        color: "#111",
+        fontSize: 11,
+        // Deja libre la franja superior donde la hoja membretada trae el
+        // logotipo y el folio de la nota de remisión.
+        paddingTop: 90,
+      }}
+    >
+      <table style={{ width: "100%", borderCollapse: "collapse", marginBottom: 10 }}>
         <tbody>
+          {infoRows.map((row, i) => (
+            <Fragment key={i}>
+              <tr>
+                {row.map(([label]) => (
+                  <td key={label} style={{ ...labelCell, width: "33.33%" }}>
+                    {label}
+                  </td>
+                ))}
+              </tr>
+              <tr>
+                {row.map(([label, value]) => (
+                  <td key={label} style={valueCell}>
+                    {value}
+                  </td>
+                ))}
+              </tr>
+            </Fragment>
+          ))}
           <tr>
-            <td style={{ verticalAlign: "top", paddingRight: 16 }}>
-              <strong>Cliente:</strong> {order.customer?.name || "—"}
-              <br />
-              <strong>WhatsApp:</strong> {order.customer?.phone || "—"}
+            <td style={labelCell} colSpan={2}>
+              Dirección de entrega
             </td>
-            <td style={{ verticalAlign: "top" }}>
-              <strong>Dirección:</strong> {order.deliveryAddress || order.customer?.address || "—"}
-              <br />
-              <strong>Zona:</strong> {order.deliveryZone || "—"}
-            </td>
+            <td style={labelCell}>Método de pago</td>
           </tr>
+          <tr>
+            <td style={valueCell} colSpan={2}>
+              {order.deliveryAddress || customer?.address || "—"}
+            </td>
+            <td style={valueCell}>{paymentMethodLabel(order.paymentMethod)}</td>
+          </tr>
+          {order.customerNotes || order.internalNotes ? (
+            <>
+              <tr>
+                <td style={labelCell} colSpan={3}>
+                  Notas
+                </td>
+              </tr>
+              <tr>
+                <td style={{ ...valueCell, textAlign: "left" }} colSpan={3}>
+                  {order.customerNotes ? <div>Cliente: {order.customerNotes}</div> : null}
+                  {order.internalNotes ? <div>Internas: {order.internalNotes}</div> : null}
+                </td>
+              </tr>
+            </>
+          ) : null}
         </tbody>
       </table>
 
-      <table style={{ width: "100%", borderCollapse: "collapse", marginBottom: 12 }}>
+      <table style={{ width: "100%", borderCollapse: "collapse", marginBottom: 10 }}>
         <thead>
           <tr>
-            {["Producto", "Unidad", "Cantidad", "Precio unit.", "Subtotal"].map((h, i) => (
-              <th
-                key={h}
-                style={{
-                  borderBottom: "1px solid #111",
-                  textAlign: i >= 2 ? "right" : "left",
-                  padding: "4px 6px",
-                }}
-              >
-                {h}
-              </th>
-            ))}
+            <th style={{ ...productHeadCell, width: 70 }}>Cantidad</th>
+            <th style={{ ...productHeadCell, width: 90 }}>Presentación</th>
+            <th style={{ ...productHeadCell, textAlign: "left" }}>Producto</th>
+            {/* Columna vacía para palomear a la entrega, como en la nota física. */}
+            <th style={{ ...productHeadCell, width: 24 }}>✓</th>
+            <th style={{ ...productHeadCell, width: 90, textAlign: "right" }}>Precio unitario</th>
+            <th style={{ ...productHeadCell, width: 90, textAlign: "right" }}>Precio total</th>
           </tr>
         </thead>
         <tbody>
           {items.map((item) => (
             <tr key={item.id}>
-              <td style={{ padding: "4px 6px", borderBottom: "1px solid #ccc" }}>
+              <td style={{ ...productCell, textAlign: "center" }}>{Number(item.quantity)}</td>
+              <td style={{ ...productCell, textAlign: "center" }}>{item.unit || "—"}</td>
+              <td style={productCell}>
                 {item.productName}
-                {item.notes ? <div style={{ fontSize: 10, color: "#555" }}>{item.notes}</div> : null}
+                {item.notes ? <div style={{ fontSize: 9, color: "#555" }}>{item.notes}</div> : null}
               </td>
-              <td style={{ padding: "4px 6px", borderBottom: "1px solid #ccc" }}>{item.unit || "—"}</td>
-              <td style={{ padding: "4px 6px", borderBottom: "1px solid #ccc", textAlign: "right" }}>
-                {Number(item.quantity)}
-              </td>
-              <td style={{ padding: "4px 6px", borderBottom: "1px solid #ccc", textAlign: "right" }}>
-                {money(item.unitPrice)}
-              </td>
-              <td style={{ padding: "4px 6px", borderBottom: "1px solid #ccc", textAlign: "right" }}>
-                {money(item.total)}
-              </td>
+              <td style={productCell} />
+              <td style={{ ...productCell, textAlign: "right" }}>{money(item.unitPrice)}</td>
+              <td style={{ ...productCell, textAlign: "right" }}>{money(item.total)}</td>
             </tr>
           ))}
         </tbody>
       </table>
 
-      <div style={{ textAlign: "right", marginBottom: 12 }}>
-        <div>Subtotal: {money(order.subtotal ?? order.total)}</div>
-        {Number(order.containersFee || 0) > 0 ? (
-          <div>
-            Bidones ({Number(order.containersCount || 0)} ×{" "}
-            {money(Number(order.containersFee) / Math.max(1, Number(order.containersCount || 0)))}):{" "}
-            {money(order.containersFee)}
-          </div>
-        ) : null}
-        {Number(order.deliveryFee || 0) > 0 ? <div>Envío: {money(order.deliveryFee)}</div> : null}
-        {Number(order.discount || 0) > 0 ? <div>Descuento: -{money(order.discount)}</div> : null}
-        <div style={{ fontSize: 16, fontWeight: 700 }}>Total: {money(order.total)}</div>
-      </div>
-
-      <div>
-        <strong>Estado:</strong> {statusLabels[order.status] || order.status} ·{" "}
-        <strong>Pago:</strong> {paymentStatusLabel(order.paymentStatus)} (
-        {paymentMethodLabel(order.paymentMethod)})
-      </div>
-      {order.customerNotes ? (
-        <div style={{ marginTop: 8 }}>
-          <strong>Notas del cliente:</strong> {order.customerNotes}
-        </div>
-      ) : null}
+      <table style={{ width: "100%", borderCollapse: "collapse" }}>
+        <tbody>
+          <tr>
+            <td style={{ verticalAlign: "top", paddingRight: 16, fontSize: 9, color: "#333" }}>
+              <div>
+                Al recibir confirmo que el producto está completo; si algo no se entrega o no está
+                en condiciones de recibir, solicitar descontar de la nota o hacer la anotación para
+                la reposición.
+              </div>
+              <div style={{ fontWeight: 700, marginTop: 4 }}>
+                Una vez recibido no hay cambios ni devoluciones.
+              </div>
+            </td>
+            <td style={{ width: 220, verticalAlign: "top" }}>
+              <table style={{ width: "100%", borderCollapse: "collapse" }}>
+                <tbody>
+                  <tr>
+                    <td style={labelCell}>Subtotal</td>
+                    <td style={{ ...valueCell, textAlign: "right" }}>
+                      {money(order.subtotal ?? order.total)}
+                    </td>
+                  </tr>
+                  {Number(order.containersFee || 0) > 0 ? (
+                    <tr>
+                      <td style={labelCell}>
+                        Bidones ({Number(order.containersCount || 0)} ×{" "}
+                        {money(
+                          Number(order.containersFee) /
+                            Math.max(1, Number(order.containersCount || 0))
+                        )}
+                        )
+                      </td>
+                      <td style={{ ...valueCell, textAlign: "right" }}>
+                        {money(order.containersFee)}
+                      </td>
+                    </tr>
+                  ) : null}
+                  {Number(order.deliveryFee || 0) > 0 ? (
+                    <tr>
+                      <td style={labelCell}>Envío</td>
+                      <td style={{ ...valueCell, textAlign: "right" }}>{money(order.deliveryFee)}</td>
+                    </tr>
+                  ) : null}
+                  {Number(order.discount || 0) > 0 ? (
+                    <tr>
+                      <td style={labelCell}>Descuento</td>
+                      <td style={{ ...valueCell, textAlign: "right" }}>-{money(order.discount)}</td>
+                    </tr>
+                  ) : null}
+                  <tr>
+                    <td style={{ ...labelCell, fontSize: 11 }}>Total</td>
+                    <td style={{ ...valueCell, textAlign: "right", fontWeight: 700, fontSize: 13 }}>
+                      {money(order.total)}
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </td>
+          </tr>
+        </tbody>
+      </table>
     </div>
   );
 }
