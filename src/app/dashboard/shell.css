@@ -654,6 +654,24 @@ body.nav-open {
   overflow: hidden;
 }
 
+/* Nuevo pedido: única barra de acciones, pegajosa al pie del scroll, con el
+   resumen y los botones siempre a la vista mientras se captura. */
+.order-actions-floating {
+  position: sticky;
+  bottom: 0;
+  z-index: 30;
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  justify-content: flex-end;
+  padding: 10px 16px;
+  background: rgba(255, 255, 255, 0.96);
+  backdrop-filter: blur(12px);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  box-shadow: 0 -8px 24px rgba(23, 43, 77, 0.08);
+}
+
 @media (max-width: 900px) {
   .shell {
     grid-template-columns: 1fr;
@@ -768,26 +786,11 @@ body.nav-open {
     overflow-x: auto;
   }
 
-  /* Nuevo pedido: acciones fijas abajo para no scrollear de vuelta al header. */
-  .order-actions {
-    position: fixed;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    z-index: 40;
-    padding: 10px 16px calc(10px + env(safe-area-inset-bottom));
-    background: rgba(255, 255, 255, 0.96);
-    backdrop-filter: blur(12px);
-    border-top: 1px solid var(--border);
-  }
-
-  .order-actions .order-actions-summary {
-    margin-right: auto !important;
-    text-align: left !important;
-  }
-
-  .has-bottom-actions {
-    padding-bottom: 88px;
+  /* Nuevo pedido: en pantallas chicas la barra del pie permite envolver los
+     botones y respeta el safe area. */
+  .order-actions-floating {
+    flex-wrap: wrap;
+    padding-bottom: calc(10px + env(safe-area-inset-bottom));
   }
 
   /* Items del pedido: la columna Quitar queda visible sobre el scroll horizontal. */

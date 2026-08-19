@@ -416,6 +416,36 @@ export default function NewOrderPage() {
     else await createOrder(false);
   }
 
+  // Resumen + botones de acción: viven en la barra pegajosa del pie, siempre
+  // visible mientras se captura (sin scrollear de vuelta al header).
+  const orderActions = (
+    <>
+      <Box className="order-actions-summary" sx={{ mr: "auto", textAlign: "left" }}>
+        <Typography variant="caption" sx={{ color: "var(--muted)", display: "block" }}>
+          {itemCount} {itemCount === 1 ? "artículo" : "artículos"} · Subtotal ${subtotal.toFixed(2)}
+        </Typography>
+        <Typography variant="h6" sx={{ color: "var(--glam-navy)", fontWeight: 700, lineHeight: 1.15 }}>
+          ${total.toFixed(2)}
+        </Typography>
+      </Box>
+      <Button component={Link} href={draftId ? "/dashboard/orders?tab=drafts" : "/dashboard/orders"} variant="outlined">
+        Cancelar
+      </Button>
+      {draftId ? (
+        <Button variant="outlined" disabled={!canSubmit || !canUpdate} onClick={() => void saveDraft()}>
+          {submitting ? "Guardando..." : "Guardar borrador"}
+        </Button>
+      ) : (
+        <Button variant="outlined" disabled={!canSubmit} onClick={() => void createOrder(true)}>
+          {submitting ? "Guardando..." : "Guardar borrador"}
+        </Button>
+      )}
+      <Button type="submit" variant="contained" disabled={!canSubmit || (Boolean(draftId) && !canUpdate)}>
+        {submitting ? "Guardando..." : draftId ? "Confirmar pedido" : "Crear pedido"}
+      </Button>
+    </>
+  );
+
   if (user && !canCreate) {
     return (
       <div className="page-stack">
@@ -435,7 +465,7 @@ export default function NewOrderPage() {
 
   return (
     <>
-    <form className="page-stack has-bottom-actions" onSubmit={submit}>
+    <form className="page-stack" onSubmit={submit}>
       <div className="toolbar">
         <div>
           <Link
@@ -452,31 +482,6 @@ export default function NewOrderPage() {
               : "Agrega productos y asigna el cliente. La fecha de entrega se asigna automáticamente según la hora de corte."}
           </p>
         </div>
-        <Box className="order-actions" sx={{ display: "flex", gap: 1.5, alignItems: "center" }}>
-          <Box className="order-actions-summary" sx={{ mr: 1, textAlign: "right" }}>
-            <Typography variant="caption" sx={{ color: "var(--muted)", display: "block" }}>
-              {itemCount} {itemCount === 1 ? "artículo" : "artículos"} · Subtotal ${subtotal.toFixed(2)}
-            </Typography>
-            <Typography variant="h6" sx={{ color: "var(--glam-navy)", fontWeight: 700, lineHeight: 1.15 }}>
-              ${total.toFixed(2)}
-            </Typography>
-          </Box>
-          <Button component={Link} href={draftId ? "/dashboard/orders?tab=drafts" : "/dashboard/orders"} variant="outlined">
-            Cancelar
-          </Button>
-          {draftId ? (
-            <Button variant="outlined" disabled={!canSubmit || !canUpdate} onClick={() => void saveDraft()}>
-              {submitting ? "Guardando..." : "Guardar borrador"}
-            </Button>
-          ) : (
-            <Button variant="outlined" disabled={!canSubmit} onClick={() => void createOrder(true)}>
-              {submitting ? "Guardando..." : "Guardar borrador"}
-            </Button>
-          )}
-          <Button type="submit" variant="contained" disabled={!canSubmit || (Boolean(draftId) && !canUpdate)}>
-            {submitting ? "Guardando..." : draftId ? "Confirmar pedido" : "Crear pedido"}
-          </Button>
-        </Box>
       </div>
 
       <section className="panel p-5">
@@ -759,6 +764,8 @@ export default function NewOrderPage() {
           </Typography>
         )}
       </section>
+
+      <Box className="order-actions-floating">{orderActions}</Box>
     </form>
 
     <CustomerFormDialog
