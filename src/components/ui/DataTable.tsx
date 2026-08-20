@@ -35,6 +35,8 @@ interface DataTableSelection {
   someSelected: boolean;
   onToggleAll: () => void;
   label?: string;
+  /** Filas que no se pueden marcar (ej. notas ya impresas para un no-admin). */
+  isDisabled?: (row: any) => boolean;
 }
 
 interface DataTableProps {
@@ -46,6 +48,8 @@ interface DataTableProps {
   onDelete?: (row: any) => void;
   getDeleteLabel?: (row: any) => string;
   selection?: DataTableSelection;
+  /** Pinta la fila con el mismo azul de "seleccionada" sin marcar el checkbox. */
+  isRowHighlighted?: (row: any) => boolean;
 }
 
 export function DataTable({
@@ -57,6 +61,7 @@ export function DataTable({
   onDelete,
   getDeleteLabel,
   selection,
+  isRowHighlighted,
 }: DataTableProps) {
   const [deleteTarget, setDeleteTarget] = useState<any>(null);
 
@@ -119,10 +124,12 @@ export function DataTable({
             ) : (
               rows.map((row) => {
                 const rowKey = getKey(row);
+                const selected = Boolean(selection?.isSelected(row)) || Boolean(isRowHighlighted?.(row));
                 return (
                   <TableRow
                     key={rowKey}
                     hover
+                    selected={selected}
                     onClick={() => onRowClick?.(row)}
                     sx={{
                       "&:last-child td, &:last-child th": { border: 0 },
@@ -131,12 +138,16 @@ export function DataTable({
                       "&:hover": {
                         backgroundColor: "rgba(6, 166, 224, 0.04) !important",
                       },
+                      "&.Mui-selected, &.Mui-selected:hover": {
+                        backgroundColor: "rgba(6, 166, 224, 0.16) !important",
+                      },
                     }}
                   >
                     {selection ? (
                       <TableCell padding="checkbox" onClick={(event) => event.stopPropagation()}>
                         <Checkbox
                           checked={selection.isSelected(row)}
+                          disabled={selection.isDisabled?.(row)}
                           onChange={() => selection.onToggle(row)}
                         />
                       </TableCell>

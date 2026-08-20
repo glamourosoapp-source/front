@@ -132,6 +132,10 @@ export interface Order {
     teamId?: string | null;
     team?: { id: string; name: string } | null;
   } | null;
+  /** Última impresión de la nota; con valor, solo un admin puede reimprimirla. */
+  printedAt?: string | null;
+  printedBy?: string | null;
+  printer?: { id: string; name: string } | null;
   customer?: Customer;
   items?: Array<{
     id: string;

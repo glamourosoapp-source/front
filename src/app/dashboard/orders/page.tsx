@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Badge, Button, Checkbox, FormControlLabel, Tab, Tabs } from "@mui/material";
+import { Badge, Button, Checkbox, FormControlLabel, Tab, Tabs, Tooltip } from "@mui/material";
 import { Printer } from "lucide-react";
 import { OrderEditDialog } from "@/components/orders/OrderEditDialog";
 import { OrdersPrintSheets } from "@/components/orders/OrderPrintSheet";
@@ -60,6 +60,23 @@ function deliveryParams(tab: DeliveryTab, unscheduledOnly: boolean, timeZone: st
   }
 }
 
+/** Una nota ya impresa se pinta en el listado y solo un admin puede reimprimirla. */
+function isPrinted(order: Order) {
+  return Boolean(order.printedAt);
+}
+
+function formatPrintedAt(value: string | Date | null | undefined) {
+  if (!value) return "";
+  const date = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+  return date.toLocaleString("es-MX", {
+    day: "2-digit",
+    month: "short",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
 function formatOrderDate(value: string | Date | undefined) {
   if (!value) return "";
   const date = value instanceof Date ? value : new Date(value);
@@ -69,7 +86,7 @@ function formatOrderDate(value: string | Date | undefined) {
 
 export default function OrdersPage() {
   const router = useRouter();
-  const { can } = usePermissions();
+  const { can, isAdmin } = usePermissions();
   const orgTimezone = useAuthStore(
     (s) => s.user?.organization?.timezone ?? DEFAULT_DELIVERY_SCHEDULE.timezone
   );
@@ -191,7 +208,13 @@ export default function OrdersPage() {
 
   const selectedOrders = Object.values(selected);
 
+  /** Reimprimir una nota ya impresa es exclusivo de los administradores. */
+  const canPrintOrder = useCallback((order: Order) => isAdmin || !isPrinted(order), [isAdmin]);
+
+  const printableOrders = orders.filter(canPrintOrder);
+
   function toggleSelected(order: Order) {
+    if (!canPrintOrder(order)) return;
     setSelected((prev) => {
       const next = { ...prev };
       if (next[order.id]) delete next[order.id];
@@ -200,13 +223,14 @@ export default function OrdersPage() {
     });
   }
 
-  const pageAllSelected = orders.length > 0 && orders.every((order) => selected[order.id]);
+  const pageAllSelected =
+    printableOrders.length > 0 && printableOrders.every((order) => selected[order.id]);
 
   function toggleSelectedPage() {
     setSelected((prev) => {
       const next = { ...prev };
-      if (pageAllSelected) orders.forEach((order) => delete next[order.id]);
-      else orders.forEach((order) => (next[order.id] = order));
+      if (pageAllSelected) printableOrders.forEach((order) => delete next[order.id]);
+      else printableOrders.forEach((order) => (next[order.id] = order));
       return next;
     });
   }
@@ -215,18 +239,38 @@ export default function OrdersPage() {
    * Notas de remisión en una sola impresión: lo marcado con checkbox o, si no
    * hay nada marcado, todos los pedidos del tab/filtro actual (no solo la
    * página visible). El diálogo del navegador permite guardarlas como PDF.
+   *
+   * Antes de abrir el diálogo se marcan en el server (POST /orders/print): esa
+   * llamada es la que autoriza, y a partir de ahí la fila queda pintada y solo
+   * un administrador puede volver a sacarla. Si se cancela el diálogo del
+   * navegador el pedido igual queda marcado —para reimprimirlo hace falta un
+   * admin, que es justo el control que se busca.
    */
   async function handlePrintNotes() {
     setPrinting(true);
     try {
-      const batch = selectedOrders.length ? selectedOrders : await fetchAllFiltered();
-      if (!batch.length) {
+      const all = selectedOrders.length ? selectedOrders : await fetchAllFiltered();
+      if (!all.length) {
         toast.info("No hay pedidos para imprimir con los filtros actuales.");
         return;
       }
-      setPrintBatch(batch);
-    } catch {
-      toast.error("No se pudieron cargar los pedidos para imprimir.");
+      const batch = all.filter(canPrintOrder);
+      if (!batch.length) {
+        toast.info("Estos pedidos ya se imprimieron; solo un administrador puede reimprimirlos.");
+        return;
+      }
+      const skipped = all.length - batch.length;
+      const printed = await httpClient.post<Order[]>("/orders/print", {
+        orderIds: batch.map((order) => order.id),
+      });
+      if (skipped) {
+        toast.info(`${skipped} nota(s) ya impresa(s) se omitieron.`);
+      }
+      setPrintBatch(printed.length ? printed : batch);
+      setSelected({});
+      void load();
+    } catch (error) {
+      toast.error(getApiErrorMessage(error, "No se pudieron preparar los pedidos para imprimir."));
     } finally {
       setPrinting(false);
     }
@@ -413,7 +457,9 @@ export default function OrdersPage() {
                 size="small"
                 variant="contained"
                 startIcon={<Printer size={16} />}
-                disabled={printing || (!orders.length && !selectedOrders.length)}
+                disabled={
+                  printing || (!printableOrders.length && !selectedOrders.length)
+                }
                 onClick={() => void handlePrintNotes()}
               >
                 {printing
@@ -506,6 +552,7 @@ export default function OrdersPage() {
           onRowClick={(row) => router.push(`/dashboard/orders/${row.id}`)}
           onEdit={can("orders", "update") ? openEdit : undefined}
           onDelete={can("orders", "delete") ? remove : undefined}
+          isRowHighlighted={(row: Order) => isPrinted(row)}
           selection={
             can("orderPrint")
               ? {
@@ -514,12 +561,34 @@ export default function OrdersPage() {
                   allSelected: pageAllSelected,
                   someSelected: selectedOrders.length > 0,
                   onToggleAll: toggleSelectedPage,
+                  isDisabled: (row: Order) => !canPrintOrder(row),
                   label: "Seleccionar pedidos para imprimir",
                 }
               : undefined
           }
           columns={[
-            { key: "orderNumber", label: "Folio" },
+            {
+              key: "orderNumber",
+              label: "Folio",
+              // El azul de la fila no puede ser la única señal (daltonismo,
+              // impresiones en gris): la marca "Impreso" dice quién y cuándo.
+              render: (r: Order) =>
+                isPrinted(r) ? (
+                  <span className="flex flex-wrap items-center gap-2">
+                    {r.orderNumber}
+                    <Tooltip
+                      arrow
+                      title={`Impreso ${formatPrintedAt(r.printedAt)}${
+                        r.printer?.name ? ` por ${r.printer.name}` : ""
+                      }`}
+                    >
+                      <span className="pill">Impreso</span>
+                    </Tooltip>
+                  </span>
+                ) : (
+                  r.orderNumber
+                ),
+            },
             { key: "createdAt", label: "Fecha", render: (r) => formatOrderDate(r.createdAt) },
             {
               key: "scheduledDeliveryDate",

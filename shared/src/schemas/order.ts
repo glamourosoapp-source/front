@@ -140,3 +140,12 @@ export const queryOrderSchema = paginationSchema.extend({
   sortBy: z.enum(["createdAt", "deliveryDate"]).optional(),
   undelivered: z.coerce.boolean().optional(),
 });
+
+/**
+ * Body de POST /orders/print: los pedidos cuyas notas se van a imprimir.
+ * El tope acompaña al del listado (200 por página × 50 páginas es el máximo
+ * que el front puede juntar, pero una impresión real nunca llega ahí).
+ */
+export const printOrdersSchema = z.object({
+  orderIds: z.array(z.string().uuid()).min(1).max(500),
+});

@@ -6,6 +6,7 @@ import { useCallback, useEffect, useState } from "react";
 import {
   Box,
   Button,
+  Tooltip,
   Table,
   TableBody,
   TableCell,
@@ -73,11 +74,12 @@ type OrderDetail = Omit<Order, "items"> & {
 export default function OrderDetailPage() {
   const params = useParams<{ id: string }>();
   const router = useRouter();
-  const { can } = usePermissions();
+  const { can, isAdmin } = usePermissions();
   const [order, setOrder] = useState<OrderDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [editOpen, setEditOpen] = useState(false);
   const [confirming, setConfirming] = useState(false);
+  const [printing, setPrinting] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -115,6 +117,28 @@ export default function OrderDetailPage() {
     if (!order) return;
     exportOrderToXlsx(order);
     toast.success("Archivo Excel descargado");
+  }
+
+  /**
+   * Imprimir (o guardar como PDF desde el diálogo del navegador) marca la nota
+   * en el server: a partir de ahí la fila se pinta en el listado y solo un
+   * administrador puede volver a sacarla.
+   */
+  async function handlePrint() {
+    if (!order) return;
+    setPrinting(true);
+    try {
+      const [printed] = await httpClient.post<OrderDetail[]>("/orders/print", {
+        orderIds: [order.id],
+      });
+      if (printed) setOrder(printed);
+      // Un tick para que el estado nuevo esté pintado antes del diálogo.
+      setTimeout(() => window.print(), 100);
+    } catch (err) {
+      toast.error(getApiErrorMessage(err, "No se pudo imprimir la nota."));
+    } finally {
+      setPrinting(false);
+    }
   }
 
   async function confirmDraft() {
@@ -156,6 +180,8 @@ export default function OrderDetailPage() {
   if (!order) return null;
 
   const items = order.items || [];
+  // Reimprimir una nota ya impresa es exclusivo de los administradores.
+  const printBlocked = Boolean(order.printedAt) && !isAdmin;
   const deliveryMapsUrl = order.deliveryLocation
     ? customerLocationMapsUrl(order.deliveryLocation)
     : "";
@@ -203,9 +229,30 @@ export default function OrderDetailPage() {
           <Button variant="outlined" startIcon={<Download size={16} />} onClick={handleDownload}>
             Descargar Excel
           </Button>
-          <Button variant="outlined" startIcon={<Printer size={16} />} onClick={() => window.print()}>
-            Imprimir
-          </Button>
+          {can("orderPrint") ? (
+            <Tooltip
+              arrow
+              title={
+                printBlocked
+                  ? `Esta nota ya se imprimió${
+                      order.printer?.name ? ` (${order.printer.name})` : ""
+                    }; solo un administrador puede reimprimirla.`
+                  : ""
+              }
+            >
+              {/* span: un Button deshabilitado no dispara el tooltip. */}
+              <span>
+                <Button
+                  variant="outlined"
+                  startIcon={<Printer size={16} />}
+                  disabled={printing || printBlocked}
+                  onClick={() => void handlePrint()}
+                >
+                  {printing ? "Preparando..." : printBlocked ? "Ya impreso" : "Imprimir"}
+                </Button>
+              </span>
+            </Tooltip>
+          ) : null}
         </Box>
       </div>
 
@@ -239,6 +286,16 @@ export default function OrderDetailPage() {
           <DetailField label="Ventana horaria" value={order.deliveryTimeWindow || "—"} />
           <DetailField label="Creado por" value={orderCreatorLabel(order)} />
           <DetailField label="Equipo" value={orderTeamLabel(order)} />
+          <DetailField
+            label="Impresión de nota"
+            value={
+              order.printedAt
+                ? `${formatOrderDate(order.printedAt)}${
+                    order.printer?.name ? ` · ${order.printer.name}` : ""
+                  }`
+                : "Sin imprimir"
+            }
+          />
           <DetailField label="Total" value={money(order.total)} />
         </div>
       </section>
