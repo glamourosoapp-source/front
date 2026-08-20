@@ -129,6 +129,29 @@ export function carriesReturnableContainer(
   return CONTAINER_CATEGORIES.has(normalizeCategory(categoryName));
 }
 
+/** Producto del que se deriva la regla de bidón (catálogo del panel o modelo del Back). */
+export interface ReturnableContainerProduct {
+  name: string;
+  variants?: Record<string, unknown> | null;
+  category?: { name?: string | null; externalCode?: string | null } | null;
+}
+
+/**
+ * Igual que `carriesReturnableContainer`, resolviendo presentación y categoría
+ * desde el producto: `variants.presentacion` la puebla el importador y el
+ * catálogo capturado a mano cae al nombre. Front y Back derivan el conteo de
+ * bidones de un pedido con esta misma función (el panel ya no lo captura).
+ */
+export function productCarriesReturnableContainer(product: ReturnableContainerProduct): boolean {
+  const fromVariants = product.variants?.presentacion;
+  const presentation =
+    typeof fromVariants === "string" && fromVariants.trim()
+      ? fromVariants.trim()
+      : extractPresentation(product.name);
+  const categoryName = product.category?.name ?? product.category?.externalCode ?? null;
+  return carriesReturnableContainer(presentation, categoryName);
+}
+
 export function categoryDisplayName(externalCode: string): string {
   const code = externalCode.trim().toUpperCase();
   const labels: Record<string, string> = {

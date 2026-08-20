@@ -38,6 +38,11 @@ const itemSchema = z
     productId: z.string().uuid().nullable().optional(),
     productName: z.string().max(140).optional(),
     quantity: z.number().positive(),
+    /**
+     * Solo se respeta en partidas sin productId (producto borrado del
+     * catálogo): con productId el server siempre reprecia con la lista del
+     * cliente. El panel ya no captura precios.
+     */
     unitPrice: z.number().min(0).optional(),
     unit: z.string().max(30).optional(),
     notes: z.union([z.string(), z.literal(""), z.null()]).optional(),
@@ -63,6 +68,7 @@ export const createOrderSchema = z
     deliveryAddress: z.union([z.string(), z.literal(""), z.null()]).optional(),
     deliveryZone: z.union([z.string(), z.literal(""), z.null()]).optional(),
     deliveryFee: z.number().min(0).default(0),
+    /** Ignorado: el server deriva los bidones del catálogo (1 por unidad 20L líquida). */
     containersCount: z.number().int().min(0).max(999).default(0),
     discount: z.number().min(0).default(0),
     paymentMethod: z.union([z.string(), z.literal(""), z.null()]).optional(),
@@ -93,6 +99,7 @@ export const updateOrderSchema = z.object({
   items: z.array(itemSchema).min(1).optional(),
   deliveryFee: z.number().min(0).optional(),
   discount: z.number().min(0).optional(),
+  /** Ignorado: el server deriva los bidones del catálogo. */
   containersCount: z.number().int().min(0).max(999).optional(),
 });
 
@@ -105,6 +112,7 @@ export const confirmOrderSchema = z.object({
   items: z.array(itemSchema).min(1).optional(),
   deliveryFee: z.number().min(0).optional(),
   discount: z.number().min(0).optional(),
+  /** Ignorado: el server deriva los bidones del catálogo. */
   containersCount: z.number().int().min(0).max(999).optional(),
   paymentMethod: z.union([z.string(), z.literal(""), z.null()]).optional(),
   paymentStatus: paymentStatus.optional(),

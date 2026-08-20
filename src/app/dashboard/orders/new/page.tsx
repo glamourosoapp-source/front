@@ -8,7 +8,6 @@ import {
   Box,
   Button,
   IconButton,
-  InputAdornment,
   MenuItem,
   Table,
   TableBody,
@@ -25,8 +24,7 @@ import { PAYMENT_METHOD_OPTIONS, PAYMENT_STATUS_OPTIONS } from "@/constants/orde
 import { ArrowLeft, Plus, ShieldAlert, Trash2 } from "lucide-react";
 import {
   CONTAINER_UNIT_PRICE,
-  carriesReturnableContainer,
-  extractPresentation,
+  productCarriesReturnableContainer,
   resolveProductUnitPrice,
 } from "@glamouroso/shared";
 import { httpClient, getApiErrorMessage } from "@/services/http-client";
@@ -39,11 +37,11 @@ import { toast } from "sonner";
 
 interface OrderLineItem {
   key: string;
+  /** Vacío solo en partidas de un borrador cuyo producto ya no está en el catálogo. */
   productId: string;
   product: Product;
   quantity: number;
   unitPrice: number;
-  priceOverridden: boolean;
 }
 
 function defaultUnitPrice(product: Product, pricingTier: Customer["pricingTier"]) {
@@ -52,16 +50,8 @@ function defaultUnitPrice(product: Product, pricingTier: Customer["pricingTier"]
 
 // Cada unidad 20L de una línea líquida trae bidón retornable que se cobra
 // aparte (los plásticos con "20 LITROS" en el nombre no llevan bidón).
-// `variants.presentacion` la puebla el importador; para catálogo capturado a
-// mano se deriva del nombre con la misma regla compartida.
 function addsContainer(product: Product): boolean {
-  const fromVariants = product.variants?.presentacion;
-  const presentation =
-    typeof fromVariants === "string" && fromVariants.trim()
-      ? fromVariants.trim()
-      : extractPresentation(product.name);
-  const categoryName = product.category?.name ?? product.category?.externalCode ?? null;
-  return carriesReturnableContainer(presentation, categoryName);
+  return productCarriesReturnableContainer(product);
 }
 
 export default function NewOrderPage() {
@@ -167,15 +157,14 @@ export default function NewOrderPage() {
     [products, selectedProduct]
   );
 
+  // El precio es el del catálogo según el tier del cliente: cambiar de cliente
+  // reprecia todas las partidas. Las de producto borrado (sin productId)
+  // conservan el precio congelado del borrador: no hay catálogo del que sacarlo.
   useEffect(() => {
     setLineItems((items) =>
-      items.map((item) => {
-        if (item.priceOverridden) return item;
-        return {
-          ...item,
-          unitPrice: defaultUnitPrice(item.product, pricingTier),
-        };
-      })
+      items.map((item) =>
+        item.productId ? { ...item, unitPrice: defaultUnitPrice(item.product, pricingTier) } : item
+      )
     );
   }, [pricingTier]);
 
@@ -184,15 +173,13 @@ export default function NewOrderPage() {
     [lineItems]
   );
 
-  // Bidones: auto (1 por unidad 20L) hasta que la capturista lo edita, p. ej.
-  // cuando el cliente entrega bidones vacíos a cambio y se cobran menos.
-  const [manualContainersCount, setManualContainersCount] = useState(0);
-  const [containersOverridden, setContainersOverridden] = useState(false);
-  const autoContainersCount = useMemo(
+  // Bidones: siempre automáticos (1 por unidad 20L de línea líquida). No se
+  // capturan: el server los deriva del catálogo igual que este cálculo, esto
+  // es solo el avance de lo que va a cobrar.
+  const containersCount = useMemo(
     () => lineItems.reduce((sum, item) => sum + (addsContainer(item.product) ? item.quantity : 0), 0),
     [lineItems]
   );
-  const containersCount = containersOverridden ? manualContainersCount : autoContainersCount;
   const containersFee = containersCount * CONTAINER_UNIT_PRICE;
   const total = subtotal + containersFee;
 
@@ -217,13 +204,15 @@ export default function NewOrderPage() {
           return;
         }
         setDraftNumber(order.orderNumber);
-        setSelectedCustomer((order.customer as Customer) ?? null);
+        const draftCustomer = (order.customer as Customer) ?? null;
+        setSelectedCustomer(draftCustomer);
         setLineItems(
           (order.items ?? []).map((item) => {
             // Producto eliminado del catálogo: stub con los datos congelados de
             // la partida; el payload manda productName en vez de productId.
+            const catalogProduct = (item.product as Product | null) ?? null;
             const product: Product =
-              (item.product as Product | null) ??
+              catalogProduct ??
               ({
                 id: item.productId ?? crypto.randomUUID(),
                 name: item.productName,
@@ -232,18 +221,17 @@ export default function NewOrderPage() {
               } as Product);
             return {
               key: crypto.randomUUID(),
-              productId: item.productId ?? "",
+              productId: catalogProduct ? (item.productId ?? "") : "",
               product,
               quantity: Number(item.quantity),
-              // priceOverridden preserva el precio pactado del borrador aunque
-              // cambie la lista de precios del cliente o del catálogo.
-              unitPrice: Number(item.unitPrice),
-              priceOverridden: true,
+              // El borrador se reprecia con el catálogo actual (es lo que va a
+              // cobrar el server); solo el producto borrado guarda su precio.
+              unitPrice: catalogProduct
+                ? defaultUnitPrice(catalogProduct, draftCustomer?.pricingTier)
+                : Number(item.unitPrice),
             };
           })
         );
-        setManualContainersCount(Number(order.containersCount ?? 0));
-        setContainersOverridden(true);
         setOrderNote(order.customerNotes ?? "");
         setPaymentMethod(order.paymentMethod ?? "");
         setPaymentStatus(order.paymentStatus || "unpaid");
@@ -284,24 +272,14 @@ export default function NewOrderPage() {
         product: selectedProduct,
         quantity: 1,
         unitPrice: defaultUnitPrice(selectedProduct, pricingTier),
-        priceOverridden: false,
       },
     ]);
     setSelectedProduct(null);
     setProductInput("");
   }
 
-  function updateLineItem(key: string, patch: Partial<Pick<OrderLineItem, "quantity" | "unitPrice">>) {
-    setLineItems((items) =>
-      items.map((item) => {
-        if (item.key !== key) return item;
-        const next = { ...item, ...patch };
-        if (patch.unitPrice !== undefined) {
-          next.priceOverridden = true;
-        }
-        return next;
-      })
-    );
+  function updateQuantity(key: string, quantity: number) {
+    setLineItems((items) => items.map((item) => (item.key === key ? { ...item, quantity } : item)));
   }
 
   function removeLineItem(key: string) {
@@ -321,15 +299,19 @@ export default function NewOrderPage() {
   }
 
   // Partidas con producto eliminado del catálogo (prefill de borrador) viajan
-  // por nombre; el resto por productId, con el precio solo si fue editado.
+  // por nombre y con su precio congelado —el server no tiene de dónde sacarlo—;
+  // el resto solo por productId: precio y bidones los pone el server.
   function buildItemsPayload() {
-    return lineItems.map((item) => ({
-      ...(item.productId
-        ? { productId: item.productId }
-        : { productName: item.product.name, unit: item.product.unit }),
-      quantity: item.quantity,
-      ...(item.priceOverridden ? { unitPrice: item.unitPrice } : {}),
-    }));
+    return lineItems.map((item) =>
+      item.productId
+        ? { productId: item.productId, quantity: item.quantity }
+        : {
+            productName: item.product.name,
+            unit: item.product.unit,
+            quantity: item.quantity,
+            unitPrice: item.unitPrice,
+          }
+    );
   }
 
   async function createOrder(asDraft: boolean) {
@@ -342,7 +324,6 @@ export default function NewOrderPage() {
         paymentMethod: paymentMethod || undefined,
         paymentStatus,
         items: buildItemsPayload(),
-        containersCount,
         source: "panel",
         asDraft,
       });
@@ -369,7 +350,6 @@ export default function NewOrderPage() {
       paymentMethod: paymentMethod || null,
       paymentStatus,
       items: buildItemsPayload(),
-      containersCount,
     };
   }
 
@@ -572,29 +552,14 @@ export default function NewOrderPage() {
                         size="small"
                         value={item.quantity}
                         onChange={(e) =>
-                          updateLineItem(item.key, { quantity: Math.max(1, Number(e.target.value) || 1) })
+                          updateQuantity(item.key, Math.max(1, Number(e.target.value) || 1))
                         }
                         inputProps={{ min: 1, step: 1 }}
                         sx={{ width: 88 }}
                       />
                     </TableCell>
-                    <TableCell align="right">
-                      <TextField
-                        type="number"
-                        size="small"
-                        value={item.unitPrice}
-                        onChange={(e) =>
-                          updateLineItem(item.key, { unitPrice: Math.max(0, Number(e.target.value) || 0) })
-                        }
-                        inputProps={{ min: 0, step: "0.01" }}
-                        slotProps={{
-                          input: {
-                            startAdornment: <InputAdornment position="start">$</InputAdornment>,
-                          },
-                        }}
-                        sx={{ width: 110 }}
-                      />
-                    </TableCell>
+                    {/* Precio de la lista del cliente: no se captura ni se edita. */}
+                    <TableCell align="right">${item.unitPrice.toFixed(2)}</TableCell>
                     <TableCell align="right">${(item.quantity * item.unitPrice).toFixed(2)}</TableCell>
                     <TableCell align="center">
                       <Tooltip title="Quitar producto">
@@ -619,41 +584,17 @@ export default function NewOrderPage() {
                   </TableCell>
                   <TableCell />
                 </TableRow>
+                {/* Bidones: 1 por unidad de 20L líquida, calculado, sin captura. */}
                 <TableRow>
                   <TableCell colSpan={2} align="right" sx={{ color: "var(--muted)" }}>
                     Bidones (envase 20L)
-                    {containersOverridden && manualContainersCount !== autoContainersCount ? (
-                      <Typography variant="caption" display="block" sx={{ color: "var(--muted)" }}>
-                        auto: {autoContainersCount}
-                      </Typography>
-                    ) : null}
                   </TableCell>
-                  <TableCell align="right">
-                    <TextField
-                      type="number"
-                      size="small"
-                      value={containersCount}
-                      onChange={(e) => {
-                        setManualContainersCount(Math.max(0, Math.trunc(Number(e.target.value) || 0)));
-                        setContainersOverridden(true);
-                      }}
-                      inputProps={{ min: 0, step: 1, "aria-label": "Bidones" }}
-                      sx={{ width: 88 }}
-                    />
-                  </TableCell>
+                  <TableCell align="right">{containersCount}</TableCell>
                   <TableCell align="right" sx={{ color: "var(--muted)" }}>
                     × ${CONTAINER_UNIT_PRICE.toFixed(2)}
                   </TableCell>
                   <TableCell align="right">${containersFee.toFixed(2)}</TableCell>
-                  <TableCell align="center">
-                    {containersOverridden ? (
-                      <Tooltip title="Volver al cálculo automático (1 bidón por unidad de 20L)">
-                        <Button size="small" onClick={() => setContainersOverridden(false)}>
-                          Auto
-                        </Button>
-                      </Tooltip>
-                    ) : null}
-                  </TableCell>
+                  <TableCell />
                 </TableRow>
                 <TableRow>
                   <TableCell colSpan={4} align="right" sx={{ fontWeight: 700 }}>
