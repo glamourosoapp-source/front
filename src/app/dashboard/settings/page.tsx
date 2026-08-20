@@ -18,7 +18,7 @@ import { NumberHealthCard } from "@/components/prospects/NumberHealthCard";
 import { httpClient, getApiErrorMessage } from "@/services/http-client";
 import { useAuthStore } from "@/stores/auth.store";
 import { usePermissions } from "@/lib/permissions";
-import type { DeliveryScheduleConfig } from "@glamouroso/shared";
+import type { DayScheduleOverride, DeliveryScheduleConfig, WeekdayKey } from "@glamouroso/shared";
 import { toast } from "sonner";
 
 interface WhatsAppConfig {
@@ -29,6 +29,30 @@ interface WhatsAppConfig {
 }
 
 const OFFSET_LABELS = ["Mismo día", "+1 día", "+2 días", "+3 días", "+4 días", "+5 días", "+6 días", "+7 días"];
+
+// Orden y etiqueta de los días con regla propia (hoy: fin de semana).
+const DAY_OVERRIDE_LABELS: Partial<Record<WeekdayKey, string>> = {
+  monday: "Lunes",
+  tuesday: "Martes",
+  wednesday: "Miércoles",
+  thursday: "Jueves",
+  friday: "Viernes",
+  saturday: "Sábado",
+  sunday: "Domingo",
+};
+
+function offsetLabel(days: number) {
+  return OFFSET_LABELS[days] || `+${days} días`;
+}
+
+/** Resumen legible de la regla especial de un día (los huecos caen a la regla general). */
+function dayOverrideSummary(override: DayScheduleOverride, general: DeliveryScheduleConfig) {
+  const before = override.offsetBeforeCutoffDays ?? general.offsetBeforeCutoffDays;
+  const after = override.offsetAfterCutoffDays ?? general.offsetAfterCutoffDays;
+  if (before === after) return `Siempre ${offsetLabel(before).toLowerCase()}`;
+  const cutoff = override.cutoffTime ?? general.cutoffTime;
+  return `Corte ${cutoff} · antes ${offsetLabel(before).toLowerCase()} · después ${offsetLabel(after).toLowerCase()}`;
+}
 
 export default function SettingsPage() {
   const user = useAuthStore((s) => s.user);
@@ -217,10 +241,26 @@ export default function SettingsPage() {
               <span>Zona horaria</span>
               <strong>{delivery?.timezone || "America/Mexico_City"}</strong>
             </div>
-            <div className="flex items-center justify-between gap-3 py-2 text-sm text-glam-muted">
+            <div className="flex items-center justify-between gap-3 border-b border-glam-line py-2 text-sm text-glam-muted">
               <span>Domingos</span>
               <strong>{delivery?.skipSundays === false ? "Se entrega" : "Sin entregas (pasa a lunes)"}</strong>
             </div>
+            {/* Reglas por día (fin de semana): pisan el corte/desfases generales. */}
+            {delivery
+              ? (Object.keys(DAY_OVERRIDE_LABELS) as WeekdayKey[])
+                  .filter((day) => delivery.dayOverrides?.[day])
+                  .map((day, index, days) => (
+                    <div
+                      key={day}
+                      className={`flex items-center justify-between gap-3 py-2 text-sm text-glam-muted ${
+                        index < days.length - 1 ? "border-b border-glam-line" : ""
+                      }`}
+                    >
+                      <span>Regla de {DAY_OVERRIDE_LABELS[day]?.toLowerCase()}</span>
+                      <strong>{dayOverrideSummary(delivery.dayOverrides[day]!, delivery)}</strong>
+                    </div>
+                  ))
+              : null}
           </div>
         </div>
       </section>
