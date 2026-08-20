@@ -25,6 +25,7 @@ import {
   paymentStatusLabel,
 } from "@/constants/orders";
 import { DetailField } from "@/components/ui/DetailField";
+import { customerLocationMapsUrl } from "@glamouroso/shared";
 import { httpClient, getApiErrorMessage } from "@/services/http-client";
 import { useRealtime } from "@/components/realtime/RealtimeProvider";
 import { usePermissions } from "@/lib/permissions";
@@ -155,6 +156,9 @@ export default function OrderDetailPage() {
   if (!order) return null;
 
   const items = order.items || [];
+  const deliveryMapsUrl = order.deliveryLocation
+    ? customerLocationMapsUrl(order.deliveryLocation)
+    : "";
 
   return (
     <div className="page-stack">
@@ -246,7 +250,37 @@ export default function OrderDetailPage() {
           <DetailField label="Cliente" value={order.customer?.name || "—"} />
           <DetailField label="WhatsApp" value={order.customer?.phone || "—"} />
           <DetailField label="Colonia" value={order.customer?.colony || "—"} />
-          <DetailField label="Direccion" value={order.deliveryAddress || order.customer?.address || "—"} />
+          {/* Domicilio elegido al capturar el pedido: la direccion es texto
+              congelado; la ubicacion guardada aporta etiqueta y link de Maps. */}
+          <DetailField
+            label="Direccion"
+            value={
+              <>
+                {order.deliveryAddress || order.customer?.address || "—"}
+                {order.deliveryLocation?.label ? (
+                  <Typography
+                    variant="caption"
+                    display="block"
+                    sx={{ color: "var(--muted)", fontWeight: 500 }}
+                  >
+                    Domicilio: {order.deliveryLocation.label}
+                  </Typography>
+                ) : null}
+                {deliveryMapsUrl ? (
+                  <Typography variant="caption" display="block">
+                    <a
+                      href={deliveryMapsUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      style={{ color: "var(--glam-blue)" }}
+                    >
+                      Ver en Google Maps
+                    </a>
+                  </Typography>
+                ) : null}
+              </>
+            }
+          />
         </div>
         {(order.customerNotes || order.internalNotes) && (
           <div className="mt-4 grid gap-4 sm:grid-cols-2">

@@ -66,6 +66,8 @@ export const createOrderSchema = z
     conversationId: z.string().uuid().nullable().optional(),
     items: z.array(itemSchema).min(1),
     deliveryAddress: z.union([z.string(), z.literal(""), z.null()]).optional(),
+    /** Domicilio guardado del cliente; si no viene dirección, se deriva de él. */
+    customerLocationId: z.union([z.string().uuid(), z.null()]).optional(),
     deliveryZone: z.union([z.string(), z.literal(""), z.null()]).optional(),
     deliveryFee: z.number().min(0).default(0),
     /** Ignorado: el server deriva los bidones del catálogo (1 por unidad 20L líquida). */
@@ -89,6 +91,7 @@ export const updateOrderSchema = z.object({
   paymentStatus: paymentStatus.optional(),
   paymentMethod: z.union([z.string(), z.literal(""), z.null()]).optional(),
   deliveryAddress: z.union([z.string(), z.literal(""), z.null()]).optional(),
+  customerLocationId: z.union([z.string().uuid(), z.null()]).optional(),
   deliveryZone: z.union([z.string(), z.literal(""), z.null()]).optional(),
   scheduledDeliveryDate: z.union([isoDate.unwrap(), z.null()]).optional(),
   deliveryTimeWindow: z.union([z.string().max(50), z.literal(""), z.null()]).optional(),
@@ -117,6 +120,7 @@ export const confirmOrderSchema = z.object({
   paymentMethod: z.union([z.string(), z.literal(""), z.null()]).optional(),
   paymentStatus: paymentStatus.optional(),
   deliveryAddress: z.union([z.string(), z.literal(""), z.null()]).optional(),
+  customerLocationId: z.union([z.string().uuid(), z.null()]).optional(),
   deliveryZone: z.union([z.string(), z.literal(""), z.null()]).optional(),
   scheduledDeliveryDate: isoDate,
   deliveryTimeWindow: z.union([z.string().max(50), z.literal(""), z.null()]).optional(),

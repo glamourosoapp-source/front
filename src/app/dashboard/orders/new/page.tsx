@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
+import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   Autocomplete,
@@ -24,6 +24,9 @@ import { PAYMENT_METHOD_OPTIONS, PAYMENT_STATUS_OPTIONS } from "@/constants/orde
 import { ArrowLeft, Plus, ShieldAlert, Trash2 } from "lucide-react";
 import {
   CONTAINER_UNIT_PRICE,
+  customerLocationMapsUrl,
+  formatCustomerDeliveryAddress,
+  formatCustomerLocationAddress,
   productCarriesReturnableContainer,
   resolveProductUnitPrice,
 } from "@glamouroso/shared";
@@ -32,7 +35,7 @@ import { useAuthStore } from "@/stores/auth.store";
 import { usePermissions } from "@/lib/permissions";
 import { useDebounce } from "@/hooks/useDebounce";
 import { formatDateOnly } from "@/lib/format-date-only";
-import { Customer, ListResponse, Order, Product } from "@/types";
+import { Customer, CustomerLocation, ListResponse, Order, Product } from "@/types";
 import { toast } from "sonner";
 
 interface OrderLineItem {
@@ -54,6 +57,13 @@ function addsContainer(product: Product): boolean {
   return productCarriesReturnableContainer(product);
 }
 
+/** Valor del selector para capturar una dirección que no es un domicilio guardado. */
+const CUSTOM_LOCATION_VALUE = "custom";
+
+function locationTitle(location: CustomerLocation, index: number): string {
+  return location.label?.trim() || `Domicilio ${index + 1}`;
+}
+
 export default function NewOrderPage() {
   const router = useRouter();
   const user = useAuthStore((s) => s.user);
@@ -71,16 +81,33 @@ export default function NewOrderPage() {
   const [loadingCustomers, setLoadingCustomers] = useState(true);
   const [loadingProducts, setLoadingProducts] = useState(true);
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
+  // Domicilios guardados del cliente (hasta 3): se elige a cuál se entrega;
+  // "Otra dirección" captura una de una sola vez, sin guardarla en el cliente.
+  const [locations, setLocations] = useState<CustomerLocation[]>([]);
+  const [loadingLocations, setLoadingLocations] = useState(false);
+  const [locationChoice, setLocationChoice] = useState<string>(CUSTOM_LOCATION_VALUE);
+  const [customAddress, setCustomAddress] = useState("");
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
   const [lineItems, setLineItems] = useState<OrderLineItem[]>([]);
   const [orderNote, setOrderNote] = useState("");
   const [paymentMethod, setPaymentMethod] = useState("");
   const [paymentStatus, setPaymentStatus] = useState("unpaid");
   const [customerDialogOpen, setCustomerDialogOpen] = useState(false);
+  /** Cliente que edita el diálogo (null = alta de cliente nuevo). */
+  const [editingCustomer, setEditingCustomer] = useState<Customer | null>(null);
 
   const pricingTier = selectedCustomer?.pricingTier || "retail";
 
   function openCreateCustomer() {
+    setEditingCustomer(null);
+    setCustomerDialogOpen(true);
+  }
+
+  // Los domicilios se administran en el mismo diálogo del cliente (que ya trae
+  // el editor de ubicaciones), para no duplicar ese formulario aquí.
+  function openCustomerLocations() {
+    if (!selectedCustomer) return;
+    setEditingCustomer(selectedCustomer);
     setCustomerDialogOpen(true);
   }
 
@@ -92,6 +119,9 @@ export default function NewOrderPage() {
   const debouncedProductInput = useDebounce(productInput, 300);
   const customerSeq = useRef(0);
   const productSeq = useRef(0);
+  const locationSeq = useRef(0);
+  /** Dirección ya guardada en el borrador que se está editando, para preseleccionarla. */
+  const prefillAddressRef = useRef<string | null>(null);
 
   useEffect(() => {
     if (!canCreate) {
@@ -139,6 +169,105 @@ export default function NewOrderPage() {
         if (seq === productSeq.current) setLoadingProducts(false);
       });
   }, [canCreate, debouncedProductInput]);
+
+  // Domicilios del cliente elegido. Al cambiar de cliente queda preseleccionado
+  // el predeterminado (o el que ya traía el borrador); al volver del diálogo de
+  // domicilios se preselecciona el que se acaba de agregar.
+  const loadLocations = useCallback(
+    async (customerId: string, previousIds?: string[]) => {
+      const seq = ++locationSeq.current;
+      setLoadingLocations(true);
+      try {
+        const items = await httpClient.get<CustomerLocation[]>(
+          `/customers/${customerId}/locations`
+        );
+        if (seq !== locationSeq.current) return;
+        const list = items ?? [];
+        setLocations(list);
+
+        if (previousIds) {
+          const added = list.find((l) => !previousIds.includes(l.id));
+          setLocationChoice((current) => {
+            if (added) return added.id;
+            if (list.some((l) => l.id === current)) return current;
+            return (list.find((l) => l.isDefault) ?? list[0])?.id ?? CUSTOM_LOCATION_VALUE;
+          });
+          if (added) setCustomAddress("");
+          return;
+        }
+
+        // Al editar un borrador se preselecciona el domicilio que coincide con
+        // la dirección ya guardada; si no coincide con ninguno se conserva tal
+        // cual como dirección manual, sin pisarla con la predeterminada.
+        const prefill = prefillAddressRef.current?.trim() || "";
+        prefillAddressRef.current = null;
+        const matched = prefill
+          ? list.find((l) => formatCustomerLocationAddress(l) === prefill)
+          : undefined;
+        if (matched) {
+          setLocationChoice(matched.id);
+          setCustomAddress("");
+          return;
+        }
+        if (prefill) {
+          setLocationChoice(CUSTOM_LOCATION_VALUE);
+          setCustomAddress(prefill);
+          return;
+        }
+        const preferred = list.find((l) => l.isDefault) ?? list[0];
+        setLocationChoice(preferred?.id ?? CUSTOM_LOCATION_VALUE);
+        setCustomAddress("");
+      } catch {
+        if (seq !== locationSeq.current) return;
+        setLocations([]);
+        setLocationChoice(CUSTOM_LOCATION_VALUE);
+        setCustomAddress("");
+        toast.error("No se pudieron cargar los domicilios del cliente");
+      } finally {
+        if (seq === locationSeq.current) setLoadingLocations(false);
+      }
+    },
+    []
+  );
+
+  const selectedCustomerId = selectedCustomer?.id ?? null;
+  useEffect(() => {
+    if (!selectedCustomerId) {
+      setLocations([]);
+      setLocationChoice(CUSTOM_LOCATION_VALUE);
+      setCustomAddress("");
+      return;
+    }
+    void loadLocations(selectedCustomerId);
+  }, [selectedCustomerId, loadLocations]);
+
+  const selectedLocation = useMemo(
+    () => locations.find((l) => l.id === locationChoice) ?? null,
+    [locations, locationChoice]
+  );
+
+  // Dirección cacheada en el propio cliente: es la que usa el server cuando el
+  // pedido va sin dirección, así que se muestra como referencia.
+  const customerFallbackAddress = useMemo(
+    () =>
+      selectedCustomer
+        ? formatCustomerDeliveryAddress({
+            street: selectedCustomer.street,
+            colony: selectedCustomer.colony,
+            postalCode: selectedCustomer.postalCode,
+            city: selectedCustomer.city,
+            zone: selectedCustomer.zone,
+            address: selectedCustomer.address,
+          })
+        : "",
+    [selectedCustomer]
+  );
+
+  const deliveryAddress = selectedLocation
+    ? formatCustomerLocationAddress(selectedLocation)
+    : customAddress.trim();
+  const selectedLocationMapsUrl = selectedLocation ? customerLocationMapsUrl(selectedLocation) : "";
+  const deliveryZone = selectedLocation?.zone?.trim() || "";
 
   // La opción seleccionada debe seguir existiendo aunque la búsqueda actual ya
   // no la incluya (el server solo devuelve lo que matchea el texto).
@@ -204,6 +333,7 @@ export default function NewOrderPage() {
           return;
         }
         setDraftNumber(order.orderNumber);
+        prefillAddressRef.current = order.deliveryAddress ?? null;
         const draftCustomer = (order.customer as Customer) ?? null;
         setSelectedCustomer(draftCustomer);
         setLineItems(
@@ -320,6 +450,9 @@ export default function NewOrderPage() {
     try {
       const created = await httpClient.post<{ scheduledDeliveryDate?: string | null }>("/orders", {
         customerId: selectedCustomer!.id,
+        customerLocationId: selectedLocation?.id ?? null,
+        deliveryAddress: deliveryAddress || undefined,
+        deliveryZone: deliveryZone || undefined,
         customerNotes: orderNote.trim() || undefined,
         paymentMethod: paymentMethod || undefined,
         paymentStatus,
@@ -346,6 +479,11 @@ export default function NewOrderPage() {
 
   function draftPayload() {
     return {
+      customerLocationId: selectedLocation?.id ?? null,
+      // Sin dirección elegida se omiten los campos: el borrador conserva la
+      // que ya tenía en vez de quedarse sin ella.
+      deliveryAddress: deliveryAddress || undefined,
+      deliveryZone: deliveryZone || undefined,
       customerNotes: orderNote.trim() || null,
       paymentMethod: paymentMethod || null,
       paymentStatus,
@@ -655,6 +793,110 @@ export default function NewOrderPage() {
               </Button>
             ) : null}
           </Box>
+
+          {/* Domicilio de entrega: el cliente puede tener hasta tres guardados. */}
+          {selectedCustomer ? (
+            <Box sx={{ display: "grid", gap: 1.5 }}>
+              {loadingLocations ? (
+                <Typography variant="body2" sx={{ color: "var(--muted)" }}>
+                  Cargando domicilios del cliente…
+                </Typography>
+              ) : (
+                <>
+                  {locations.length > 0 ? (
+                    <TextField
+                      select
+                      label="Domicilio de entrega"
+                      value={locationChoice}
+                      onChange={(e) => setLocationChoice(e.target.value)}
+                      fullWidth
+                      helperText={
+                        locations.length === 1
+                          ? "El cliente tiene un domicilio guardado."
+                          : `El cliente tiene ${locations.length} domicilios guardados.`
+                      }
+                      SelectProps={{
+                        renderValue: (value) => {
+                          const id = String(value);
+                          if (id === CUSTOM_LOCATION_VALUE) return "Otra dirección";
+                          const index = locations.findIndex((l) => l.id === id);
+                          const location = locations[index];
+                          if (!location) return "";
+                          return `${locationTitle(location, index)} — ${
+                            formatCustomerLocationAddress(location) || "sin dirección"
+                          }`;
+                        },
+                      }}
+                    >
+                      {locations.map((location, index) => (
+                        <MenuItem
+                          key={location.id}
+                          value={location.id}
+                          sx={{ whiteSpace: "normal", alignItems: "flex-start" }}
+                        >
+                          <Box>
+                            <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                              {locationTitle(location, index)}
+                              {location.isDefault ? " · predeterminado" : ""}
+                            </Typography>
+                            <Typography variant="caption" sx={{ color: "var(--muted)" }}>
+                              {formatCustomerLocationAddress(location) || "Sin dirección capturada"}
+                            </Typography>
+                          </Box>
+                        </MenuItem>
+                      ))}
+                      <MenuItem value={CUSTOM_LOCATION_VALUE}>Otra dirección…</MenuItem>
+                    </TextField>
+                  ) : null}
+
+                  {selectedLocation ? (
+                    <Box sx={{ display: "flex", gap: 2, alignItems: "center", flexWrap: "wrap" }}>
+                      {selectedLocationMapsUrl ? (
+                        <Typography variant="caption">
+                          <a
+                            href={selectedLocationMapsUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            style={{ color: "var(--glam-blue)" }}
+                          >
+                            Ver en Google Maps
+                          </a>
+                        </Typography>
+                      ) : null}
+                      <Button size="small" onClick={openCustomerLocations} sx={{ ml: "auto" }}>
+                        Administrar domicilios
+                      </Button>
+                    </Box>
+                  ) : (
+                    <TextField
+                      label="Dirección de entrega"
+                      value={customAddress}
+                      onChange={(e) => setCustomAddress(e.target.value)}
+                      fullWidth
+                      multiline
+                      minRows={2}
+                      placeholder="Calle y número, colonia, ciudad o link de Google Maps"
+                      helperText={
+                        locations.length === 0
+                          ? customerFallbackAddress
+                            ? `Este cliente no tiene domicilios guardados. Si la dejas vacía se usa la del cliente: ${customerFallbackAddress}`
+                            : "Este cliente no tiene domicilios guardados."
+                          : "Dirección solo para este pedido: no se guarda en el cliente."
+                      }
+                    />
+                  )}
+
+                  {!selectedLocation ? (
+                    <Box sx={{ display: "flex" }}>
+                      <Button size="small" onClick={openCustomerLocations} sx={{ ml: "auto" }}>
+                        {locations.length === 0 ? "Agregar domicilio" : "Administrar domicilios"}
+                      </Button>
+                    </Box>
+                  ) : null}
+                </>
+              )}
+            </Box>
+          ) : null}
           <TextField
             select
             label="Metodo de pago"
@@ -711,12 +953,21 @@ export default function NewOrderPage() {
 
     <CustomerFormDialog
       open={customerDialogOpen}
-      customer={null}
+      customer={editingCustomer}
       onClose={() => setCustomerDialogOpen(false)}
-      onSaved={(created) => {
-        if (!created) return;
-        setCustomers((prev) => (prev.some((c) => c.id === created.id) ? prev : [...prev, created]));
-        setSelectedCustomer(created);
+      onSaved={(saved) => {
+        if (!saved) return;
+        if (editingCustomer) {
+          // Edición de domicilios: recargar la lista y quedarse con el que se
+          // acaba de agregar (o con el que ya estaba elegido).
+          void loadLocations(
+            editingCustomer.id,
+            locations.map((l) => l.id)
+          );
+          return;
+        }
+        setCustomers((prev) => (prev.some((c) => c.id === saved.id) ? prev : [...prev, saved]));
+        setSelectedCustomer(saved);
       }}
     />
     </>

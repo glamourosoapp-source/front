@@ -109,6 +109,9 @@ export interface Order {
   paymentMethod?: string | null;
   total: string | number;
   deliveryAddress?: string;
+  /** Domicilio guardado del cliente que se eligió al capturar el pedido. */
+  customerLocationId?: string | null;
+  deliveryLocation?: CustomerLocation | null;
   deliveryZone?: string | null;
   scheduledDeliveryDate?: string | null;
   deliveryTimeWindow?: string | null;
