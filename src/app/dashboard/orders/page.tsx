@@ -24,6 +24,7 @@ import { useRealtime } from "@/components/realtime/RealtimeProvider";
 import { usePermissions } from "@/lib/permissions";
 import { useAuthStore } from "@/stores/auth.store";
 import { DEFAULT_DELIVERY_SCHEDULE } from "@glamouroso/shared";
+import { businessTimeZone } from "@/lib/business-time";
 import { formatDateOnly, localDateOnly } from "@/lib/format-date-only";
 import { exportOrdersToPdf, exportOrdersToXlsx } from "@/lib/export-orders-list";
 import { ListResponse, Order } from "@/types";
@@ -65,11 +66,13 @@ function isPrinted(order: Order) {
   return Boolean(order.printedAt);
 }
 
+// Timestamps siempre en la timezone del negocio, no la del navegador.
 function formatPrintedAt(value: string | Date | null | undefined) {
   if (!value) return "";
   const date = value instanceof Date ? value : new Date(value);
   if (Number.isNaN(date.getTime())) return "";
   return date.toLocaleString("es-MX", {
+    timeZone: businessTimeZone(),
     day: "2-digit",
     month: "short",
     hour: "2-digit",
@@ -81,7 +84,12 @@ function formatOrderDate(value: string | Date | undefined) {
   if (!value) return "";
   const date = value instanceof Date ? value : new Date(value);
   if (Number.isNaN(date.getTime())) return "";
-  return date.toLocaleDateString("es-MX", { day: "2-digit", month: "short", year: "numeric" });
+  return date.toLocaleDateString("es-MX", {
+    timeZone: businessTimeZone(),
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+  });
 }
 
 export default function OrdersPage() {

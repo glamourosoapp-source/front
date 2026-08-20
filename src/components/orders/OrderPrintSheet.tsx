@@ -9,6 +9,7 @@ import {
   paymentMethodLabel,
   paymentStatusLabel,
 } from "@/constants/orders";
+import { businessTimeZone } from "@/lib/business-time";
 import { formatDateOnly } from "@/lib/format-date-only";
 import type { Order } from "@/types";
 
@@ -16,11 +17,13 @@ function money(value: string | number | undefined) {
   return `$${Number(value || 0).toFixed(2)}`;
 }
 
+// La nota impresa lleva la hora del negocio, no la del navegador que imprime.
 function formatCreatedAt(value: string | Date | undefined) {
   if (!value) return "—";
   const date = value instanceof Date ? value : new Date(value);
   if (Number.isNaN(date.getTime())) return "—";
   return date.toLocaleDateString("es-MX", {
+    timeZone: businessTimeZone(),
     day: "2-digit",
     month: "2-digit",
     year: "numeric",

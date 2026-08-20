@@ -1,4 +1,5 @@
 import { orderCreatorLabel, orderStatusLabel, orderTeamLabel, paymentStatusLabel } from "@/constants/orders";
+import { businessTimeZone } from "@/lib/business-time";
 import { formatDateOnly } from "@/lib/format-date-only";
 import type { Order } from "@/types";
 
@@ -22,11 +23,17 @@ export interface OrdersExportContext {
   scopeLabel: string;
 }
 
+// Timestamp en la timezone del negocio, no la del navegador que exporta.
 function formatCreatedAt(value: string | Date | undefined) {
   if (!value) return "";
   const date = value instanceof Date ? value : new Date(value);
   if (Number.isNaN(date.getTime())) return "";
-  return date.toLocaleDateString("es-MX", { day: "2-digit", month: "short", year: "numeric" });
+  return date.toLocaleDateString("es-MX", {
+    timeZone: businessTimeZone(),
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+  });
 }
 
 export const ORDERS_EXPORT_HEADERS = [

@@ -31,15 +31,18 @@ import { httpClient, getApiErrorMessage } from "@/services/http-client";
 import { useRealtime } from "@/components/realtime/RealtimeProvider";
 import { usePermissions } from "@/lib/permissions";
 import { exportOrderToXlsx } from "@/lib/export-order-xlsx";
+import { businessTimeZone } from "@/lib/business-time";
 import { formatDateOnly } from "@/lib/format-date-only";
 import { Order } from "@/types";
 import { toast } from "sonner";
 
+// Timestamp en la timezone del negocio, no la del navegador.
 function formatOrderDate(value: string | Date | undefined) {
   if (!value) return "—";
   const date = value instanceof Date ? value : new Date(value);
   if (Number.isNaN(date.getTime())) return "—";
   return date.toLocaleDateString("es-MX", {
+    timeZone: businessTimeZone(),
     day: "2-digit",
     month: "short",
     year: "numeric",

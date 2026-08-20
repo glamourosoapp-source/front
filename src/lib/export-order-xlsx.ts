@@ -1,5 +1,6 @@
 import * as XLSX from "xlsx";
 import { orderCreatorLabel, orderTeamLabel, paymentMethodLabel, paymentStatusLabel } from "@/constants/orders";
+import { businessTimeZone } from "@/lib/business-time";
 import { formatDateOnly } from "@/lib/format-date-only";
 import type { Order } from "@/types";
 
@@ -10,11 +11,13 @@ const statusLabels: Record<string, string> = {
   cancelled: "Cancelado",
 };
 
+// Timestamp en la timezone del negocio, no la del navegador que exporta.
 function formatDate(value: string | Date | undefined) {
   if (!value) return "";
   const date = value instanceof Date ? value : new Date(value);
   if (Number.isNaN(date.getTime())) return "";
   return date.toLocaleDateString("es-MX", {
+    timeZone: businessTimeZone(),
     day: "2-digit",
     month: "short",
     year: "numeric",
