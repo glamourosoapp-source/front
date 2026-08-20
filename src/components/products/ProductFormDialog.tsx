@@ -15,7 +15,7 @@ import {
   Tooltip,
 } from "@mui/material";
 import AutoAwesomeIcon from "@mui/icons-material/AutoAwesome";
-import { PRODUCT_UNITS } from "@glamouroso/shared";
+import { PRODUCT_UNITS, returnableContainerOverride } from "@glamouroso/shared";
 import { Product } from "@/types";
 import { usePermissions } from "@/lib/permissions";
 import { httpClient, getApiErrorMessage } from "@/services/http-client";
@@ -39,6 +39,7 @@ export function ProductFormDialog({ open, editing, categories, saving = false, o
   const { can } = usePermissions();
   const presentation = editing?.variants?.presentacion;
   const productGroupKey = editing?.variants?.productGroupKey;
+  const bidonOverride = returnableContainerOverride(editing?.variants ?? null);
   const [description, setDescription] = useState("");
   const [improving, setImproving] = useState(false);
   // Productos nuevos nacen ilimitados: el catalogo de Glamouroso no depende del inventario.
@@ -196,6 +197,18 @@ export function ProductFormDialog({ open, editing, categories, saving = false, o
             defaultValue={productGroupKey ? String(productGroupKey) : ""}
             fullWidth
           />
+          <TextField
+            select
+            name="bidon"
+            label="Bidón a cambio"
+            defaultValue={bidonOverride === null ? "" : String(bidonOverride)}
+            fullWidth
+            helperText="Automático: los envases de 20 L de líneas líquidas cobran bidón. Marca «Sí» en los 10 L que también salen en bidón de 20 L."
+          >
+            <MenuItem value="">Automático (solo 20 L líquidos)</MenuItem>
+            <MenuItem value="true">Sí, siempre cobra bidón</MenuItem>
+            <MenuItem value="false">No lleva bidón</MenuItem>
+          </TextField>
         </DialogContent>
         <DialogActions sx={{ px: 3, py: 2 }}>
           <Button onClick={onClose}>Cancelar</Button>

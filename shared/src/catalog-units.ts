@@ -137,12 +137,30 @@ export interface ReturnableContainerProduct {
 }
 
 /**
+ * Override manual por producto: `variants.bidon` (true/false, o "true"/"false"
+ * si vino de un formulario). `true` cobra bidón aunque no sea 20L (hay 10L que
+ * salen en bidón de 20), `false` lo apaga, ausente = regla automática de 20L.
+ */
+export function returnableContainerOverride(
+  variants: Record<string, unknown> | null | undefined
+): boolean | null {
+  const value = variants?.bidon;
+  if (typeof value === "boolean") return value;
+  if (value === "true") return true;
+  if (value === "false") return false;
+  return null;
+}
+
+/**
  * Igual que `carriesReturnableContainer`, resolviendo presentación y categoría
  * desde el producto: `variants.presentacion` la puebla el importador y el
- * catálogo capturado a mano cae al nombre. Front y Back derivan el conteo de
+ * catálogo capturado a mano cae al nombre. `variants.bidon` (checkbox del
+ * catálogo) manda sobre la regla automática. Front y Back derivan el conteo de
  * bidones de un pedido con esta misma función (el panel ya no lo captura).
  */
 export function productCarriesReturnableContainer(product: ReturnableContainerProduct): boolean {
+  const override = returnableContainerOverride(product.variants);
+  if (override !== null) return override;
   const fromVariants = product.variants?.presentacion;
   const presentation =
     typeof fromVariants === "string" && fromVariants.trim()

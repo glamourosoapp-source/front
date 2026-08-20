@@ -142,9 +142,12 @@ export default function ProductsPage() {
     const productGroupKey = String(form.get("productGroupKey") || "").trim();
     const unitType = String(form.get("unitType") || "").trim();
     const unitsPerPackageRaw = String(form.get("unitsPerPackage") || "").trim();
-    const variants: Record<string, string> = {};
+    const variants: Record<string, string | boolean> = {};
     if (presentacion) variants.presentacion = presentacion;
     if (productGroupKey) variants.productGroupKey = productGroupKey;
+    // Override de bidón a cambio: "" = regla automática de 20L (no se guarda).
+    const bidonRaw = String(form.get("bidon") || "");
+    if (bidonRaw === "true" || bidonRaw === "false") variants.bidon = bidonRaw === "true";
 
     const payload: Record<string, unknown> = {
       name: String(form.get("name")),
