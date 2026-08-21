@@ -32,7 +32,7 @@ function formatCreatedAt(value: string | Date | undefined) {
   });
 }
 
-interface PrintableOrder extends Omit<Order, "items"> {
+export interface PrintableOrder extends Omit<Order, "items"> {
   items?: Array<{
     id: string;
     productName: string;
@@ -84,9 +84,10 @@ const productCell: CSSProperties = {
  * física de Glamouroso. Sin logo ni folio de remisión: se imprime sobre hojas
  * membretadas que ya los traen preimpresos, por eso arranca con espacio arriba.
  * No se monta solo: lo envuelven OrderPrintSheet (un pedido) u OrdersPrintSheets
- * (varios, una nota por hoja).
+ * (varios, una nota por hoja) para imprimir, y OrderNotePreviewDialog para verla
+ * en pantalla y bajarla como imagen sin marcar el pedido como impreso.
  */
-function OrderNote({ order }: { order: PrintableOrder }) {
+export function OrderNote({ order }: { order: PrintableOrder }) {
   const items = order.items || [];
   const customer = order.customer;
   const deliveryDate = order.scheduledDeliveryDate

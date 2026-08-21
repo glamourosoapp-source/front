@@ -4,8 +4,9 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Badge, Button, Checkbox, FormControlLabel, Tab, Tabs, Tooltip } from "@mui/material";
-import { Printer } from "lucide-react";
+import { Eye, Printer } from "lucide-react";
 import { OrderEditDialog } from "@/components/orders/OrderEditDialog";
+import { OrderNotePreviewDialog } from "@/components/orders/OrderNotePreviewDialog";
 import { OrdersPrintSheets } from "@/components/orders/OrderPrintSheet";
 import { DataTable } from "@/components/ui/DataTable";
 import { DateFilterField } from "@/components/ui/DateFilterField";
@@ -128,6 +129,11 @@ export default function OrdersPage() {
   const [selected, setSelected] = useState<Record<string, Order>>({});
   const [printing, setPrinting] = useState(false);
   const [printBatch, setPrintBatch] = useState<Order[]>([]);
+  // Vista previa: mismo lote que se imprimiría, pero solo para mirar/descargar
+  // como imagen (no pasa por POST /orders/print, no marca nada).
+  const [previewBatch, setPreviewBatch] = useState<Order[]>([]);
+  const [previewOpen, setPreviewOpen] = useState(false);
+  const [preparingPreview, setPreparingPreview] = useState(false);
 
   // En Borradores y Papelera el estado va fijo y no aplican los filtros de
   // entrega ni "sin entregar" (el server excluye ambos de esos listados).
@@ -270,6 +276,30 @@ export default function OrdersPage() {
       toast.error(getApiErrorMessage(error, "No se pudieron preparar los pedidos para imprimir."));
     } finally {
       setPrinting(false);
+    }
+  }
+
+  /**
+   * Vista previa de las notas: lo marcado con checkbox o, si no hay nada
+   * marcado, todos los pedidos del tab/filtro actual. A diferencia de
+   * "Imprimir pedidos" NO llama a POST /orders/print: no marca `printedAt`, no
+   * pinta la fila de azul y no limpia la selección. Solo abre el diálogo para
+   * ver la nota y, si se quiere, bajarla como PNG.
+   */
+  async function handlePreviewNotes() {
+    setPreparingPreview(true);
+    try {
+      const all = selectedOrders.length ? selectedOrders : await fetchAllFiltered();
+      if (!all.length) {
+        toast.info("No hay pedidos para previsualizar con los filtros actuales.");
+        return;
+      }
+      setPreviewBatch(all);
+      setPreviewOpen(true);
+    } catch (error) {
+      toast.error(getApiErrorMessage(error, "No se pudo abrir la vista previa."));
+    } finally {
+      setPreparingPreview(false);
     }
   }
 
@@ -468,6 +498,19 @@ export default function OrdersPage() {
             </Button>
             <Button size="small" variant="outlined" disabled={exporting || !orders.length} onClick={() => handleExport("pdf")}>
               PDF
+            </Button>
+            <Button
+              size="small"
+              variant="outlined"
+              startIcon={<Eye size={16} />}
+              disabled={preparingPreview || (!orders.length && !selectedOrders.length)}
+              onClick={() => void handlePreviewNotes()}
+            >
+              {preparingPreview
+                ? "Abriendo..."
+                : selectedOrders.length
+                  ? `Vista previa (${selectedOrders.length})`
+                  : "Vista previa"}
             </Button>
             {can("orderPrint") ? (
               <Button
@@ -718,6 +761,11 @@ export default function OrdersPage() {
         onSaved={() => void load()}
       />
 
+      <OrderNotePreviewDialog
+        open={previewOpen}
+        orders={previewBatch}
+        onClose={() => setPreviewOpen(false)}
+      />
       <OrdersPrintSheets orders={printBatch} />
     </div>
   );
