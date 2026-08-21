@@ -17,6 +17,11 @@ import {
 } from "@mui/material";
 import { ArrowLeft, Download, Pencil, Printer } from "lucide-react";
 import { OrderEditDialog } from "@/components/orders/OrderEditDialog";
+import {
+  WHOLESALE_COLOR,
+  WHOLESALE_ROW_BG,
+  isWholesaleTier,
+} from "@/components/orders/OrderItemsEditor";
 import { OrderPrintSheet } from "@/components/orders/OrderPrintSheet";
 import {
   orderCreatorLabel,
@@ -69,6 +74,7 @@ type OrderDetail = Omit<Order, "items"> & {
     unit?: string;
     quantity: string | number;
     unitPrice: string | number;
+    priceTier?: "retail" | "wholesale";
     total: string | number;
     notes?: string | null;
   }>;
@@ -392,27 +398,45 @@ export default function OrderDetailPage() {
                   <TableCell>Producto</TableCell>
                   <TableCell>Unidad</TableCell>
                   <TableCell align="right">Cantidad</TableCell>
+                  <TableCell>Lista</TableCell>
                   <TableCell align="right">Precio unit.</TableCell>
                   <TableCell align="right">Subtotal</TableCell>
                 </TableRow>
               </TableHead>
               <TableBody>
-                {items.map((item) => (
-                  <TableRow key={item.id}>
-                    <TableCell>
-                      <strong>{item.productName}</strong>
-                      {item.notes ? (
-                        <Typography variant="caption" display="block" sx={{ color: "var(--muted)" }}>
-                          {item.notes}
-                        </Typography>
-                      ) : null}
-                    </TableCell>
-                    <TableCell>{item.unit || "—"}</TableCell>
-                    <TableCell align="right">{Number(item.quantity)}</TableCell>
-                    <TableCell align="right">{money(item.unitPrice)}</TableCell>
-                    <TableCell align="right">{money(item.total)}</TableCell>
-                  </TableRow>
-                ))}
+                {/* Las partidas de mayoreo van en rojo, igual que en la nota impresa. */}
+                {items.map((item) => {
+                  const wholesale = isWholesaleTier(item.priceTier);
+                  const wholesaleText = wholesale
+                    ? { color: WHOLESALE_COLOR, fontWeight: 700 }
+                    : undefined;
+                  return (
+                    <TableRow
+                      key={item.id}
+                      sx={wholesale ? { backgroundColor: WHOLESALE_ROW_BG } : undefined}
+                    >
+                      <TableCell sx={wholesale ? { color: WHOLESALE_COLOR } : undefined}>
+                        <strong>{item.productName}</strong>
+                        {item.notes ? (
+                          <Typography variant="caption" display="block" sx={{ color: "var(--muted)" }}>
+                            {item.notes}
+                          </Typography>
+                        ) : null}
+                      </TableCell>
+                      <TableCell>{item.unit || "—"}</TableCell>
+                      <TableCell align="right">{Number(item.quantity)}</TableCell>
+                      <TableCell sx={wholesaleText}>
+                        {wholesale ? "Mayoreo" : "Menudeo"}
+                      </TableCell>
+                      <TableCell align="right" sx={wholesaleText}>
+                        {money(item.unitPrice)}
+                      </TableCell>
+                      <TableCell align="right" sx={wholesaleText}>
+                        {money(item.total)}
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
               </TableBody>
             </Table>
           </TableContainer>

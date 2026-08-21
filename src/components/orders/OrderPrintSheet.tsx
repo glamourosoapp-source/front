@@ -39,6 +39,8 @@ export interface PrintableOrder extends Omit<Order, "items"> {
     unit?: string;
     quantity: string | number;
     unitPrice: string | number;
+    /** "wholesale" pinta la partida de rojo y le agrega la marca MAYOREO. */
+    priceTier?: "retail" | "wholesale";
     total: string | number;
     notes?: string | null;
   }>;
@@ -77,6 +79,30 @@ const productCell: CSSProperties = {
   border: "1px solid #111",
   padding: "3px 6px",
   fontSize: 11,
+};
+
+/**
+ * Partida de mayoreo dentro de la nota. Va en rojo, pero la impresión puede
+ * salir en blanco y negro: por eso además lleva la marca textual "MAYOREO" y
+ * negritas, que sí sobreviven a una impresora monocromática.
+ * `printColorAdjust` obliga al navegador a respetar el color al imprimir.
+ */
+const wholesaleCell: CSSProperties = {
+  color: "#c62828",
+  fontWeight: 700,
+  WebkitPrintColorAdjust: "exact",
+  printColorAdjust: "exact",
+};
+
+const wholesaleTag: CSSProperties = {
+  fontSize: 8,
+  fontWeight: 700,
+  letterSpacing: 0.4,
+  border: "1px solid #c62828",
+  borderRadius: 2,
+  padding: "0 3px",
+  marginLeft: 4,
+  whiteSpace: "nowrap",
 };
 
 /**
@@ -202,19 +228,26 @@ export function OrderNote({ order }: { order: PrintableOrder }) {
           </tr>
         </thead>
         <tbody>
-          {items.map((item) => (
-            <tr key={item.id}>
-              <td style={{ ...productCell, textAlign: "center" }}>{Number(item.quantity)}</td>
-              <td style={{ ...productCell, textAlign: "center" }}>{item.unit || "—"}</td>
-              <td style={productCell}>
-                {item.productName}
-                {item.notes ? <div style={{ fontSize: 9, color: "#555" }}>{item.notes}</div> : null}
-              </td>
-              <td style={productCell} />
-              <td style={{ ...productCell, textAlign: "right" }}>{money(item.unitPrice)}</td>
-              <td style={{ ...productCell, textAlign: "right" }}>{money(item.total)}</td>
-            </tr>
-          ))}
+          {items.map((item) => {
+            const wholesale = item.priceTier === "wholesale";
+            const cell: CSSProperties = wholesale
+              ? { ...productCell, ...wholesaleCell }
+              : productCell;
+            return (
+              <tr key={item.id}>
+                <td style={{ ...cell, textAlign: "center" }}>{Number(item.quantity)}</td>
+                <td style={{ ...cell, textAlign: "center" }}>{item.unit || "—"}</td>
+                <td style={cell}>
+                  {item.productName}
+                  {wholesale ? <span style={wholesaleTag}>MAYOREO</span> : null}
+                  {item.notes ? <div style={{ fontSize: 9, color: "#555" }}>{item.notes}</div> : null}
+                </td>
+                <td style={cell} />
+                <td style={{ ...cell, textAlign: "right" }}>{money(item.unitPrice)}</td>
+                <td style={{ ...cell, textAlign: "right" }}>{money(item.total)}</td>
+              </tr>
+            );
+          })}
         </tbody>
       </table>
 

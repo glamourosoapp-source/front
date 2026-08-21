@@ -7,55 +7,34 @@ import {
   Autocomplete,
   Box,
   Button,
-  IconButton,
   MenuItem,
-  Table,
-  TableBody,
-  TableCell,
-  TableContainer,
-  TableHead,
-  TableRow,
-  Tooltip,
   TextField,
   Typography,
 } from "@mui/material";
 import { CustomerFormDialog } from "@/components/customers/CustomerFormDialog";
 import { PAYMENT_METHOD_OPTIONS, PAYMENT_STATUS_OPTIONS } from "@/constants/orders";
-import { ArrowLeft, Plus, ShieldAlert, Trash2 } from "lucide-react";
+import { ArrowLeft, ShieldAlert } from "lucide-react";
 import {
-  CONTAINER_UNIT_PRICE,
   customerLocationMapsUrl,
   formatCustomerDeliveryAddress,
   formatCustomerLocationAddress,
-  productCarriesReturnableContainer,
-  resolveProductUnitPrice,
+  resolveProductPricing,
+  type PricingTier,
 } from "@glamouroso/shared";
+import {
+  OrderItemsEditor,
+  lineItemsFromOrder,
+  lineItemsPayload,
+  orderTotals,
+  type OrderLineItem,
+} from "@/components/orders/OrderItemsEditor";
 import { httpClient, getApiErrorMessage } from "@/services/http-client";
 import { useAuthStore } from "@/stores/auth.store";
 import { usePermissions } from "@/lib/permissions";
 import { useDebounce } from "@/hooks/useDebounce";
 import { formatDateOnly } from "@/lib/format-date-only";
-import { Customer, CustomerLocation, ListResponse, Order, Product } from "@/types";
+import { Customer, CustomerLocation, ListResponse, Order } from "@/types";
 import { toast } from "sonner";
-
-interface OrderLineItem {
-  key: string;
-  /** Vacío solo en partidas de un borrador cuyo producto ya no está en el catálogo. */
-  productId: string;
-  product: Product;
-  quantity: number;
-  unitPrice: number;
-}
-
-function defaultUnitPrice(product: Product, pricingTier: Customer["pricingTier"]) {
-  return resolveProductUnitPrice(product, pricingTier || "retail");
-}
-
-// Cada unidad 20L de una línea líquida trae bidón retornable que se cobra
-// aparte (los plásticos con "20 LITROS" en el nombre no llevan bidón).
-function addsContainer(product: Product): boolean {
-  return productCarriesReturnableContainer(product);
-}
 
 /** Valor del selector para capturar una dirección que no es un domicilio guardado. */
 const CUSTOM_LOCATION_VALUE = "custom";
@@ -77,9 +56,7 @@ export default function NewOrderPage() {
   const [draftNumber, setDraftNumber] = useState("");
   const [loadingDraft, setLoadingDraft] = useState(false);
   const [customers, setCustomers] = useState<Customer[]>([]);
-  const [products, setProducts] = useState<Product[]>([]);
   const [loadingCustomers, setLoadingCustomers] = useState(true);
-  const [loadingProducts, setLoadingProducts] = useState(true);
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
   // Domicilios guardados del cliente (hasta 3): se elige a cuál se entrega;
   // "Otra dirección" captura una de una sola vez, sin guardarla en el cliente.
@@ -87,7 +64,6 @@ export default function NewOrderPage() {
   const [loadingLocations, setLoadingLocations] = useState(false);
   const [locationChoice, setLocationChoice] = useState<string>(CUSTOM_LOCATION_VALUE);
   const [customAddress, setCustomAddress] = useState("");
-  const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
   const [lineItems, setLineItems] = useState<OrderLineItem[]>([]);
   const [orderNote, setOrderNote] = useState("");
   const [paymentMethod, setPaymentMethod] = useState("");
@@ -96,7 +72,9 @@ export default function NewOrderPage() {
   /** Cliente que edita el diálogo (null = alta de cliente nuevo). */
   const [editingCustomer, setEditingCustomer] = useState<Customer | null>(null);
 
-  const pricingTier = selectedCustomer?.pricingTier || "retail";
+  // Lista del cliente: es solo el DEFAULT de las filas nuevas. Cada partida
+  // puede quedar en otra lista (se elige por fila en OrderItemsEditor).
+  const pricingTier: PricingTier = (selectedCustomer?.pricingTier as PricingTier) || "retail";
 
   function openCreateCustomer() {
     setEditingCustomer(null);
@@ -114,11 +92,8 @@ export default function NewOrderPage() {
   // Búsqueda server-side: con >200 clientes/productos, cargar una sola página
   // y filtrar en memoria dejaba registros imposibles de encontrar.
   const [customerInput, setCustomerInput] = useState("");
-  const [productInput, setProductInput] = useState("");
   const debouncedCustomerInput = useDebounce(customerInput, 300);
-  const debouncedProductInput = useDebounce(productInput, 300);
   const customerSeq = useRef(0);
-  const productSeq = useRef(0);
   const locationSeq = useRef(0);
   /** Dirección ya guardada en el borrador que se está editando, para preseleccionarla. */
   const prefillAddressRef = useRef<string | null>(null);
@@ -145,30 +120,6 @@ export default function NewOrderPage() {
         if (seq === customerSeq.current) setLoadingCustomers(false);
       });
   }, [canCreate, debouncedCustomerInput]);
-
-  useEffect(() => {
-    if (!canCreate) {
-      setLoadingProducts(false);
-      return;
-    }
-    const seq = ++productSeq.current;
-    setLoadingProducts(true);
-    httpClient
-      .get<ListResponse<Product>>("/products", {
-        available: true,
-        search: debouncedProductInput.trim() || undefined,
-        limit: 50,
-      })
-      .then((res) => {
-        if (seq === productSeq.current) setProducts(res.items);
-      })
-      .catch(() => {
-        if (seq === productSeq.current) toast.error("No se pudo cargar productos");
-      })
-      .finally(() => {
-        if (seq === productSeq.current) setLoadingProducts(false);
-      });
-  }, [canCreate, debouncedProductInput]);
 
   // Domicilios del cliente elegido. Al cambiar de cliente queda preseleccionado
   // el predeterminado (o el que ya traía el borrador); al volver del diálogo de
@@ -278,43 +229,25 @@ export default function NewOrderPage() {
         : customers,
     [customers, selectedCustomer]
   );
-  const productOptions = useMemo(
-    () =>
-      selectedProduct && !products.some((p) => p.id === selectedProduct.id)
-        ? [selectedProduct, ...products]
-        : products,
-    [products, selectedProduct]
-  );
-
-  // El precio es el del catálogo según el tier del cliente: cambiar de cliente
-  // reprecia todas las partidas. Las de producto borrado (sin productId)
-  // conservan el precio congelado del borrador: no hay catálogo del que sacarlo.
+  // Cambiar de cliente reprecia TODAS las partidas con la lista del cliente
+  // nuevo: la elección por fila era para el cliente anterior. Las de producto
+  // borrado (sin productId) conservan el precio congelado del borrador: no hay
+  // catálogo del que sacarlo.
   useEffect(() => {
     setLineItems((items) =>
-      items.map((item) =>
-        item.productId ? { ...item, unitPrice: defaultUnitPrice(item.product, pricingTier) } : item
-      )
+      items.map((item) => {
+        if (!item.productId) return item;
+        const { unitPrice, appliedTier } = resolveProductPricing(item.product, pricingTier);
+        return { ...item, unitPrice, priceTier: appliedTier };
+      })
     );
   }, [pricingTier]);
 
-  const subtotal = useMemo(
-    () => lineItems.reduce((sum, item) => sum + item.quantity * item.unitPrice, 0),
+  const { subtotal, containersCount, containersFee, total, itemCount } = useMemo(
+    () => orderTotals(lineItems),
     [lineItems]
   );
-
-  // Bidones: siempre automáticos (1 por unidad 20L de línea líquida). No se
-  // capturan: el server los deriva del catálogo igual que este cálculo, esto
-  // es solo el avance de lo que va a cobrar.
-  const containersCount = useMemo(
-    () => lineItems.reduce((sum, item) => sum + (addsContainer(item.product) ? item.quantity : 0), 0),
-    [lineItems]
-  );
-  const containersFee = containersCount * CONTAINER_UNIT_PRICE;
-  const total = subtotal + containersFee;
-
-  const itemCount = useMemo(() => lineItems.reduce((sum, item) => sum + item.quantity, 0), [lineItems]);
   const canSubmit = Boolean(selectedCustomer) && lineItems.length > 0 && !submitting && !loadingDraft;
-  const canAddProduct = Boolean(selectedProduct) && !loadingProducts;
 
   // Carga del borrador a editar. ?draftId= se lee de window en efecto (mismo
   // patrón que el ?search= de la lista: useSearchParams exigiría <Suspense>).
@@ -336,32 +269,7 @@ export default function NewOrderPage() {
         prefillAddressRef.current = order.deliveryAddress ?? null;
         const draftCustomer = (order.customer as Customer) ?? null;
         setSelectedCustomer(draftCustomer);
-        setLineItems(
-          (order.items ?? []).map((item) => {
-            // Producto eliminado del catálogo: stub con los datos congelados de
-            // la partida; el payload manda productName en vez de productId.
-            const catalogProduct = (item.product as Product | null) ?? null;
-            const product: Product =
-              catalogProduct ??
-              ({
-                id: item.productId ?? crypto.randomUUID(),
-                name: item.productName,
-                unit: item.unit ?? "pieza",
-                price: Number(item.unitPrice),
-              } as Product);
-            return {
-              key: crypto.randomUUID(),
-              productId: catalogProduct ? (item.productId ?? "") : "",
-              product,
-              quantity: Number(item.quantity),
-              // El borrador se reprecia con el catálogo actual (es lo que va a
-              // cobrar el server); solo el producto borrado guarda su precio.
-              unitPrice: catalogProduct
-                ? defaultUnitPrice(catalogProduct, draftCustomer?.pricingTier)
-                : Number(item.unitPrice),
-            };
-          })
-        );
+        setLineItems(lineItemsFromOrder(order.items ?? []));
         setOrderNote(order.customerNotes ?? "");
         setPaymentMethod(order.paymentMethod ?? "");
         setPaymentStatus(order.paymentStatus || "unpaid");
@@ -374,48 +282,6 @@ export default function NewOrderPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user, draftId]);
 
-  function addProduct() {
-    if (!selectedProduct) {
-      toast.error("Selecciona un producto del catálogo");
-      return;
-    }
-
-    const existing = lineItems.find((item) => item.productId === selectedProduct.id);
-    if (existing) {
-      setLineItems((items) =>
-        items.map((item) =>
-          item.productId === selectedProduct.id
-            ? { ...item, quantity: item.quantity + 1 }
-            : item
-        )
-      );
-      setSelectedProduct(null);
-      setProductInput("");
-      return;
-    }
-
-    setLineItems((items) => [
-      ...items,
-      {
-        key: crypto.randomUUID(),
-        productId: selectedProduct.id,
-        product: selectedProduct,
-        quantity: 1,
-        unitPrice: defaultUnitPrice(selectedProduct, pricingTier),
-      },
-    ]);
-    setSelectedProduct(null);
-    setProductInput("");
-  }
-
-  function updateQuantity(key: string, quantity: number) {
-    setLineItems((items) => items.map((item) => (item.key === key ? { ...item, quantity } : item)));
-  }
-
-  function removeLineItem(key: string) {
-    setLineItems((items) => items.filter((item) => item.key !== key));
-  }
-
   function validateForm() {
     if (lineItems.length === 0) {
       toast.error("Agrega al menos un producto al pedido");
@@ -426,22 +292,6 @@ export default function NewOrderPage() {
       return false;
     }
     return true;
-  }
-
-  // Partidas con producto eliminado del catálogo (prefill de borrador) viajan
-  // por nombre y con su precio congelado —el server no tiene de dónde sacarlo—;
-  // el resto solo por productId: precio y bidones los pone el server.
-  function buildItemsPayload() {
-    return lineItems.map((item) =>
-      item.productId
-        ? { productId: item.productId, quantity: item.quantity }
-        : {
-            productName: item.product.name,
-            unit: item.product.unit,
-            quantity: item.quantity,
-            unitPrice: item.unitPrice,
-          }
-    );
   }
 
   async function createOrder(asDraft: boolean) {
@@ -456,7 +306,7 @@ export default function NewOrderPage() {
         customerNotes: orderNote.trim() || undefined,
         paymentMethod: paymentMethod || undefined,
         paymentStatus,
-        items: buildItemsPayload(),
+        items: lineItemsPayload(lineItems),
         source: "panel",
         asDraft,
       });
@@ -487,7 +337,7 @@ export default function NewOrderPage() {
       customerNotes: orderNote.trim() || null,
       paymentMethod: paymentMethod || null,
       paymentStatus,
-      items: buildItemsPayload(),
+      items: lineItemsPayload(lineItems),
     };
   }
 
@@ -604,149 +454,17 @@ export default function NewOrderPage() {
 
       <section className="panel p-5">
         <h2>Productos</h2>
-        <p className="page-kicker mb-4">Busca en el catálogo y agrega los productos del pedido.</p>
+        <p className="page-kicker mb-4">
+          Busca en el catálogo y agrega los productos del pedido. Cada partida puede ir en menudeo o
+          en mayoreo: las de mayoreo se marcan en rojo aquí y en la nota impresa.
+        </p>
 
-        <Box sx={{ display: "flex", gap: 2, alignItems: "flex-start", flexWrap: "wrap", mb: 3 }}>
-          <Autocomplete
-            options={productOptions}
-            value={selectedProduct}
-            onChange={(_, value) => setSelectedProduct(value)}
-            onInputChange={(_, value, reason) => {
-              // "reset" es el relleno del label al seleccionar: no buscar eso.
-              if (reason !== "reset") setProductInput(value);
-            }}
-            filterOptions={(options) => options}
-            getOptionLabel={(option) =>
-              `${option.name}${option.sku ? ` · ${option.sku}` : ""} · $${Number(option.price).toFixed(2)}`
-            }
-            isOptionEqualToValue={(option, value) => option.id === value.id}
-            loading={loadingProducts}
-            renderInput={(params) => (
-              <TextField
-                {...params}
-                label="Producto del catálogo"
-                helperText={
-                  loadingProducts
-                    ? "Buscando productos…"
-                    : productOptions.length === 0
-                      ? productInput.trim()
-                        ? "Sin resultados en el catálogo"
-                        : "Escribe para buscar en el catálogo"
-                      : "Tip: presiona Enter para agregar"
-                }
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") {
-                    e.preventDefault();
-                    if (canAddProduct) addProduct();
-                  }
-                }}
-              />
-            )}
-            sx={{ flex: "1 1 320px" }}
-          />
-          <Button
-            variant="contained"
-            startIcon={<Plus size={16} />}
-            onClick={addProduct}
-            disabled={!canAddProduct}
-            sx={{ mt: 0.5 }}
-          >
-            Agregar
-          </Button>
-        </Box>
-
-        {lineItems.length === 0 ? (
-          <Typography sx={{ color: "var(--muted)", py: 4, textAlign: "center" }}>
-            Aún no hay productos. Selecciona uno del catálogo para comenzar.
-          </Typography>
-        ) : (
-          <TableContainer className="order-items-table">
-            <Table size="small">
-              <TableHead>
-                <TableRow>
-                  <TableCell>Producto</TableCell>
-                  <TableCell>Unidad</TableCell>
-                  <TableCell align="right">Cantidad</TableCell>
-                  <TableCell align="right">Precio unit.</TableCell>
-                  <TableCell align="right">Subtotal</TableCell>
-                  <TableCell align="center">Quitar</TableCell>
-                </TableRow>
-              </TableHead>
-              <TableBody>
-                {lineItems.map((item) => (
-                  <TableRow key={item.key}>
-                    <TableCell>
-                      <strong>{item.product.name}</strong>
-                      {item.product.sku ? (
-                        <Typography variant="caption" display="block" sx={{ color: "var(--muted)" }}>
-                          SKU: {item.product.sku}
-                        </Typography>
-                      ) : null}
-                    </TableCell>
-                    <TableCell>{item.product.unit}</TableCell>
-                    <TableCell align="right">
-                      <TextField
-                        type="number"
-                        size="small"
-                        value={item.quantity}
-                        onChange={(e) =>
-                          updateQuantity(item.key, Math.max(1, Number(e.target.value) || 1))
-                        }
-                        inputProps={{ min: 1, step: 1 }}
-                        sx={{ width: 88 }}
-                      />
-                    </TableCell>
-                    {/* Precio de la lista del cliente: no se captura ni se edita. */}
-                    <TableCell align="right">${item.unitPrice.toFixed(2)}</TableCell>
-                    <TableCell align="right">${(item.quantity * item.unitPrice).toFixed(2)}</TableCell>
-                    <TableCell align="center">
-                      <Tooltip title="Quitar producto">
-                        <IconButton
-                          size="small"
-                          color="error"
-                          onClick={() => removeLineItem(item.key)}
-                          aria-label={`Quitar ${item.product.name}`}
-                        >
-                          <Trash2 size={16} />
-                        </IconButton>
-                      </Tooltip>
-                    </TableCell>
-                  </TableRow>
-                ))}
-                <TableRow>
-                  <TableCell colSpan={4} align="right" sx={{ color: "var(--muted)" }}>
-                    Subtotal
-                  </TableCell>
-                  <TableCell align="right" sx={{ fontWeight: 700 }}>
-                    ${subtotal.toFixed(2)}
-                  </TableCell>
-                  <TableCell />
-                </TableRow>
-                {/* Bidones: 1 por unidad de 20L líquida, calculado, sin captura. */}
-                <TableRow>
-                  <TableCell colSpan={2} align="right" sx={{ color: "var(--muted)" }}>
-                    Bidones (envase 20L)
-                  </TableCell>
-                  <TableCell align="right">{containersCount}</TableCell>
-                  <TableCell align="right" sx={{ color: "var(--muted)" }}>
-                    × ${CONTAINER_UNIT_PRICE.toFixed(2)}
-                  </TableCell>
-                  <TableCell align="right">${containersFee.toFixed(2)}</TableCell>
-                  <TableCell />
-                </TableRow>
-                <TableRow>
-                  <TableCell colSpan={4} align="right" sx={{ fontWeight: 700 }}>
-                    Total
-                  </TableCell>
-                  <TableCell align="right" sx={{ fontWeight: 700 }}>
-                    ${total.toFixed(2)}
-                  </TableCell>
-                  <TableCell />
-                </TableRow>
-              </TableBody>
-            </Table>
-          </TableContainer>
-        )}
+        <OrderItemsEditor
+          items={lineItems}
+          onChange={setLineItems}
+          defaultTier={pricingTier}
+          disabled={submitting || loadingDraft}
+        />
       </section>
 
       <section className="panel p-5">
@@ -939,11 +657,11 @@ export default function NewOrderPage() {
         </div>
 
         {selectedCustomer?.pricingTier === "wholesale" && (
-          <span className="pill mt-4 inline-block">Lista de precios: mayoreo</span>
+          <span className="pill mt-4 inline-block">Lista del cliente: mayoreo</span>
         )}
         {!selectedCustomer && !loadingCustomers && (
           <Typography sx={{ color: "var(--muted)", mt: 2 }}>
-            Selecciona un cliente para aplicar la lista de precios correcta.
+            Selecciona un cliente para aplicar su lista de precios por defecto.
           </Typography>
         )}
       </section>

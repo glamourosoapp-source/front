@@ -151,6 +151,11 @@ export interface Order {
     quantity: string | number;
     unitPrice: string | number;
     total: string | number;
+    /**
+     * Lista de precios con la que se cobró ESTA partida. Se elige por fila al
+     * capturar el pedido; el default es la lista del cliente.
+     */
+    priceTier?: "retail" | "wholesale";
     notes?: string | null;
     product?: {
       id: string;

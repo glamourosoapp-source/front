@@ -66,13 +66,14 @@ export function exportOrderToXlsx(order: Order) {
     ["Notas del cliente", (order as { customerNotes?: string }).customerNotes || "—"],
     ["Notas internas", (order as { internalNotes?: string }).internalNotes || "—"],
     [],
-    ["Producto", "Unidad", "Cantidad", "Precio unit.", "Subtotal"],
+    ["Producto", "Unidad", "Cantidad", "Lista", "Precio unit.", "Subtotal"],
   ];
 
   const itemRows = items.map((item) => [
     item.productName,
     (item as { unit?: string }).unit || "—",
     Number(item.quantity),
+    item.priceTier === "wholesale" ? "Mayoreo" : "Menudeo",
     Number(item.unitPrice),
     Number(item.total),
   ]);
@@ -85,23 +86,23 @@ export function exportOrderToXlsx(order: Order) {
 
   const totalsRows: (string | number)[][] = [
     [],
-    ["", "", "", "Subtotal", money(subtotal ?? order.total)],
+    ["", "", "", "", "Subtotal", money(subtotal ?? order.total)],
   ];
 
   if (Number(containersFee || 0) > 0) {
-    totalsRows.push(["", "", "", `Bidones (${Number(containersCount || 0)})`, money(containersFee)]);
+    totalsRows.push(["", "", "", "", `Bidones (${Number(containersCount || 0)})`, money(containersFee)]);
   }
   if (Number(deliveryFee || 0) > 0) {
-    totalsRows.push(["", "", "", "Envio", money(deliveryFee)]);
+    totalsRows.push(["", "", "", "", "Envio", money(deliveryFee)]);
   }
   if (Number(discount || 0) > 0) {
-    totalsRows.push(["", "", "", "Descuento", money(discount)]);
+    totalsRows.push(["", "", "", "", "Descuento", money(discount)]);
   }
-  totalsRows.push(["", "", "", "Total", money(order.total)]);
+  totalsRows.push(["", "", "", "", "Total", money(order.total)]);
 
   const sheetData = [...infoRows, ...itemRows, ...totalsRows];
   const worksheet = XLSX.utils.aoa_to_sheet(sheetData);
-  worksheet["!cols"] = [{ wch: 28 }, { wch: 14 }, { wch: 12 }, { wch: 14 }, { wch: 14 }];
+  worksheet["!cols"] = [{ wch: 28 }, { wch: 14 }, { wch: 12 }, { wch: 12 }, { wch: 14 }, { wch: 14 }];
 
   const workbook = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(workbook, worksheet, "Pedido");

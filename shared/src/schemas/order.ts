@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { ORDER_STATUS, PAYMENT_STATUS } from "../constants";
+import { ORDER_STATUS, PAYMENT_STATUS, PRICING_TIERS } from "../constants";
 import { paginationSchema } from "./common";
 
 // Estados "activos": los únicos aceptados como destino en el PUT genérico.
@@ -42,10 +42,16 @@ const itemSchema = z
     quantity: z.number().positive(),
     /**
      * Solo se respeta en partidas sin productId (producto borrado del
-     * catálogo): con productId el server siempre reprecia con la lista del
-     * cliente. El panel ya no captura precios.
+     * catálogo): con productId el server siempre reprecia con la lista de la
+     * partida. El panel ya no captura precios.
      */
     unitPrice: z.number().min(0).optional(),
+    /**
+     * Lista de precios de ESTA partida (mayoreo/menudeo). Si no viene, el
+     * server usa la del cliente. Pedir mayoreo sobre un producto sin precio de
+     * mayoreo cae a menudeo y la partida se guarda como menudeo.
+     */
+    priceTier: z.enum([PRICING_TIERS.RETAIL, PRICING_TIERS.WHOLESALE]).optional(),
     unit: z.string().max(30).optional(),
     notes: z.union([z.string(), z.literal(""), z.null()]).optional(),
   })
@@ -99,8 +105,8 @@ export const updateOrderSchema = z.object({
   deliveryTimeWindow: z.union([z.string().max(50), z.literal(""), z.null()]).optional(),
   customerNotes: z.union([z.string(), z.literal(""), z.null()]).optional(),
   internalNotes: z.union([z.string(), z.literal(""), z.null()]).optional(),
-  // Solo válidos mientras el pedido es borrador; el server responde 409 en
-  // cualquier otro estado.
+  // Editar partidas y cargos recalcula totales server-side; en un pedido ya
+  // confirmado además refresca los acumulados del cliente.
   items: z.array(itemSchema).min(1).optional(),
   deliveryFee: z.number().min(0).optional(),
   discount: z.number().min(0).optional(),
