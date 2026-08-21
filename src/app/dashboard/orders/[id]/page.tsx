@@ -82,6 +82,7 @@ export default function OrderDetailPage() {
   const [loading, setLoading] = useState(true);
   const [editOpen, setEditOpen] = useState(false);
   const [confirming, setConfirming] = useState(false);
+  const [restoring, setRestoring] = useState(false);
   const [printing, setPrinting] = useState(false);
 
   const load = useCallback(async () => {
@@ -124,8 +125,9 @@ export default function OrderDetailPage() {
 
   /**
    * Imprimir (o guardar como PDF desde el diálogo del navegador) marca la nota
-   * en el server: a partir de ahí la fila se pinta en el listado y solo un
-   * administrador puede volver a sacarla.
+   * en el server: a partir de ahí la fila se pinta de azul en el listado. Se
+   * puede reimprimir las veces que haga falta; la marca sigue siendo la de la
+   * primera impresión.
    */
   async function handlePrint() {
     if (!order) return;
@@ -141,6 +143,20 @@ export default function OrderDetailPage() {
       toast.error(getApiErrorMessage(err, "No se pudo imprimir la nota."));
     } finally {
       setPrinting(false);
+    }
+  }
+
+  async function restoreOrder() {
+    if (!order) return;
+    setRestoring(true);
+    try {
+      const restored = await httpClient.post<OrderDetail>(`/orders/${order.id}/restore`, {});
+      toast.success(`Pedido ${restored.orderNumber} restaurado`);
+      setOrder(restored);
+    } catch (err) {
+      toast.error(getApiErrorMessage(err, "No se pudo restaurar el pedido."));
+    } finally {
+      setRestoring(false);
     }
   }
 
@@ -171,6 +187,9 @@ export default function OrderDetailPage() {
   }
 
   const isDraft = order?.status === "draft";
+  // Un pedido eliminado se ve, pero no se edita ni se confirma: el server
+  // responde 409. Solo un admin puede devolverlo con Restaurar.
+  const isDeleted = order?.status === "deleted";
 
   if (loading) {
     return (
@@ -183,8 +202,8 @@ export default function OrderDetailPage() {
   if (!order) return null;
 
   const items = order.items || [];
-  // Reimprimir una nota ya impresa es exclusivo de los administradores.
-  const printBlocked = Boolean(order.printedAt) && !isAdmin;
+  // Ya impresa solo cambia la etiqueta del botón: reimprimir está permitido.
+  const alreadyPrinted = Boolean(order.printedAt);
   const deliveryMapsUrl = order.deliveryLocation
     ? customerLocationMapsUrl(order.deliveryLocation)
     : "";
@@ -204,13 +223,20 @@ export default function OrderDetailPage() {
             {isDraft ? "Borrador" : "Pedido"} {order.orderNumber}
           </h1>
           <p className="page-kicker">
-            {isDraft
-              ? "Borrador sin confirmar: edítalo o conviértelo en pedido."
-              : "Detalle completo del pedido y Productos."}
+            {isDeleted
+              ? "Eliminado: no cuenta en listados, totales ni reportes. Un administrador puede restaurarlo."
+              : isDraft
+                ? "Borrador sin confirmar: edítalo o conviértelo en pedido."
+                : "Detalle completo del pedido y Productos."}
           </p>
         </div>
         <Box sx={{ display: "flex", gap: 1.5, alignItems: "center", flexWrap: "wrap" }}>
-          {isDraft && can("orders", "update") ? (
+          {isDeleted && isAdmin ? (
+            <Button variant="contained" disabled={restoring} onClick={() => void restoreOrder()}>
+              {restoring ? "Restaurando..." : "Restaurar pedido"}
+            </Button>
+          ) : null}
+          {!isDeleted && isDraft && can("orders", "update") ? (
             <>
               <Button
                 variant="outlined"
@@ -224,7 +250,7 @@ export default function OrderDetailPage() {
               </Button>
             </>
           ) : null}
-          {!isDraft && can("orders", "update") ? (
+          {!isDeleted && !isDraft && can("orders", "update") ? (
             <Button variant="outlined" startIcon={<Pencil size={16} />} onClick={() => setEditOpen(true)}>
               Editar
             </Button>
@@ -236,22 +262,22 @@ export default function OrderDetailPage() {
             <Tooltip
               arrow
               title={
-                printBlocked
+                alreadyPrinted
                   ? `Esta nota ya se imprimió${
                       order.printer?.name ? ` (${order.printer.name})` : ""
-                    }; solo un administrador puede reimprimirla.`
+                    }; se conserva la marca de la primera impresión.`
                   : ""
               }
             >
-              {/* span: un Button deshabilitado no dispara el tooltip. */}
+              {/* span: el tooltip necesita un nodo propio que reciba el hover. */}
               <span>
                 <Button
                   variant="outlined"
                   startIcon={<Printer size={16} />}
-                  disabled={printing || printBlocked}
+                  disabled={printing}
                   onClick={() => void handlePrint()}
                 >
-                  {printing ? "Preparando..." : printBlocked ? "Ya impreso" : "Imprimir"}
+                  {printing ? "Preparando..." : alreadyPrinted ? "Reimprimir" : "Imprimir"}
                 </Button>
               </span>
             </Tooltip>

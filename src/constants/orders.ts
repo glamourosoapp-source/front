@@ -24,6 +24,9 @@ export const ORDER_STATUS_OPTIONS = [
 
 export function orderStatusLabel(value: string | null | undefined) {
   if (value === "draft") return "Borrador";
+  // Eliminado: no está en el select porque no se llega por edición, sino con
+  // el botón de eliminar (y se sale restaurando desde la papelera).
+  if (value === "deleted") return "Eliminado";
   if (!value) return "—";
   return ORDER_STATUS_OPTIONS.find((o) => o.value === value)?.label ?? value;
 }

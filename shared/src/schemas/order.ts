@@ -12,13 +12,15 @@ const orderStatus = z.enum([
   ORDER_STATUS.CANCELLED,
 ]);
 
-// Para filtros de listado (incluye borradores).
+// Para filtros de listado (incluye borradores y eliminados). `deleted` solo lo
+// acepta el server para administradores; a cualquier otro rol le responde 403.
 const orderStatusFilter = z.enum([
   ORDER_STATUS.DRAFT,
   ORDER_STATUS.NEW,
   ORDER_STATUS.PROCESSING,
   ORDER_STATUS.DELIVERED,
   ORDER_STATUS.CANCELLED,
+  ORDER_STATUS.DELETED,
 ]);
 
 const paymentStatus = z.enum([

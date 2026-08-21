@@ -30,7 +30,7 @@ import { exportOrdersToPdf, exportOrdersToXlsx } from "@/lib/export-orders-list"
 import { ListResponse, Order } from "@/types";
 import { toast } from "sonner";
 
-type DeliveryTab = "today" | "tomorrow" | "upcoming" | "all" | "drafts";
+type DeliveryTab = "today" | "tomorrow" | "upcoming" | "all" | "drafts" | "deleted";
 
 const TAB_LABELS: Record<DeliveryTab, string> = {
   today: "Hoy",
@@ -38,8 +38,11 @@ const TAB_LABELS: Record<DeliveryTab, string> = {
   upcoming: "Próximos",
   all: "Todos",
   drafts: "Borradores",
+  deleted: "Papelera",
 };
 
+// La papelera solo existe para administradores: son los únicos que pueden ver
+// y restaurar lo eliminado (el server responde 403 al resto).
 const TAB_VALUES: DeliveryTab[] = ["today", "tomorrow", "upcoming", "all", "drafts"];
 
 /**
@@ -57,11 +60,12 @@ function deliveryParams(tab: DeliveryTab, unscheduledOnly: boolean, timeZone: st
     case "all":
       return unscheduledOnly ? { unscheduled: true } : {};
     case "drafts":
+    case "deleted":
       return {};
   }
 }
 
-/** Una nota ya impresa se pinta en el listado y solo un admin puede reimprimirla. */
+/** Una nota ya impresa se pinta en el listado; se puede volver a imprimir igual. */
 function isPrinted(order: Order) {
   return Boolean(order.printedAt);
 }
@@ -118,25 +122,27 @@ export default function OrdersPage() {
   const [editing, setEditing] = useState<Order | null>(null);
   const [draftCount, setDraftCount] = useState(0);
   const [confirmingId, setConfirmingId] = useState<string | null>(null);
+  const [restoringId, setRestoringId] = useState<string | null>(null);
   // Selección para imprimir notas: se guarda el pedido completo (no solo el id)
   // para poder imprimir lo marcado en páginas anteriores sin volver a pedirlo.
   const [selected, setSelected] = useState<Record<string, Order>>({});
   const [printing, setPrinting] = useState(false);
   const [printBatch, setPrintBatch] = useState<Order[]>([]);
 
-  // En el tab Borradores el estado va fijo a "draft" y no aplican los filtros
-  // de entrega ni "sin entregar" (el server excluye drafts de esos listados).
+  // En Borradores y Papelera el estado va fijo y no aplican los filtros de
+  // entrega ni "sin entregar" (el server excluye ambos de esos listados).
+  const fixedStatusTab = tab === "drafts" || tab === "deleted";
   const buildParams = useCallback(
     () => ({
       search: appliedSearch || undefined,
-      status: tab === "drafts" ? "draft" : status || undefined,
+      status: tab === "drafts" ? "draft" : tab === "deleted" ? "deleted" : status || undefined,
       paymentStatus: paymentStatus || undefined,
       dateFrom: dateFrom || undefined,
       dateTo: dateTo || undefined,
-      undelivered: (tab !== "drafts" && undelivered) || undefined,
+      undelivered: (!fixedStatusTab && undelivered) || undefined,
       ...deliveryParams(tab, unscheduledOnly, orgTimezone),
     }),
-    [appliedSearch, dateFrom, dateTo, paymentStatus, status, tab, undelivered, unscheduledOnly, orgTimezone]
+    [appliedSearch, dateFrom, dateTo, fixedStatusTab, paymentStatus, status, tab, undelivered, unscheduledOnly, orgTimezone]
   );
 
   // Solo la carga más reciente escribe estado: al cambiar rápido de tab/filtro
@@ -216,13 +222,7 @@ export default function OrdersPage() {
 
   const selectedOrders = Object.values(selected);
 
-  /** Reimprimir una nota ya impresa es exclusivo de los administradores. */
-  const canPrintOrder = useCallback((order: Order) => isAdmin || !isPrinted(order), [isAdmin]);
-
-  const printableOrders = orders.filter(canPrintOrder);
-
   function toggleSelected(order: Order) {
-    if (!canPrintOrder(order)) return;
     setSelected((prev) => {
       const next = { ...prev };
       if (next[order.id]) delete next[order.id];
@@ -231,14 +231,13 @@ export default function OrdersPage() {
     });
   }
 
-  const pageAllSelected =
-    printableOrders.length > 0 && printableOrders.every((order) => selected[order.id]);
+  const pageAllSelected = orders.length > 0 && orders.every((order) => selected[order.id]);
 
   function toggleSelectedPage() {
     setSelected((prev) => {
       const next = { ...prev };
-      if (pageAllSelected) printableOrders.forEach((order) => delete next[order.id]);
-      else printableOrders.forEach((order) => (next[order.id] = order));
+      if (pageAllSelected) orders.forEach((order) => delete next[order.id]);
+      else orders.forEach((order) => (next[order.id] = order));
       return next;
     });
   }
@@ -248,11 +247,10 @@ export default function OrdersPage() {
    * hay nada marcado, todos los pedidos del tab/filtro actual (no solo la
    * página visible). El diálogo del navegador permite guardarlas como PDF.
    *
-   * Antes de abrir el diálogo se marcan en el server (POST /orders/print): esa
-   * llamada es la que autoriza, y a partir de ahí la fila queda pintada y solo
-   * un administrador puede volver a sacarla. Si se cancela el diálogo del
-   * navegador el pedido igual queda marcado —para reimprimirlo hace falta un
-   * admin, que es justo el control que se busca.
+   * Antes de abrir el diálogo se marcan en el server (POST /orders/print): a
+   * partir de ahí la fila queda pintada de azul. Se puede reimprimir cuantas
+   * veces haga falta; la marca conserva la fecha y el usuario de la primera
+   * impresión, incluso si se cancela el diálogo del navegador.
    */
   async function handlePrintNotes() {
     setPrinting(true);
@@ -262,19 +260,10 @@ export default function OrdersPage() {
         toast.info("No hay pedidos para imprimir con los filtros actuales.");
         return;
       }
-      const batch = all.filter(canPrintOrder);
-      if (!batch.length) {
-        toast.info("Estos pedidos ya se imprimieron; solo un administrador puede reimprimirlos.");
-        return;
-      }
-      const skipped = all.length - batch.length;
       const printed = await httpClient.post<Order[]>("/orders/print", {
-        orderIds: batch.map((order) => order.id),
+        orderIds: all.map((order) => order.id),
       });
-      if (skipped) {
-        toast.info(`${skipped} nota(s) ya impresa(s) se omitieron.`);
-      }
-      setPrintBatch(printed.length ? printed : batch);
+      setPrintBatch(printed.length ? printed : all);
       setSelected({});
       void load();
     } catch (error) {
@@ -395,8 +384,23 @@ export default function OrdersPage() {
       await httpClient.delete(`/orders/${order.id}`);
       toast.success(`Pedido ${order.orderNumber} eliminado con éxito`);
       await load();
-    } catch {
-      toast.error("Error al eliminar el pedido");
+    } catch (error) {
+      // El Back rechaza eliminar pedidos confirmados si no eres admin: su
+      // mensaje explica mejor que un "error al eliminar" genérico.
+      toast.error(getApiErrorMessage(error, "Error al eliminar el pedido"));
+    }
+  }
+
+  async function restore(order: Order) {
+    setRestoringId(order.id);
+    try {
+      await httpClient.post(`/orders/${order.id}/restore`, {});
+      toast.success(`Pedido ${order.orderNumber} restaurado`);
+      await Promise.all([load(), loadDraftCount()]);
+    } catch (error) {
+      toast.error(getApiErrorMessage(error, "No se pudo restaurar el pedido."));
+    } finally {
+      setRestoringId(null);
     }
   }
 
@@ -437,20 +441,25 @@ export default function OrdersPage() {
               </Badge>
             }
           />
+          {isAdmin ? <Tab value="deleted" label="Papelera" /> : null}
         </Tabs>
         <div className="mb-4 flex flex-wrap items-end justify-between gap-3">
           <div>
             <h2>
               {tab === "drafts"
                 ? "Borradores de pedido"
-                : tab === "all"
-                  ? "Pedidos recientes"
-                  : `Pedidos con entrega: ${TAB_LABELS[tab]}`}
+                : tab === "deleted"
+                  ? "Papelera"
+                  : tab === "all"
+                    ? "Pedidos recientes"
+                    : `Pedidos con entrega: ${TAB_LABELS[tab]}`}
             </h2>
             <p className="page-kicker">
               {tab === "drafts"
                 ? "Pedidos guardados sin confirmar; edítalos o conviértelos en pedido."
-                : "Busca por folio o cliente; combina con fechas, estado y pago."}
+                : tab === "deleted"
+                  ? "Eliminados: no cuentan en totales ni reportes. Restaura para devolverlos a su estado anterior."
+                  : "Busca por folio o cliente; combina con fechas, estado y pago."}
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
@@ -465,9 +474,7 @@ export default function OrdersPage() {
                 size="small"
                 variant="contained"
                 startIcon={<Printer size={16} />}
-                disabled={
-                  printing || (!printableOrders.length && !selectedOrders.length)
-                }
+                disabled={printing || (!orders.length && !selectedOrders.length)}
                 onClick={() => void handlePrintNotes()}
               >
                 {printing
@@ -500,11 +507,13 @@ export default function OrdersPage() {
             <DateFilterField label="Creado hasta" value={dateTo} onChange={setDateTo} min={dateFrom || undefined} />
             <select
               className="input"
-              value={tab === "drafts" ? "" : status}
-              disabled={undelivered || tab === "drafts"}
+              value={fixedStatusTab ? "" : status}
+              disabled={undelivered || fixedStatusTab}
               onChange={(e) => setStatus(e.target.value)}
             >
-              <option value="">{tab === "drafts" ? "Borradores" : "Todos los estados"}</option>
+              <option value="">
+                {tab === "drafts" ? "Borradores" : tab === "deleted" ? "Eliminados" : "Todos los estados"}
+              </option>
               {ORDER_STATUS_OPTIONS.map((item) => (
                 <option key={item.value} value={item.value}>
                   {item.label}
@@ -521,7 +530,7 @@ export default function OrdersPage() {
             </select>
           </div>
           <div className="flex flex-wrap items-center gap-4">
-            {tab !== "drafts" ? (
+            {!fixedStatusTab ? (
               <FormControlLabel
                 control={
                   <Checkbox
@@ -560,6 +569,17 @@ export default function OrdersPage() {
           onRowClick={(row) => router.push(`/dashboard/orders/${row.id}`)}
           onEdit={can("orders", "update") ? openEdit : undefined}
           onDelete={can("orders", "delete") ? remove : undefined}
+          // El permiso habilita borrar borradores; tirar un pedido confirmado
+          // (folio ORD- emitido) es solo de administradores, igual que el Back.
+          canDeleteRow={(row: Order) =>
+            row.status !== "deleted" && (isAdmin || row.status === "draft")
+          }
+          deleteDescription={(label) => (
+            <>
+              ¿Eliminar <strong>{label}</strong>? Deja de contar en listados, totales y reportes,
+              pero conserva su folio y un administrador puede restaurarlo desde la papelera.
+            </>
+          )}
           isRowHighlighted={(row: Order) => isPrinted(row)}
           selection={
             can("orderPrint")
@@ -569,7 +589,6 @@ export default function OrdersPage() {
                   allSelected: pageAllSelected,
                   someSelected: selectedOrders.length > 0,
                   onToggleAll: toggleSelectedPage,
-                  isDisabled: (row: Order) => !canPrintOrder(row),
                   label: "Seleccionar pedidos para imprimir",
                 }
               : undefined
@@ -625,6 +644,37 @@ export default function OrdersPage() {
               render: (r) => <span className="pill">{paymentStatusLabel(r.paymentStatus)}</span>,
             },
             { key: "total", label: "Total", render: (r) => `$${Number(r.total).toFixed(2)}` },
+            ...(tab === "deleted"
+              ? [
+                  {
+                    key: "deletedAt",
+                    label: "Eliminado",
+                    render: (r: Order) => (
+                      <span>
+                        {formatPrintedAt(r.deletedAt)}
+                        {r.deleter?.name ? ` · ${r.deleter.name}` : ""}
+                      </span>
+                    ),
+                  },
+                  {
+                    key: "restore",
+                    label: "",
+                    render: (r: Order) => (
+                      <Button
+                        size="small"
+                        variant="contained"
+                        disabled={restoringId !== null}
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          void restore(r);
+                        }}
+                      >
+                        {restoringId === r.id ? "Restaurando..." : "Restaurar"}
+                      </Button>
+                    ),
+                  },
+                ]
+              : []),
             ...(tab === "drafts" && can("orders", "update")
               ? [
                   {

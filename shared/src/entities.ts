@@ -132,10 +132,16 @@ export interface Order {
     teamId?: string | null;
     team?: { id: string; name: string } | null;
   } | null;
-  /** Última impresión de la nota; con valor, solo un admin puede reimprimirla. */
+  /** Primera impresión de la nota; una reimpresión no la modifica. */
   printedAt?: string | null;
   printedBy?: string | null;
   printer?: { id: string; name: string } | null;
+  /** Eliminado no destructivo (status "deleted"): rastro para la papelera. */
+  deletedAt?: string | null;
+  deletedBy?: string | null;
+  deleter?: { id: string; name: string } | null;
+  /** Estado al que vuelve el pedido si se restaura. */
+  deletedFromStatus?: string | null;
   customer?: Customer;
   items?: Array<{
     id: string;

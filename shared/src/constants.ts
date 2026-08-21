@@ -17,6 +17,14 @@ export const ORDER_STATUS = {
   PROCESSING: "processing",
   DELIVERED: "delivered",
   CANCELLED: "cancelled",
+  /**
+   * Eliminado: la fila y el folio se conservan, pero el pedido se comporta como
+   * si no existiera (fuera de listados, acumulados del cliente, dashboard y
+   * atribución de campañas). Se llega solo por DELETE /orders/:id y se revierte
+   * con POST /orders/:id/restore. No confundir con CANCELLED, que es un evento
+   * de negocio y sí cuenta en el historial del cliente.
+   */
+  DELETED: "deleted",
 } as const;
 
 export const PAYMENT_STATUS = {

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { ReactNode, useState } from "react";
 import {
   Table,
   TableBody,
@@ -47,6 +47,13 @@ interface DataTableProps {
   onEdit?: (row: any) => void;
   onDelete?: (row: any) => void;
   getDeleteLabel?: (row: any) => string;
+  /** Oculta el botón de eliminar en las filas que el usuario no puede borrar. */
+  canDeleteRow?: (row: any) => boolean;
+  /**
+   * Texto del diálogo de confirmación. Por defecto avisa que el borrado es
+   * permanente; las listas cuyo borrado sí es reversible pasan el suyo.
+   */
+  deleteDescription?: (label: string) => ReactNode;
   selection?: DataTableSelection;
   /** Pinta la fila con el mismo azul de "seleccionada" sin marcar el checkbox. */
   isRowHighlighted?: (row: any) => boolean;
@@ -60,6 +67,8 @@ export function DataTable({
   onEdit,
   onDelete,
   getDeleteLabel,
+  canDeleteRow,
+  deleteDescription,
   selection,
   isRowHighlighted,
 }: DataTableProps) {
@@ -180,7 +189,7 @@ export function DataTable({
                               </IconButton>
                             </Tooltip>
                           )}
-                          {onDelete && (
+                          {onDelete && (canDeleteRow ? canDeleteRow(row) : true) && (
                             <Tooltip title="Eliminar" arrow>
                               <IconButton
                                 size="small"
@@ -230,7 +239,13 @@ export function DataTable({
         </DialogTitle>
         <DialogContent>
           <DialogContentText id="confirm-delete-description" sx={{ color: "text.secondary" }}>
-            ¿Estás seguro de que deseas eliminar permanentemente <strong>{deleteLabel}</strong>? Esta acción no se puede deshacer.
+            {deleteDescription ? (
+              deleteDescription(deleteLabel)
+            ) : (
+              <>
+                ¿Estás seguro de que deseas eliminar permanentemente <strong>{deleteLabel}</strong>? Esta acción no se puede deshacer.
+              </>
+            )}
           </DialogContentText>
         </DialogContent>
         <DialogActions sx={{ px: 3, pb: 2 }}>
