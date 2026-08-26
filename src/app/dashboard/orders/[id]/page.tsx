@@ -242,18 +242,23 @@ export default function OrderDetailPage() {
               {restoring ? "Restaurando..." : "Restaurar pedido"}
             </Button>
           ) : null}
-          {!isDeleted && isDraft && can("orders", "update") ? (
+          {!isDeleted && isDraft ? (
             <>
-              <Button
-                variant="outlined"
-                startIcon={<Pencil size={16} />}
-                onClick={() => router.push(`/dashboard/orders/new?draftId=${order.id}`)}
-              >
-                Editar borrador
-              </Button>
-              <Button variant="contained" disabled={confirming} onClick={() => void confirmDraft()}>
-                {confirming ? "Convirtiendo..." : "Convertir en pedido"}
-              </Button>
+              {can("orderDrafts", "update") ? (
+                <Button
+                  variant="outlined"
+                  startIcon={<Pencil size={16} />}
+                  onClick={() => router.push(`/dashboard/orders/new?draftId=${order.id}`)}
+                >
+                  Editar borrador
+                </Button>
+              ) : null}
+              {/* Convertir emite el folio ORD-: pide editar borradores y crear pedidos. */}
+              {can("orderDrafts", "update") && can("orders", "create") ? (
+                <Button variant="contained" disabled={confirming} onClick={() => void confirmDraft()}>
+                  {confirming ? "Convirtiendo..." : "Convertir en pedido"}
+                </Button>
+              ) : null}
             </>
           ) : null}
           {!isDeleted && !isDraft && can("orders", "update") ? (

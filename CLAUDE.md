@@ -18,7 +18,7 @@ cd shared && bunx tsc --noEmit
 ## Reglas
 
 - `shared/` es copia duplicada del contrato con `Back/shared/`. **Mantener ambas en sync** en el mismo cambio.
-- Permisos en UI: `usePermissions()` (`src/lib/permissions.ts`); el sidebar filtra por módulo y los botones se gatean por acción. Rol admin = bypass.
+- Permisos en UI: `usePermissions()` (`src/lib/permissions.ts`); el sidebar filtra por módulo y los botones se gatean por acción. Rol admin = bypass. En pedidos, **borradores van por `orderDrafts`, no por `orders`**: la pestaña Borradores y su badge por `orderDrafts:view`, "Guardar borrador" por `create`, editar/eliminar la fila draft por `update`/`delete` (`canEditRow`/`canDeleteRow` de `DataTable`) y "Convertir en pedido" por `orderDrafts:update` + `orders:create`.
 - Fechas DATEONLY (`YYYY-MM-DD`): nunca `new Date("YYYY-MM-DD")` para mostrar (corre el día por timezone) — usar `src/lib/format-date-only.ts`.
 - Etiqueta "Creado por" en pedidos: `orderCreatorLabel` en `src/constants/orders.ts` (`source='whatsapp'` → "Agente IA").
 - Impresión: clases `.print-only` + `@media print` en `globals.css`; exports Excel/PDF paginan de a 200. La hoja imprimible **debe montarse por portal como hijo directo de `<body>`** (ver `OrderPrintSheet`): el `@media print` saca del flujo todo lo demás con `body > *:not(.print-only) { display: none }`; si se anida en el layout, el alto del dashboard vuelve a generar una página en blanco. Para varias notas de golpe está `OrdersPrintSheets` (un solo `.print-only` con una nota por hijo y `breakAfter: page` salvo la última), que usa el botón "Imprimir pedidos" del listado (permiso `orderPrint`).

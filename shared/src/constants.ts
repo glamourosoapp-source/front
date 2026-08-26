@@ -155,6 +155,7 @@ export const ORDER_SCOPES = {
 export const PERMISSION_MODULES = [
   { key: "dashboard", label: "Overview" },
   { key: "orders", label: "Pedidos" },
+  { key: "orderDrafts", label: "Pedidos: borradores" },
   { key: "orderPrint", label: "Pedidos: imprimir notas" },
   { key: "customers", label: "Clientes" },
   { key: "products", label: "Catalogo" },

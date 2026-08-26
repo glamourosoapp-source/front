@@ -100,6 +100,11 @@ function formatOrderDate(value: string | Date | undefined) {
 export default function OrdersPage() {
   const router = useRouter();
   const { can, isAdmin } = usePermissions();
+  // Los borradores tienen su propio módulo: ver la pestaña, editarlos,
+  // eliminarlos y convertirlos se gatean por separado de los pedidos.
+  const canViewDrafts = can("orderDrafts");
+  const canUpdateDrafts = can("orderDrafts", "update");
+  const canDeleteDrafts = can("orderDrafts", "delete");
   const orgTimezone = useAuthStore(
     (s) => s.user?.organization?.timezone ?? DEFAULT_DELIVERY_SCHEDULE.timezone
   );
@@ -178,6 +183,7 @@ export default function OrdersPage() {
   // Conteo del badge del tab Borradores: pide 1 fila y lee el total (el
   // scope own/team lo aplica el server).
   const loadDraftCount = useCallback(async () => {
+    if (!canViewDrafts) return;
     try {
       const response = await httpClient.get<ListResponse<Order>>("/orders", {
         status: "draft",
@@ -187,7 +193,7 @@ export default function OrdersPage() {
     } catch {
       // Silencioso: el badge es informativo, la lista ya reporta sus errores.
     }
-  }, []);
+  }, [canViewDrafts]);
 
   /** Trae TODO lo filtrado paginando (el tope del API es 200 por página). */
   const fetchAllFiltered = useCallback(async () => {
@@ -353,8 +359,12 @@ export default function OrdersPage() {
       setAppliedSearch(fromUrl.trim());
     }
     const tabFromUrl = params.get("tab") as DeliveryTab | null;
-    if (tabFromUrl && TAB_VALUES.includes(tabFromUrl)) setTab(tabFromUrl);
-  }, []);
+    if (!tabFromUrl || !TAB_VALUES.includes(tabFromUrl)) return;
+    // Sin permiso de borradores el deep-link ?tab=drafts se ignora: el server
+    // rechaza ese listado y el tab ni siquiera se renderiza.
+    if (tabFromUrl === "drafts" && !canViewDrafts) return;
+    setTab(tabFromUrl);
+  }, [canViewDrafts]);
 
   // Filtros o tab nuevos vuelven a la página 1 (el seq guard evita el doble render)
   // y descartan la selección: lo marcado ya no corresponde a lo que se ve.
@@ -463,14 +473,16 @@ export default function OrdersPage() {
           <Tab value="tomorrow" label="Mañana" />
           <Tab value="upcoming" label="Próximos" />
           <Tab value="all" label="Todos" />
-          <Tab
-            value="drafts"
-            label={
-              <Badge badgeContent={draftCount} color="warning" max={99} sx={{ "& .MuiBadge-badge": { right: -10 } }}>
-                Borradores
-              </Badge>
-            }
-          />
+          {canViewDrafts ? (
+            <Tab
+              value="drafts"
+              label={
+                <Badge badgeContent={draftCount} color="warning" max={99} sx={{ "& .MuiBadge-badge": { right: -10 } }}>
+                  Borradores
+                </Badge>
+              }
+            />
+          ) : null}
           {isAdmin ? <Tab value="deleted" label="Papelera" /> : null}
         </Tabs>
         <div className="mb-4 flex flex-wrap items-end justify-between gap-3">
@@ -610,12 +622,16 @@ export default function OrdersPage() {
           getKey={(row) => row.id}
           getDeleteLabel={(row) => `el pedido ${row.orderNumber}`}
           onRowClick={(row) => router.push(`/dashboard/orders/${row.id}`)}
-          onEdit={can("orders", "update") ? openEdit : undefined}
-          onDelete={can("orders", "delete") ? remove : undefined}
-          // El permiso habilita borrar borradores; tirar un pedido confirmado
-          // (folio ORD- emitido) es solo de administradores, igual que el Back.
+          onEdit={can("orders", "update") || canUpdateDrafts ? openEdit : undefined}
+          onDelete={can("orders", "delete") || canDeleteDrafts ? remove : undefined}
+          canEditRow={(row: Order) =>
+            row.status === "draft" ? canUpdateDrafts : can("orders", "update")
+          }
+          // Borrar un borrador lo habilita su propio permiso; tirar un pedido
+          // confirmado (folio ORD- emitido) es solo de administradores, igual
+          // que el Back.
           canDeleteRow={(row: Order) =>
-            row.status !== "deleted" && (isAdmin || row.status === "draft")
+            row.status !== "deleted" && (row.status === "draft" ? canDeleteDrafts : isAdmin)
           }
           deleteDescription={(label) => (
             <>
@@ -718,7 +734,9 @@ export default function OrdersPage() {
                   },
                 ]
               : []),
-            ...(tab === "drafts" && can("orders", "update")
+            // Convertir emite el folio ORD- y crea el pedido real: pide editar
+            // borradores y, además, crear pedidos.
+            ...(tab === "drafts" && canUpdateDrafts && can("orders", "create")
               ? [
                   {
                     key: "confirm",

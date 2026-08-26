@@ -48,7 +48,12 @@ export default function NewOrderPage() {
   const user = useAuthStore((s) => s.user);
   const { can } = usePermissions();
   const canCreate = can("orders", "create");
-  const canUpdate = can("orders", "update");
+  // Los borradores tienen módulo propio: se puede poder dejar borradores sin
+  // poder crear pedidos (y al revés). Confirmar pide ambos, porque emite el
+  // folio ORD-.
+  const canCreateDraft = can("orderDrafts", "create");
+  const canUpdateDraft = can("orderDrafts", "update");
+  const canConfirmDraft = canUpdateDraft && canCreate;
   const [submitting, setSubmitting] = useState(false);
   // Modo edición de borrador (?draftId=): misma pantalla, prellenada; guarda
   // con PUT y convierte con POST /confirm en lugar de crear.
@@ -378,10 +383,15 @@ export default function NewOrderPage() {
     }
   }
 
+  // Enter en cualquier campo dispara el submit, así que la acción se decide
+  // aquí también (no basta con esconder el botón).
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (draftId) await confirmDraft();
-    else await createOrder(false);
+    if (draftId) {
+      if (canConfirmDraft) await confirmDraft();
+    } else if (canCreate) {
+      await createOrder(false);
+    }
   }
 
   // Resumen + botones de acción: viven en la barra pegajosa del pie, siempre
@@ -400,21 +410,30 @@ export default function NewOrderPage() {
         Cancelar
       </Button>
       {draftId ? (
-        <Button variant="outlined" disabled={!canSubmit || !canUpdate} onClick={() => void saveDraft()}>
+        <Button variant="outlined" disabled={!canSubmit || !canUpdateDraft} onClick={() => void saveDraft()}>
           {submitting ? "Guardando..." : "Guardar borrador"}
         </Button>
-      ) : (
+      ) : canCreateDraft ? (
         <Button variant="outlined" disabled={!canSubmit} onClick={() => void createOrder(true)}>
           {submitting ? "Guardando..." : "Guardar borrador"}
         </Button>
-      )}
-      <Button type="submit" variant="contained" disabled={!canSubmit || (Boolean(draftId) && !canUpdate)}>
-        {submitting ? "Guardando..." : draftId ? "Confirmar pedido" : "Crear pedido"}
-      </Button>
+      ) : null}
+      {draftId || canCreate ? (
+        <Button
+          type="submit"
+          variant="contained"
+          disabled={!canSubmit || (Boolean(draftId) && !canConfirmDraft)}
+        >
+          {submitting ? "Guardando..." : draftId ? "Confirmar pedido" : "Crear pedido"}
+        </Button>
+      ) : null}
     </>
   );
 
-  if (user && !canCreate) {
+  // La pantalla sirve para crear pedidos y para capturar/editar borradores: se
+  // bloquea solo a quien no puede ninguna de las tres cosas. El `?draftId=` se
+  // resuelve en un efecto, así que no se puede mirar aquí sin parpadeo.
+  if (user && !canCreate && !canCreateDraft && !canUpdateDraft) {
     return (
       <div className="page-stack">
         <div className="panel p-5 flex items-center gap-3">
@@ -422,8 +441,8 @@ export default function NewOrderPage() {
           <div>
             <h2 style={{ margin: 0 }}>Sin permiso para crear pedidos</h2>
             <p className="page-kicker" style={{ margin: 0 }}>
-              Tu perfil no tiene la accion de crear en el modulo de pedidos. Pide acceso a tu
-              administrador si necesitas registrar un pedido.
+              Tu perfil no tiene la accion de crear en el modulo de pedidos ni en el de
+              borradores. Pide acceso a tu administrador si necesitas registrar un pedido.
             </p>
           </div>
         </div>

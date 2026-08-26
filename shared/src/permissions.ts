@@ -49,7 +49,7 @@ export function can(
   return permissions?.[module]?.[action] === true;
 }
 
-/** Scope efectivo de pedidos; cualquier valor distinto de "own"/"team" se trata como "all". */
+/** Scope efectivo de pedidos —los borradores lo heredan, son filas de `orders`—; cualquier valor distinto de "own"/"team" se trata como "all". */
 export function getOrderScope(permissions: PermissionMap | null | undefined): OrderScope {
   const scope = permissions?.orders?.scope;
   return scope === ORDER_SCOPES.OWN || scope === ORDER_SCOPES.TEAM ? scope : ORDER_SCOPES.ALL;

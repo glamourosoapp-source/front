@@ -47,6 +47,8 @@ interface DataTableProps {
   onEdit?: (row: any) => void;
   onDelete?: (row: any) => void;
   getDeleteLabel?: (row: any) => string;
+  /** Oculta el botón de editar en las filas que el usuario no puede modificar. */
+  canEditRow?: (row: any) => boolean;
   /** Oculta el botón de eliminar en las filas que el usuario no puede borrar. */
   canDeleteRow?: (row: any) => boolean;
   /**
@@ -67,6 +69,7 @@ export function DataTable({
   onEdit,
   onDelete,
   getDeleteLabel,
+  canEditRow,
   canDeleteRow,
   deleteDescription,
   selection,
@@ -169,7 +172,7 @@ export function DataTable({
                     {(onEdit || onDelete) && (
                       <TableCell align="right">
                         <div style={{ display: "flex", justifyContent: "flex-end", gap: "8px" }}>
-                          {onEdit && (
+                          {onEdit && (canEditRow ? canEditRow(row) : true) && (
                             <Tooltip title="Editar" arrow>
                               <IconButton
                                 size="small"
