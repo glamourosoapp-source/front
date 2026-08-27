@@ -261,6 +261,10 @@ textarea {
   grid-template-columns: repeat(4, minmax(0, 1fr));
 }
 
+.grid-5 {
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+}
+
 .grid-2 {
   grid-template-columns: minmax(300px, 0.78fr) minmax(0, 1.22fr);
 }
@@ -647,8 +651,15 @@ textarea.input {
   }
 }
 
+@media (max-width: 1380px) {
+  .grid-5 {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
 @media (max-width: 1180px) {
   .grid-4,
+  .grid-5,
   .grid-2 {
     grid-template-columns: 1fr;
   }

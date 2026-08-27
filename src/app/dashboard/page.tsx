@@ -3,7 +3,8 @@
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { DataTable } from "@/components/ui/DataTable";
-import { SalesByPeriodChart } from "@/components/dashboard/SalesByPeriodChart";
+import { MONTH_LONG, SalesByPeriodChart } from "@/components/dashboard/SalesByPeriodChart";
+import type { DashboardOverview } from "@glamouroso/shared/schemas/dashboard";
 import { httpClient } from "@/services/http-client";
 import { useRealtime } from "@/components/realtime/RealtimeProvider";
 import {
@@ -18,7 +19,7 @@ import {
   Bar,
   Legend,
 } from "recharts";
-import { ShoppingBag, TrendingUp, DollarSign, Activity, Sparkles } from "lucide-react";
+import { ShoppingBag, TrendingUp, DollarSign, Activity, Sparkles, Users, Wallet } from "lucide-react";
 import type { PermissionModule } from "@glamouroso/shared";
 import { useAuthStore } from "@/stores/auth.store";
 import { usePermissions } from "@/lib/permissions";
@@ -38,6 +39,10 @@ const NAV_ROUTES: { module: PermissionModule; href: string }[] = [
   { module: "settings", href: "/dashboard/settings" },
 ];
 
+function formatMoney(value: number): string {
+  return `$${value.toLocaleString("es-MX", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+}
+
 /** Etiqueta "vie 15" para una fecha DATEONLY sin correrla de día por timezone. */
 function weekdayLabel(dateOnly: string): string {
   const [year, month, day] = dateOnly.split("-").map(Number);
@@ -50,7 +55,7 @@ function weekdayLabel(dateOnly: string): string {
 }
 
 export default function DashboardPage() {
-  const [data, setData] = useState<any>(null);
+  const [data, setData] = useState<DashboardOverview | null>(null);
   const [loading, setLoading] = useState(true);
   const user = useAuthStore((s) => s.user);
   const router = useRouter();
@@ -69,7 +74,7 @@ export default function DashboardPage() {
     if (!canSeeOverview) return;
     setLoading(true);
     httpClient
-      .get("/dashboard/overview")
+      .get<DashboardOverview>("/dashboard/overview")
       .then(setData)
       .catch(() => setData(null))
       .finally(() => setLoading(false));
@@ -85,7 +90,7 @@ export default function DashboardPage() {
     const refresh = () => {
       lastRefreshRef.current = Date.now();
       httpClient
-        .get("/dashboard/overview")
+        .get<DashboardOverview>("/dashboard/overview")
         .then(setData)
         .catch(() => undefined);
     };
@@ -104,20 +109,38 @@ export default function DashboardPage() {
     };
   }, [canSeeOverview, subscribe]);
 
-  const totals = data?.totals || {};
+  const totals = data?.totals;
   const products = data?.topProducts || [];
 
   // Parse chart data for top products
-  const productChartData = products.map((p: any) => ({
+  const productChartData = products.map((p) => ({
     name: p.name.length > 15 ? p.name.slice(0, 15) + "..." : p.name,
     ventas: Number(p.total || 0),
     cantidad: Number(p.quantity || 0),
   }));
 
-  const weeklySalesData = (data?.weeklyTrend || []).map((point: any) => ({
+  const weeklySalesData = (data?.weeklyTrend || []).map((point) => ({
     day: weekdayLabel(String(point.date)),
     ventas: Number(point.sales || 0),
     pedidos: Number(point.orders || 0),
+  }));
+
+  // Semana en curso (lunes a domingo) y semanas del mes en curso.
+  const currentWeekData = (data?.currentWeek || []).map((point) => ({
+    day: weekdayLabel(point.date),
+    ventas: point.sales,
+    pedidos: point.orders,
+  }));
+  const monthWeeksData = (data?.currentMonth?.points || []).map((point) => ({
+    label: `Sem ${point.key} (${point.startDay}–${point.endDay})`,
+    ventas: point.sales,
+    pedidos: point.orders,
+  }));
+  const currentMonthName = data?.currentMonth?.month ? MONTH_LONG[data.currentMonth.month - 1] : "";
+  const teamSalesData = (data?.salesByTeam || []).map((team) => ({
+    team: team.team,
+    ventas: team.sales,
+    pedidos: team.orders,
   }));
 
   const firstName = user?.name?.trim().split(/\s+/)[0] || "equipo";
@@ -146,8 +169,8 @@ export default function DashboardPage() {
           </p>
           {!loading && (
             <div className="dashboard-welcome-chips">
-              <span className="pill warning">{totals.orders_today || 0} pedidos hoy</span>
-              <span className="pill">{totals.new_orders || 0} por atender</span>
+              <span className="pill warning">{totals?.orders_today ?? 0} pedidos hoy</span>
+              <span className="pill">{totals?.new_orders ?? 0} por atender</span>
             </div>
           )}
         </div>
@@ -164,7 +187,7 @@ export default function DashboardPage() {
       </section>
 
       {/* Grid de Tarjetas Métricas */}
-      <section className="grid grid-4">
+      <section className="grid grid-5">
         <div className="card metric">
           <div className="metric-head">
             <span>Pedidos Hoy</span>
@@ -172,8 +195,19 @@ export default function DashboardPage() {
               <Activity size={22} />
             </div>
           </div>
-          <strong>{totals.orders_today || 0}</strong>
+          <strong>{totals?.orders_today ?? 0}</strong>
           <small>Flujo diario activo</small>
+        </div>
+
+        <div className="card metric">
+          <div className="metric-head">
+            <span>Ventas de Hoy</span>
+            <div className="metric-icon">
+              <Wallet size={22} />
+            </div>
+          </div>
+          <strong>{formatMoney(totals?.sales_today ?? 0)}</strong>
+          <small>Facturación del día</small>
         </div>
 
         <div className="card metric">
@@ -183,7 +217,7 @@ export default function DashboardPage() {
               <ShoppingBag size={22} />
             </div>
           </div>
-          <strong>{totals.new_orders || 0}</strong>
+          <strong>{totals?.new_orders ?? 0}</strong>
           <small>Por atender en cola</small>
         </div>
 
@@ -194,7 +228,7 @@ export default function DashboardPage() {
               <TrendingUp size={22} />
             </div>
           </div>
-          <strong>{totals.total_orders || 0}</strong>
+          <strong>{totals?.total_orders ?? 0}</strong>
           <small>Historial acumulado</small>
         </div>
 
@@ -205,13 +239,135 @@ export default function DashboardPage() {
               <DollarSign size={22} />
             </div>
           </div>
-          <strong>${Number(totals.total_sales || 0).toLocaleString("es-MX", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong>
+          <strong>{formatMoney(totals?.total_sales ?? 0)}</strong>
           <small>Facturación total</small>
         </div>
       </section>
 
       {/* Gráfica grande de ventas por mes / semanas del mes */}
       <SalesByPeriodChart />
+
+      {/* Semana en curso (por día) y mes en curso (por semana) */}
+      <section className="grid grid-2" style={{ gap: "20px" }}>
+        <div className="panel p-5" style={{ height: "340px", display: "flex", flexDirection: "column" }}>
+          <div style={{ marginBottom: "16px" }}>
+            <h2 style={{ fontSize: "16px", fontWeight: 700, color: "var(--glam-navy)" }}>Ventas por Día — Semana Actual</h2>
+            <p className="page-kicker">Facturación de lunes a domingo de la semana en curso (cancelados excluidos).</p>
+          </div>
+          <div style={{ flex: 1, minHeight: 0 }}>
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={currentWeekData} margin={{ top: 10, right: 10, left: -10, bottom: 0 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
+                <XAxis dataKey="day" tickLine={false} axisLine={false} style={{ fontSize: "11px", fill: "var(--glam-muted)" }} />
+                <YAxis tickLine={false} axisLine={false} style={{ fontSize: "11px", fill: "var(--glam-muted)" }} />
+                <ChartTooltip
+                  contentStyle={{
+                    background: "rgba(23, 32, 51, 0.95)",
+                    border: "0",
+                    borderRadius: "8px",
+                    color: "white",
+                    boxShadow: "0 10px 25px rgba(0,0,0,0.15)",
+                  }}
+                  itemStyle={{ color: "var(--glam-blue)" }}
+                  labelStyle={{ color: "#9aa3b5", fontWeight: 700 }}
+                  formatter={(value) => [formatMoney(Number(value)), "Ventas"]}
+                  labelFormatter={(label, payload) => `${label} · ${payload?.[0]?.payload?.pedidos ?? 0} pedidos`}
+                />
+                <Bar dataKey="ventas" fill="var(--glam-blue)" radius={[4, 4, 0, 0]} maxBarSize={45} />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+
+        <div className="panel p-5" style={{ height: "340px", display: "flex", flexDirection: "column" }}>
+          <div style={{ marginBottom: "16px" }}>
+            <h2 style={{ fontSize: "16px", fontWeight: 700, color: "var(--glam-navy)" }}>
+              Ventas por Semana{currentMonthName ? ` — ${currentMonthName}` : " — Mes Actual"}
+            </h2>
+            <p className="page-kicker">Facturación por semana del mes en curso (cancelados excluidos).</p>
+          </div>
+          <div style={{ flex: 1, minHeight: 0 }}>
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={monthWeeksData} margin={{ top: 10, right: 10, left: -10, bottom: 0 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
+                <XAxis dataKey="label" tickLine={false} axisLine={false} style={{ fontSize: "11px", fill: "var(--glam-muted)" }} />
+                <YAxis tickLine={false} axisLine={false} style={{ fontSize: "11px", fill: "var(--glam-muted)" }} />
+                <ChartTooltip
+                  contentStyle={{
+                    background: "rgba(23, 32, 51, 0.95)",
+                    border: "0",
+                    borderRadius: "8px",
+                    color: "white",
+                    boxShadow: "0 10px 25px rgba(0,0,0,0.15)",
+                  }}
+                  itemStyle={{ color: "var(--glam-blue)" }}
+                  labelStyle={{ color: "#9aa3b5", fontWeight: 700 }}
+                  formatter={(value) => [formatMoney(Number(value)), "Ventas"]}
+                  labelFormatter={(label, payload) => `${label} · ${payload?.[0]?.payload?.pedidos ?? 0} pedidos`}
+                />
+                <Bar dataKey="ventas" fill="var(--glam-blue)" radius={[4, 4, 0, 0]} maxBarSize={64} />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+      </section>
+
+      {/* Ventas por equipo del mes en curso */}
+      <section className="panel p-5" style={{ height: "320px", display: "flex", flexDirection: "column" }}>
+        <div style={{ marginBottom: "16px", display: "flex", alignItems: "center", gap: "10px" }}>
+          <div className="metric-icon" style={{ width: "36px", height: "36px" }}>
+            <Users size={18} />
+          </div>
+          <div>
+            <h2 style={{ fontSize: "16px", fontWeight: 700, color: "var(--glam-navy)" }}>
+              Ventas por Equipo{currentMonthName ? ` — ${currentMonthName}` : ""}
+            </h2>
+            <p className="page-kicker">Facturación del mes en curso según el equipo del creador del pedido.</p>
+          </div>
+        </div>
+        <div style={{ flex: 1, minHeight: 0 }}>
+          {teamSalesData.length === 0 ? (
+            <div style={{ display: "grid", placeItems: "center", height: "100%", color: "var(--glam-muted)", fontSize: "13px" }}>
+              Sin ventas registradas este mes.
+            </div>
+          ) : (
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={teamSalesData} layout="vertical" margin={{ top: 4, right: 24, left: 10, bottom: 0 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" horizontal={false} />
+                <XAxis
+                  type="number"
+                  tickLine={false}
+                  axisLine={false}
+                  style={{ fontSize: "11px", fill: "var(--glam-muted)" }}
+                  tickFormatter={(value) => `$${Number(value).toLocaleString("es-MX")}`}
+                />
+                <YAxis
+                  type="category"
+                  dataKey="team"
+                  tickLine={false}
+                  axisLine={false}
+                  width={140}
+                  style={{ fontSize: "12px", fill: "var(--glam-muted)" }}
+                />
+                <ChartTooltip
+                  contentStyle={{
+                    background: "rgba(23, 32, 51, 0.95)",
+                    border: "0",
+                    borderRadius: "8px",
+                    color: "white",
+                    boxShadow: "0 10px 25px rgba(0,0,0,0.15)",
+                  }}
+                  itemStyle={{ color: "var(--glam-blue)" }}
+                  labelStyle={{ color: "#9aa3b5", fontWeight: 700 }}
+                  formatter={(value) => [formatMoney(Number(value)), "Ventas"]}
+                  labelFormatter={(label, payload) => `${label} · ${payload?.[0]?.payload?.pedidos ?? 0} pedidos`}
+                />
+                <Bar dataKey="ventas" fill="var(--glam-navy)" radius={[0, 4, 4, 0]} maxBarSize={28} />
+              </BarChart>
+            </ResponsiveContainer>
+          )}
+        </div>
+      </section>
 
       {/* Grid de Gráficos de Alta Fidelidad */}
       <section className="grid grid-2" style={{ gap: "20px" }}>

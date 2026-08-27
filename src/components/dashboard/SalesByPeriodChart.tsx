@@ -14,7 +14,7 @@ import {
 } from "recharts";
 
 const MONTH_SHORT = ["Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"];
-const MONTH_LONG = [
+export const MONTH_LONG = [
   "Enero",
   "Febrero",
   "Marzo",

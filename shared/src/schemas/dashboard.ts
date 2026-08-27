@@ -29,3 +29,49 @@ export interface DashboardSales {
   totalSales: number;
   totalOrders: number;
 }
+
+/** Totales del overview. Los conteos de pedidos incluyen cancelados (comportamiento histórico); las métricas de dinero por periodo los excluyen, igual que /dashboard/sales. */
+export interface DashboardOverviewTotals {
+  orders_today: number;
+  new_orders: number;
+  total_orders: number;
+  /** Facturación histórica acumulada (incluye cancelados, comportamiento histórico de la tarjeta). */
+  total_sales: number;
+  /** Facturación de hoy en la timezone del negocio; excluye cancelados. */
+  sales_today: number;
+}
+
+/** Punto de una serie diaria de ventas (fecha civil del negocio, "YYYY-MM-DD"). */
+export interface DashboardTrendPoint {
+  date: string;
+  sales: number;
+  orders: number;
+}
+
+export interface DashboardTopProduct {
+  name: string;
+  quantity: number;
+  total: number;
+}
+
+/** Ventas agrupadas por el equipo del creador del pedido. */
+export interface DashboardTeamSales {
+  /** Nombre del equipo; "Glamouroso IA" para pedidos de WhatsApp sin creador y "Sin equipo" para el resto sin equipo. */
+  team: string;
+  sales: number;
+  orders: number;
+}
+
+/** Respuesta de GET /dashboard/overview (el servicio normaliza los numeric de PG a number). */
+export interface DashboardOverview {
+  totals: DashboardOverviewTotals;
+  topProducts: DashboardTopProduct[];
+  /** Últimos 7 días civiles, incluye hoy. */
+  weeklyTrend: DashboardTrendPoint[];
+  /** Lunes a domingo de la semana en curso (excluye cancelados). */
+  currentWeek: DashboardTrendPoint[];
+  /** Ventas del mes en curso por semanas (misma serie que /dashboard/sales con year+month actuales). */
+  currentMonth: DashboardSales;
+  /** Ventas del mes en curso agrupadas por equipo, de mayor a menor facturación. */
+  salesByTeam: DashboardTeamSales[];
+}
