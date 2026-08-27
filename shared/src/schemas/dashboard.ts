@@ -30,14 +30,14 @@ export interface DashboardSales {
   totalOrders: number;
 }
 
-/** Totales del overview. Los conteos de pedidos incluyen cancelados (comportamiento histórico); las métricas de dinero por periodo los excluyen, igual que /dashboard/sales. */
+/** Totales del overview. Criterio único en todo el dashboard: se excluyen pedidos cancelados (y drafts/eliminados), igual que /dashboard/sales. */
 export interface DashboardOverviewTotals {
   orders_today: number;
   new_orders: number;
   total_orders: number;
-  /** Facturación histórica acumulada (incluye cancelados, comportamiento histórico de la tarjeta). */
+  /** Facturación histórica acumulada. */
   total_sales: number;
-  /** Facturación de hoy en la timezone del negocio; excluye cancelados. */
+  /** Facturación de hoy en la timezone del negocio. */
   sales_today: number;
 }
 
@@ -68,7 +68,7 @@ export interface DashboardOverview {
   topProducts: DashboardTopProduct[];
   /** Últimos 7 días civiles, incluye hoy. */
   weeklyTrend: DashboardTrendPoint[];
-  /** Lunes a domingo de la semana en curso (excluye cancelados). */
+  /** Lunes a domingo de la semana en curso. */
   currentWeek: DashboardTrendPoint[];
   /** Ventas del mes en curso por semanas (misma serie que /dashboard/sales con year+month actuales). */
   currentMonth: DashboardSales;
