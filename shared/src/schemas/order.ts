@@ -140,6 +140,8 @@ export const queryOrderSchema = paginationSchema.extend({
   status: z.union([orderStatusFilter, z.literal(""), z.null()]).optional(),
   paymentStatus: z.union([paymentStatus, z.literal(""), z.null()]).optional(),
   customerId: z.union([z.string().uuid(), z.literal(""), z.null()]).optional(),
+  // Filtro por creador del pedido; el router solo lo acepta de administradores.
+  createdBy: z.union([z.string().uuid(), z.literal(""), z.null()]).optional(),
   dateFrom: isoDate,
   dateTo: isoDate,
   deliveryFrom: isoDate,

@@ -28,7 +28,7 @@ import { DEFAULT_DELIVERY_SCHEDULE } from "@glamouroso/shared";
 import { businessTimeZone } from "@/lib/business-time";
 import { formatDateOnly, localDateOnly } from "@/lib/format-date-only";
 import { exportOrdersToPdf, exportOrdersToXlsx } from "@/lib/export-orders-list";
-import { ListResponse, Order } from "@/types";
+import { ListResponse, Order, User } from "@/types";
 import { toast } from "sonner";
 
 type DeliveryTab = "today" | "tomorrow" | "upcoming" | "all" | "drafts" | "deleted";
@@ -120,6 +120,9 @@ export default function OrdersPage() {
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
   const [undelivered, setUndelivered] = useState(false);
+  // Filtro por vendedor (creador del pedido), solo para administradores.
+  const [createdBy, setCreatedBy] = useState("");
+  const [sellers, setSellers] = useState<User[]>([]);
   const [tab, setTab] = useState<DeliveryTab>("today");
   const [unscheduledOnly, setUnscheduledOnly] = useState(false);
   const [exporting, setExporting] = useState(false);
@@ -148,12 +151,13 @@ export default function OrdersPage() {
       search: appliedSearch || undefined,
       status: tab === "drafts" ? "draft" : tab === "deleted" ? "deleted" : status || undefined,
       paymentStatus: paymentStatus || undefined,
+      createdBy: (isAdmin && createdBy) || undefined,
       dateFrom: dateFrom || undefined,
       dateTo: dateTo || undefined,
       undelivered: (!fixedStatusTab && undelivered) || undefined,
       ...deliveryParams(tab, unscheduledOnly, orgTimezone),
     }),
-    [appliedSearch, dateFrom, dateTo, fixedStatusTab, paymentStatus, status, tab, undelivered, unscheduledOnly, orgTimezone]
+    [appliedSearch, createdBy, dateFrom, dateTo, fixedStatusTab, isAdmin, paymentStatus, status, tab, undelivered, unscheduledOnly, orgTimezone]
   );
 
   // Solo la carga más reciente escribe estado: al cambiar rápido de tab/filtro
@@ -371,7 +375,17 @@ export default function OrdersPage() {
   useEffect(() => {
     setPage(1);
     setSelected({});
-  }, [tab, appliedSearch, status, paymentStatus, dateFrom, dateTo, undelivered, unscheduledOnly]);
+  }, [tab, appliedSearch, status, paymentStatus, createdBy, dateFrom, dateTo, undelivered, unscheduledOnly]);
+
+  // El filtro por vendedor solo aplica para admins (los perfiles own/team ya
+  // vienen filtrados por el server); el listado de usuarios excluye al agente.
+  useEffect(() => {
+    if (!isAdmin) return;
+    httpClient
+      .get<ListResponse<User>>("/users", { limit: 200 })
+      .then((r) => setSellers(r.items))
+      .catch(() => undefined);
+  }, [isAdmin]);
 
   function applySearch() {
     setAppliedSearch(search.trim());
@@ -413,6 +427,7 @@ export default function OrdersPage() {
     setAppliedSearch("");
     setStatus("");
     setPaymentStatus("");
+    setCreatedBy("");
     setDateFrom("");
     setDateTo("");
     setUndelivered(false);
@@ -445,7 +460,7 @@ export default function OrdersPage() {
   }
 
   const hasFilters = Boolean(
-    appliedSearch || status || paymentStatus || dateFrom || dateTo || undelivered || unscheduledOnly
+    appliedSearch || status || paymentStatus || createdBy || dateFrom || dateTo || undelivered || unscheduledOnly
   );
 
   return (
@@ -557,7 +572,13 @@ export default function OrdersPage() {
               {loading ? "Cargando..." : "Buscar"}
             </Button>
           </div>
-          <div className="grid gap-3 md:grid-cols-[minmax(170px,1fr)_minmax(170px,1fr)_160px_160px]">
+          <div
+            className={`grid gap-3 ${
+              isAdmin
+                ? "md:grid-cols-[minmax(170px,1fr)_minmax(170px,1fr)_160px_160px_180px]"
+                : "md:grid-cols-[minmax(170px,1fr)_minmax(170px,1fr)_160px_160px]"
+            }`}
+          >
             <DateFilterField label="Creado desde" value={dateFrom} onChange={setDateFrom} max={dateTo || undefined} />
             <DateFilterField label="Creado hasta" value={dateTo} onChange={setDateTo} min={dateFrom || undefined} />
             <select
@@ -583,6 +604,16 @@ export default function OrdersPage() {
                 </option>
               ))}
             </select>
+            {isAdmin ? (
+              <select className="input" value={createdBy} onChange={(e) => setCreatedBy(e.target.value)}>
+                <option value="">Todos los vendedores</option>
+                {sellers.map((seller) => (
+                  <option key={seller.id} value={seller.id}>
+                    {seller.name}
+                  </option>
+                ))}
+              </select>
+            ) : null}
           </div>
           <div className="flex flex-wrap items-center gap-4">
             {!fixedStatusTab ? (
