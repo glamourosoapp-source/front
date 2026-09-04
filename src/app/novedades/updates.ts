@@ -19,7 +19,7 @@ export type ChangeItem = {
 export type ChangeGroup = {
   id: string;
   /** Clave del ícono; se mapea a un componente en page.tsx. */
-  icon: "orders" | "print" | "container" | "delivery" | "catalog" | "team" | "bot" | "fix";
+  icon: "orders" | "print" | "container" | "delivery" | "catalog" | "team" | "bot" | "fix" | "dashboard";
   title: string;
   intro: string;
   items: ChangeItem[];
@@ -37,6 +37,112 @@ export type WeeklyRelease = {
 };
 
 export const RELEASES: WeeklyRelease[] = [
+  {
+    id: "2026-w36",
+    range: "Semana del 29 de agosto al 4 de septiembre de 2026",
+    summary:
+      "Toda la semana se dedicó al Overview Ejecutivo, la pantalla de inicio: que las semanas se cuenten como las cuenta Glamouroso (de sábado a viernes), que cada tarjeta y gráfica diga exactamente qué periodo muestra, y que los productos más vendidos se puedan ver por mes, por año o de todo el tiempo.",
+    stats: [
+      { label: "Cambios entregados", value: "9" },
+      { label: "Gráficas actualizadas", value: "5" },
+      { label: "Tarjetas corregidas", value: "2" },
+      { label: "Sistemas actualizados", value: "2" },
+    ],
+    highlights: [
+      {
+        title: "Las semanas van de sábado a viernes",
+        text: "Todas las cifras semanales del Overview usan la semana real de la empresa. Antes contaban de lunes a domingo, o en bloques de siete días que no correspondían a ninguna semana.",
+      },
+      {
+        title: "Cada semana con sus fechas, completa",
+        text: "Las barras dicen «sáb 29 ago – vie 4 sep». Si una semana cruza de mes se muestra entera, sin partirla.",
+      },
+      {
+        title: "«Pedidos de la Semana» en lugar de «Pedidos Nuevos»",
+        text: "La tarjeta vieja repetía el total histórico. La nueva muestra cuántos pedidos van en la semana en curso, y el mismo número aparece en el saludo de bienvenida.",
+      },
+      {
+        title: "Productos más vendidos por periodo",
+        text: "La gráfica y la tabla de productos dicen de qué mes o año son, se puede cambiar el periodo y ver hasta 50 productos ordenados por dinero o por unidades.",
+      },
+    ],
+    groups: [
+      {
+        id: "semanas",
+        icon: "dashboard",
+        title: "Overview: las semanas como las cuenta Glamouroso",
+        intro:
+          "La empresa cierra su semana el viernes y la abre el sábado. El Overview contaba distinto, así que sus números semanales no cuadraban con los de la operación.",
+        items: [
+          {
+            tag: "mejora",
+            title: "Semana de sábado a viernes en todo el Overview",
+            what: "La tarjeta «Pedidos de la Semana», el contador del saludo, la gráfica «Ventas por Día — Semana Actual» y las gráficas «Ventas por Semana» usan la semana de sábado a viernes. Antes la semana en curso iba de lunes a domingo y las semanas del mes eran bloques fijos del 1 al 7, del 8 al 14, etcétera.",
+            why: "Los números semanales del sistema coinciden con los que dirección y el equipo llevan a mano. Una sola regla, definida en un solo lugar, para todas las gráficas.",
+          },
+          {
+            tag: "mejora",
+            title: "Cada semana se muestra completa y con sus fechas",
+            what: "Cada barra lleva su rango real, por ejemplo «sáb 29 ago – vie 4 sep», y al pasar el cursor se ve también el número de semana del año («Sem 36»). Si una semana empieza en un mes y termina en el siguiente, se muestra entera con sus siete días.",
+            why: "Ya no hay que adivinar qué días abarca «Sem 1». Ojo: por mostrar las semanas completas, la suma de las semanas de un mes puede no coincidir con la venta del mes, porque la primera y la última traen días del mes vecino.",
+          },
+          {
+            tag: "mejora",
+            title: "«Facturación Semanal» pasa a «Facturación — Últimos 7 Días»",
+            what: "Esa gráfica siempre mostró los últimos siete días contando hoy, no una semana de calendario. Solo cambió el nombre.",
+            why: "Para no confundirla con las semanas de sábado a viernes: cada gráfica dice exactamente lo que enseña.",
+          },
+        ],
+      },
+      {
+        id: "tarjetas",
+        icon: "orders",
+        title: "Tarjetas: que cada número diga algo",
+        intro: "Dos de los números grandes del inicio repetían información o no correspondían a lo que decían.",
+        items: [
+          {
+            tag: "mejora",
+            title: "«Pedidos Nuevos» ahora es «Pedidos de la Semana»",
+            what: "La tarjeta contaba los pedidos que seguían marcados como nuevos, y como ese estado casi nunca se cambia, mostraba el mismo número que «Pedidos Totales». Ahora cuenta los pedidos de la semana en curso, de sábado a viernes.",
+            why: "Dos tarjetas con el mismo 767 no decían nada. Ahora se ve de un vistazo cómo va la semana, y el número es exactamente el mismo que suma la gráfica «Ventas por Día — Semana Actual».",
+          },
+          {
+            tag: "mejora",
+            title: "El contador «por atender» del saludo pasa a «pedidos esta semana»",
+            what: "El saludo de bienvenida anunciaba como pendientes todos los pedidos históricos. Ahora muestra los pedidos de la semana en curso, el mismo número que la tarjeta.",
+            why: "Dejaba la impresión de una cola enorme de trabajo pendiente que no existía.",
+          },
+        ],
+      },
+      {
+        id: "productos",
+        icon: "catalog",
+        title: "Productos más vendidos por periodo",
+        intro:
+          "La gráfica «Ingresos por Producto Popular» y la tabla «Catálogo de Artículos más Demandados» eran un acumulado de toda la historia y no lo decían.",
+        items: [
+          {
+            tag: "nuevo",
+            title: "Se elige el periodo y el título lo dice",
+            what: "Se puede ver un mes, un año completo o todo el tiempo; el título muestra el periodo elegido (por ejemplo «— Septiembre 2026») y ambas vistas arrancan en el mes en curso.",
+            why: "Antes no se sabía si el «producto más vendido» era del mes o de toda la vida del negocio.",
+          },
+          {
+            tag: "nuevo",
+            title: "Lista completa de hasta 50 productos",
+            what: "Las tablas tienen columna «Lugar» (1º, 2º, 3º…) y el botón «Ver más» abre una lista de hasta 50 productos con su propio selector de periodo y de orden: por dinero facturado o por unidades vendidas.",
+            why: "Sirve para decidir compras y promociones con datos del periodo que interesa, no solo con el top 5.",
+          },
+          {
+            tag: "correccion",
+            title: "Un fallo de conexión ya no se ve como «sin ventas»",
+            what: "Si el servidor no responde, la gráfica avisa que no pudo cargar y ofrece reintentar, en vez de mostrar el periodo como vacío.",
+            why: "Un problema técnico no debe parecer un mes sin ventas.",
+          },
+        ],
+      },
+    ],
+  },
   {
     id: "2026-w34",
     range: "Semana del 17 al 21 de agosto de 2026",

@@ -2,6 +2,7 @@
 // El gate de sesión vive en el layout de /dashboard, así que esta ruta, al
 // colgar de la raíz, se abre con solo tener el link.
 import {
+  BarChart3,
   Bot,
   ClipboardList,
   Container,
@@ -25,6 +26,7 @@ const GROUP_ICONS: Record<ChangeGroup["icon"], typeof ClipboardList> = {
   team: Users,
   bot: Bot,
   fix: Wrench,
+  dashboard: BarChart3,
 };
 
 const TAG_LABELS: Record<ChangeTag, string> = {
