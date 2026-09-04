@@ -33,35 +33,52 @@ function formatMoney(value: number): string {
   return `$${value.toLocaleString("es-MX", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
 
-/** "sáb 29 ago" para una fecha DATEONLY sin correrla de día por timezone. */
-function shortDate(dateOnly: string): string {
+/** "29 ago" (o "sáb 29 ago" con `withWeekday`) para una fecha DATEONLY sin correrla de día por timezone. */
+function shortDate(dateOnly: string, withWeekday = false): string {
   const [year, month, day] = dateOnly.split("-").map(Number);
   if (!year || !month || !day) return dateOnly;
+  const label = `${day} ${MONTH_SHORT[month - 1].toLowerCase()}`;
+  if (!withWeekday) return label;
   const weekday = new Date(Date.UTC(year, month - 1, day)).toLocaleDateString("es-MX", {
     weekday: "short",
     timeZone: "UTC",
   });
-  return `${weekday} ${day} ${MONTH_SHORT[month - 1].toLowerCase()}`;
+  return `${weekday} ${label}`;
 }
 
-/** Etiqueta del eje X de una semana del mes: "Sem 2 (5–11)". Días recortados al mes. */
+/** Etiqueta del eje X de una semana de negocio completa: "sáb 29 ago – vie 4 sep". */
 export function weekBucketLabel(point: DashboardSalesPoint): string {
-  return `Sem ${point.key} (${point.startDay}–${point.endDay})`;
+  if (!point.weekStart || !point.weekEnd) return `Sem ${point.key}`;
+  return `${shortDate(point.weekStart, true)} – ${shortDate(point.weekEnd, true)}`;
 }
 
 /**
- * Rango real "sáb 29 ago – vie 4 sep" de una semana de negocio partida entre dos meses
- * (la primera o la última del mes). Vacío cuando la semana cabe entera en el mes.
+ * Tick del eje X para semanas: "sáb 29 ago" arriba y "vie 4 sep" abajo, para que
+ * las 4-6 semanas quepan completas incluso en el panel chico del Overview.
  */
-export function weekBucketRange(point: DashboardSalesPoint): string {
-  if (!point.weekStart || !point.weekEnd || point.startDay === undefined || point.endDay === undefined) return "";
-  if (point.endDay - point.startDay + 1 >= 7) return "";
-  return `${shortDate(point.weekStart)} – ${shortDate(point.weekEnd)}`;
+export function WeekAxisTick({ x, y, payload }: { x?: number; y?: number; payload?: { value?: unknown } }) {
+  const [from, to] = String(payload?.value ?? "").split(" – ");
+  return (
+    <text x={x} y={y} dy={12} textAnchor="middle" fontSize={11} fill="var(--glam-muted)">
+      <tspan x={x}>{from}</tspan>
+      {to && (
+        <tspan x={x} dy={13}>
+          {to}
+        </tspan>
+      )}
+    </text>
+  );
+}
+
+/** Encabezado del tooltip: "Sem 36 · sáb 29 ago – vie 4 sep". */
+export function weekBucketTitle(point: DashboardSalesPoint): string {
+  if (!point.weekStart || !point.weekEnd) return `Sem ${point.key}`;
+  return `Sem ${point.key} · ${shortDate(point.weekStart, true)} – ${shortDate(point.weekEnd, true)}`;
 }
 
 /**
  * Gráfica grande de ventas: por mes del año seleccionado, o por semanas de negocio
- * (sábado a viernes, recortadas al mes) al elegir un mes o hacer clic en su barra.
+ * completas (sábado a viernes) que tocan el mes al elegirlo o hacer clic en su barra.
  * Excluye pedidos cancelados.
  */
 export function SalesByPeriodChart() {
@@ -84,7 +101,7 @@ export function SalesByPeriodChart() {
   const chartData = (data?.points ?? []).map((point) => ({
     ...point,
     label: isWeekly ? weekBucketLabel(point) : MONTH_SHORT[point.key - 1],
-    range: isWeekly ? weekBucketRange(point) : "",
+    title: isWeekly ? weekBucketTitle(point) : "",
   }));
   const hasSales = chartData.some((point) => point.orders > 0);
 
@@ -102,7 +119,7 @@ export function SalesByPeriodChart() {
           </h2>
           <p className="page-kicker">
             {month
-              ? "Facturación por semana de negocio (sábado a viernes) del mes seleccionado; la primera y la última pueden ser parciales. Pedidos cancelados excluidos."
+              ? "Semanas completas de sábado a viernes que tocan el mes seleccionado; la primera y la última pueden cruzar de mes. Pedidos cancelados excluidos."
               : "Facturación mensual del año seleccionado. Haz clic en un mes para ver sus semanas."}
           </p>
         </div>
@@ -154,7 +171,11 @@ export function SalesByPeriodChart() {
           <ResponsiveContainer width="100%" height="100%">
             <BarChart data={chartData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
-              <XAxis dataKey="label" tickLine={false} axisLine={false} style={{ fontSize: "11px", fill: "var(--glam-muted)" }} />
+              {isWeekly ? (
+                <XAxis dataKey="label" tickLine={false} axisLine={false} interval={0} height={40} tick={<WeekAxisTick />} />
+              ) : (
+                <XAxis dataKey="label" tickLine={false} axisLine={false} style={{ fontSize: "11px", fill: "var(--glam-muted)" }} />
+              )}
               <YAxis
                 tickLine={false}
                 axisLine={false}
@@ -173,10 +194,9 @@ export function SalesByPeriodChart() {
                 itemStyle={{ color: "var(--glam-blue)" }}
                 labelStyle={{ color: "#9aa3b5", fontWeight: 700 }}
                 formatter={(value) => [formatMoney(Number(value)), "Ventas"]}
-                labelFormatter={(label, payload) => {
-                  const range = payload?.[0]?.payload?.range;
-                  return `${label}${range ? ` · ${range}` : ""} · ${payload?.[0]?.payload?.orders ?? 0} pedidos`;
-                }}
+                labelFormatter={(label, payload) =>
+                  `${payload?.[0]?.payload?.title || label} · ${payload?.[0]?.payload?.orders ?? 0} pedidos`
+                }
               />
               <Bar
                 dataKey="sales"

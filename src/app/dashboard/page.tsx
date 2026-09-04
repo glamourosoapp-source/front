@@ -5,8 +5,9 @@ import { useRouter } from "next/navigation";
 import {
   MONTH_LONG,
   SalesByPeriodChart,
+  WeekAxisTick,
   weekBucketLabel,
-  weekBucketRange,
+  weekBucketTitle,
 } from "@/components/dashboard/SalesByPeriodChart";
 import { TopProductsByPeriod } from "@/components/dashboard/TopProductsByPeriod";
 import type { DashboardOverview } from "@glamouroso/shared/schemas/dashboard";
@@ -132,7 +133,7 @@ export default function DashboardPage() {
   const ordersThisWeek = (data?.currentWeek || []).reduce((sum, point) => sum + point.orders, 0);
   const monthWeeksData = (data?.currentMonth?.points || []).map((point) => ({
     label: weekBucketLabel(point),
-    range: weekBucketRange(point),
+    title: weekBucketTitle(point),
     ventas: point.sales,
     pedidos: point.orders,
   }));
@@ -285,15 +286,15 @@ export default function DashboardPage() {
               Ventas por Semana{currentMonthName ? ` — ${currentMonthName}` : " — Mes Actual"}
             </h2>
             <p className="page-kicker">
-              Facturación por semana de negocio (sábado a viernes) del mes en curso; la primera y la última pueden ser
-              parciales. Cancelados excluidos.
+              Semanas completas de sábado a viernes que tocan el mes en curso; la primera y la última pueden cruzar de
+              mes. Cancelados excluidos.
             </p>
           </div>
           <div style={{ flex: 1, minHeight: 0 }}>
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={monthWeeksData} margin={{ top: 10, right: 10, left: -10, bottom: 0 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
-                <XAxis dataKey="label" tickLine={false} axisLine={false} style={{ fontSize: "11px", fill: "var(--glam-muted)" }} />
+                <XAxis dataKey="label" tickLine={false} axisLine={false} interval={0} height={40} tick={<WeekAxisTick />} />
                 <YAxis tickLine={false} axisLine={false} style={{ fontSize: "11px", fill: "var(--glam-muted)" }} />
                 <ChartTooltip
                   contentStyle={{
@@ -306,10 +307,9 @@ export default function DashboardPage() {
                   itemStyle={{ color: "var(--glam-blue)" }}
                   labelStyle={{ color: "#9aa3b5", fontWeight: 700 }}
                   formatter={(value) => [formatMoney(Number(value)), "Ventas"]}
-                  labelFormatter={(label, payload) => {
-                    const range = payload?.[0]?.payload?.range;
-                    return `${label}${range ? ` · ${range}` : ""} · ${payload?.[0]?.payload?.pedidos ?? 0} pedidos`;
-                  }}
+                  labelFormatter={(label, payload) =>
+                    `${payload?.[0]?.payload?.title || label} · ${payload?.[0]?.payload?.pedidos ?? 0} pedidos`
+                  }
                 />
                 <Bar dataKey="ventas" fill="var(--glam-blue)" radius={[4, 4, 0, 0]} maxBarSize={64} />
               </BarChart>

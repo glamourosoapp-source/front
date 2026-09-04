@@ -9,22 +9,19 @@ export const queryDashboardSalesSchema = z.object({
 export type QueryDashboardSales = z.infer<typeof queryDashboardSalesSchema>;
 
 /**
- * Punto de la serie de ventas: `key` es mes (1-12) o semana del mes (1-6).
- * Las semanas son la semana de negocio de Glamouroso (sábado a viernes) recortada
- * al mes: la primera y la última pueden ser parciales, y así la suma de las
- * semanas es exactamente el total del mes.
+ * Punto de la serie de ventas: `key` es el mes (1-12) o, en granularidad "week",
+ * el número de semana de negocio dentro del año (la semana 1 es la que contiene
+ * el 1 de enero). Las semanas van de sábado a viernes y siempre **completas**: la
+ * serie de un mes trae las semanas que lo tocan, aunque empiecen en el mes
+ * anterior o terminen en el siguiente, y cada una suma sus 7 días.
  */
 export interface DashboardSalesPoint {
   key: number;
   sales: number;
   orders: number;
-  /** Solo granularidad "week": primer día de la semana recortado al mes (1-31). */
-  startDay?: number;
-  /** Solo granularidad "week": último día de la semana recortado al mes (1-31). */
-  endDay?: number;
-  /** Solo granularidad "week": sábado real donde empieza la semana ("YYYY-MM-DD"); puede caer en el mes anterior. */
+  /** Solo granularidad "week": sábado donde empieza la semana ("YYYY-MM-DD"); puede caer en el mes anterior. */
   weekStart?: string;
-  /** Solo granularidad "week": viernes real donde termina la semana ("YYYY-MM-DD"); puede caer en el mes siguiente. */
+  /** Solo granularidad "week": viernes donde termina la semana ("YYYY-MM-DD"); puede caer en el mes siguiente. */
   weekEnd?: string;
 }
 
@@ -35,6 +32,7 @@ export interface DashboardSales {
   /** Años con pedidos registrados (incluye siempre el año en curso del negocio). */
   availableYears: number[];
   points: DashboardSalesPoint[];
+  /** Suma de los puntos mostrados. En "week" es la suma de las semanas completas, que no tiene por qué cuadrar con el total del mes. */
   totalSales: number;
   totalOrders: number;
 }
