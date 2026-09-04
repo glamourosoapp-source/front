@@ -54,6 +54,54 @@ export interface DashboardTopProduct {
   total: number;
 }
 
+/** Criterio de orden del top de productos: por dinero facturado o por unidades vendidas. */
+export type DashboardTopProductsOrderBy = "total" | "quantity";
+
+/** Tope duro de productos que devuelve GET /dashboard/top-products. */
+export const DASHBOARD_TOP_PRODUCTS_MAX_LIMIT = 50;
+
+/** Cuántos productos devuelve el endpoint si no se pide un límite. */
+export const DASHBOARD_TOP_PRODUCTS_DEFAULT_LIMIT = 5;
+
+/**
+ * Query de GET /dashboard/top-products. El periodo es acumulativo hacia arriba:
+ * sin `year` es todo el histórico, con `year` es ese año y con `year` + `month` ese mes.
+ */
+export const queryDashboardTopProductsSchema = z
+  .object({
+    year: z.coerce.number().int().min(2000).max(2100).optional(),
+    month: z.coerce.number().int().min(1).max(12).optional(),
+    limit: z.coerce.number().int().min(1).max(DASHBOARD_TOP_PRODUCTS_MAX_LIMIT).optional(),
+    orderBy: z.enum(["total", "quantity"]).optional(),
+  })
+  .refine((query) => query.month === undefined || query.year !== undefined, {
+    message: "month requiere year",
+    path: ["month"],
+  });
+
+export type QueryDashboardTopProducts = z.infer<typeof queryDashboardTopProductsSchema>;
+
+/**
+ * Respuesta de GET /dashboard/top-products: los productos más vendidos del periodo.
+ * Mismo criterio de venta que el resto del dashboard: se excluyen pedidos cancelados,
+ * draft y eliminados, y el corte de fecha usa `orders.created_at` en la timezone del
+ * negocio.
+ */
+export interface DashboardTopProducts {
+  /** Año del periodo, o `null` cuando se pidió todo el histórico. */
+  year: number | null;
+  month: number | null;
+  /** Cuántos productos se pidieron (los devueltos pueden ser menos). */
+  limit: number;
+  orderBy: DashboardTopProductsOrderBy;
+  /** Años con pedidos registrados (incluye siempre el año en curso del negocio). */
+  availableYears: number[];
+  /** Productos del periodo ordenados por `orderBy`, de mayor a menor. */
+  products: DashboardTopProduct[];
+  /** Ingreso de todos los productos del periodo, no solo de los devueltos. */
+  totalSales: number;
+}
+
 /** Ventas agrupadas por el equipo del creador del pedido. */
 export interface DashboardTeamSales {
   /** Nombre del equipo; "Glamouroso IA" para pedidos de WhatsApp sin creador y "Sin equipo" para el resto sin equipo. */
@@ -65,7 +113,6 @@ export interface DashboardTeamSales {
 /** Respuesta de GET /dashboard/overview (el servicio normaliza los numeric de PG a number). */
 export interface DashboardOverview {
   totals: DashboardOverviewTotals;
-  topProducts: DashboardTopProduct[];
   /** Últimos 7 días civiles, incluye hoy. */
   weeklyTrend: DashboardTrendPoint[];
   /** Lunes a domingo de la semana en curso. */

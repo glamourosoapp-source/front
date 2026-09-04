@@ -61,6 +61,10 @@ textarea {
   margin: 6px 0 0;
   color: var(--muted);
   font-size: 13px;
+  /* Igual que en .input: dentro de un título de diálogo heredaba la display bold itálica. */
+  font-family: var(--font-body);
+  font-style: normal;
+  font-weight: 400;
 }
 
 .dashboard-welcome {
@@ -443,11 +447,26 @@ textarea {
   color: var(--text);
   outline: 0;
   transition: border-color 160ms ease, box-shadow 160ms ease;
+  /* Los controles heredan la tipografía del contenedor (`font: inherit` arriba). Dentro de
+     un título de diálogo eso los sacaba en la display bold itálica a 20px, así que la
+     tipografía de cuerpo se fija aquí en vez de heredarse. */
+  font-family: var(--font-body);
+  font-size: 1rem;
+  font-style: normal;
+  font-weight: 400;
 }
 
 .input:focus {
   border-color: var(--glam-blue);
   box-shadow: 0 0 0 4px rgba(6, 166, 224, 0.1);
+}
+
+/* Un control deshabilitado tiene que verse deshabilitado: si no, parece que no responde. */
+.input:disabled {
+  background: var(--bg);
+  color: var(--muted);
+  cursor: not-allowed;
+  opacity: 0.75;
 }
 
 textarea.input {
