@@ -164,7 +164,7 @@ export default function DashboardPage() {
           {!loading && (
             <div className="dashboard-welcome-chips">
               <span className="pill warning">{totals?.orders_today ?? 0} pedidos hoy</span>
-              <span className="pill">{totals?.new_orders ?? 0} por atender</span>
+              <span className="pill">{ordersThisWeek} pedidos esta semana</span>
             </div>
           )}
         </div>
