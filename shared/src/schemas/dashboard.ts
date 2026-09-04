@@ -8,15 +8,24 @@ export const queryDashboardSalesSchema = z.object({
 
 export type QueryDashboardSales = z.infer<typeof queryDashboardSalesSchema>;
 
-/** Punto de la serie de ventas: `key` es mes (1-12) o semana del mes (1-5). */
+/**
+ * Punto de la serie de ventas: `key` es mes (1-12) o semana del mes (1-6).
+ * Las semanas son la semana de negocio de Glamouroso (sábado a viernes) recortada
+ * al mes: la primera y la última pueden ser parciales, y así la suma de las
+ * semanas es exactamente el total del mes.
+ */
 export interface DashboardSalesPoint {
   key: number;
   sales: number;
   orders: number;
-  /** Solo granularidad "week": día del mes donde empieza la semana. */
+  /** Solo granularidad "week": primer día de la semana recortado al mes (1-31). */
   startDay?: number;
-  /** Solo granularidad "week": día del mes donde termina la semana. */
+  /** Solo granularidad "week": último día de la semana recortado al mes (1-31). */
   endDay?: number;
+  /** Solo granularidad "week": sábado real donde empieza la semana ("YYYY-MM-DD"); puede caer en el mes anterior. */
+  weekStart?: string;
+  /** Solo granularidad "week": viernes real donde termina la semana ("YYYY-MM-DD"); puede caer en el mes siguiente. */
+  weekEnd?: string;
 }
 
 export interface DashboardSales {
@@ -115,7 +124,7 @@ export interface DashboardOverview {
   totals: DashboardOverviewTotals;
   /** Últimos 7 días civiles, incluye hoy. */
   weeklyTrend: DashboardTrendPoint[];
-  /** Lunes a domingo de la semana en curso. */
+  /** Sábado a viernes de la semana de negocio en curso. */
   currentWeek: DashboardTrendPoint[];
   /** Ventas del mes en curso por semanas (misma serie que /dashboard/sales con year+month actuales). */
   currentMonth: DashboardSales;

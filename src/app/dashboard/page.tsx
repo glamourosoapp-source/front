@@ -2,7 +2,12 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { MONTH_LONG, SalesByPeriodChart } from "@/components/dashboard/SalesByPeriodChart";
+import {
+  MONTH_LONG,
+  SalesByPeriodChart,
+  weekBucketLabel,
+  weekBucketRange,
+} from "@/components/dashboard/SalesByPeriodChart";
 import { TopProductsByPeriod } from "@/components/dashboard/TopProductsByPeriod";
 import type { DashboardOverview } from "@glamouroso/shared/schemas/dashboard";
 import { httpClient } from "@/services/http-client";
@@ -116,7 +121,7 @@ export default function DashboardPage() {
     pedidos: Number(point.orders || 0),
   }));
 
-  // Semana en curso (lunes a domingo) y semanas del mes en curso.
+  // Semana de negocio en curso (sábado a viernes) y semanas de negocio del mes en curso.
   const currentWeekData = (data?.currentWeek || []).map((point) => ({
     day: weekdayLabel(point.date),
     ventas: point.sales,
@@ -126,7 +131,8 @@ export default function DashboardPage() {
   // "Ventas por Día — Semana Actual" cuenten exactamente lo mismo.
   const ordersThisWeek = (data?.currentWeek || []).reduce((sum, point) => sum + point.orders, 0);
   const monthWeeksData = (data?.currentMonth?.points || []).map((point) => ({
-    label: `Sem ${point.key} (${point.startDay}–${point.endDay})`,
+    label: weekBucketLabel(point),
+    range: weekBucketRange(point),
     ventas: point.sales,
     pedidos: point.orders,
   }));
@@ -212,7 +218,7 @@ export default function DashboardPage() {
             </div>
           </div>
           <strong>{ordersThisWeek}</strong>
-          <small>Lunes a domingo en curso</small>
+          <small>Sábado a viernes en curso</small>
         </div>
 
         <div className="card metric">
@@ -246,7 +252,7 @@ export default function DashboardPage() {
         <div className="panel p-5" style={{ height: "340px", display: "flex", flexDirection: "column" }}>
           <div style={{ marginBottom: "16px" }}>
             <h2 style={{ fontSize: "16px", fontWeight: 700, color: "var(--glam-navy)" }}>Ventas por Día — Semana Actual</h2>
-            <p className="page-kicker">Facturación de lunes a domingo de la semana en curso (cancelados excluidos).</p>
+            <p className="page-kicker">Facturación de sábado a viernes de la semana en curso (cancelados excluidos).</p>
           </div>
           <div style={{ flex: 1, minHeight: 0 }}>
             <ResponsiveContainer width="100%" height="100%">
@@ -278,7 +284,10 @@ export default function DashboardPage() {
             <h2 style={{ fontSize: "16px", fontWeight: 700, color: "var(--glam-navy)" }}>
               Ventas por Semana{currentMonthName ? ` — ${currentMonthName}` : " — Mes Actual"}
             </h2>
-            <p className="page-kicker">Facturación por semana del mes en curso (cancelados excluidos).</p>
+            <p className="page-kicker">
+              Facturación por semana de negocio (sábado a viernes) del mes en curso; la primera y la última pueden ser
+              parciales. Cancelados excluidos.
+            </p>
           </div>
           <div style={{ flex: 1, minHeight: 0 }}>
             <ResponsiveContainer width="100%" height="100%">
@@ -297,7 +306,10 @@ export default function DashboardPage() {
                   itemStyle={{ color: "var(--glam-blue)" }}
                   labelStyle={{ color: "#9aa3b5", fontWeight: 700 }}
                   formatter={(value) => [formatMoney(Number(value)), "Ventas"]}
-                  labelFormatter={(label, payload) => `${label} · ${payload?.[0]?.payload?.pedidos ?? 0} pedidos`}
+                  labelFormatter={(label, payload) => {
+                    const range = payload?.[0]?.payload?.range;
+                    return `${label}${range ? ` · ${range}` : ""} · ${payload?.[0]?.payload?.pedidos ?? 0} pedidos`;
+                  }}
                 />
                 <Bar dataKey="ventas" fill="var(--glam-blue)" radius={[4, 4, 0, 0]} maxBarSize={64} />
               </BarChart>
@@ -363,11 +375,11 @@ export default function DashboardPage() {
         </div>
       </section>
 
-      {/* Facturación semanal: últimos 7 días */}
+      {/* Facturación de los últimos 7 días (ventana móvil, no es la semana de negocio) */}
       <section className="panel p-5" style={{ height: "340px", display: "flex", flexDirection: "column" }}>
         <div style={{ marginBottom: "16px" }}>
-          <h2 style={{ fontSize: "16px", fontWeight: 700, color: "var(--glam-navy)" }}>Facturación Semanal</h2>
-          <p className="page-kicker">Histórico de ingresos monetarios por ventas acumuladas en los últimos 7 días.</p>
+          <h2 style={{ fontSize: "16px", fontWeight: 700, color: "var(--glam-navy)" }}>Facturación — Últimos 7 Días</h2>
+          <p className="page-kicker">Ingresos por día de los últimos 7 días, incluido hoy (ventana móvil, no la semana de negocio).</p>
         </div>
         <div style={{ flex: 1, minHeight: 0 }}>
           <ResponsiveContainer width="100%" height="100%">

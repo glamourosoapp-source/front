@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { httpClient } from "@/services/http-client";
-import type { DashboardSales } from "@glamouroso/shared/schemas/dashboard";
+import type { DashboardSales, DashboardSalesPoint } from "@glamouroso/shared/schemas/dashboard";
 import {
   ResponsiveContainer,
   BarChart,
@@ -33,9 +33,36 @@ function formatMoney(value: number): string {
   return `$${value.toLocaleString("es-MX", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
 
+/** "sáb 29 ago" para una fecha DATEONLY sin correrla de día por timezone. */
+function shortDate(dateOnly: string): string {
+  const [year, month, day] = dateOnly.split("-").map(Number);
+  if (!year || !month || !day) return dateOnly;
+  const weekday = new Date(Date.UTC(year, month - 1, day)).toLocaleDateString("es-MX", {
+    weekday: "short",
+    timeZone: "UTC",
+  });
+  return `${weekday} ${day} ${MONTH_SHORT[month - 1].toLowerCase()}`;
+}
+
+/** Etiqueta del eje X de una semana del mes: "Sem 2 (5–11)". Días recortados al mes. */
+export function weekBucketLabel(point: DashboardSalesPoint): string {
+  return `Sem ${point.key} (${point.startDay}–${point.endDay})`;
+}
+
 /**
- * Gráfica grande de ventas: por mes del año seleccionado, o por semanas del mes
- * al elegir un mes (o hacer clic en su barra). Excluye pedidos cancelados.
+ * Rango real "sáb 29 ago – vie 4 sep" de una semana de negocio partida entre dos meses
+ * (la primera o la última del mes). Vacío cuando la semana cabe entera en el mes.
+ */
+export function weekBucketRange(point: DashboardSalesPoint): string {
+  if (!point.weekStart || !point.weekEnd || point.startDay === undefined || point.endDay === undefined) return "";
+  if (point.endDay - point.startDay + 1 >= 7) return "";
+  return `${shortDate(point.weekStart)} – ${shortDate(point.weekEnd)}`;
+}
+
+/**
+ * Gráfica grande de ventas: por mes del año seleccionado, o por semanas de negocio
+ * (sábado a viernes, recortadas al mes) al elegir un mes o hacer clic en su barra.
+ * Excluye pedidos cancelados.
  */
 export function SalesByPeriodChart() {
   const [year, setYear] = useState(() => new Date().getFullYear());
@@ -56,7 +83,8 @@ export function SalesByPeriodChart() {
   const years = data?.availableYears?.length ? data.availableYears : [year];
   const chartData = (data?.points ?? []).map((point) => ({
     ...point,
-    label: isWeekly ? `Sem ${point.key} (${point.startDay}–${point.endDay})` : MONTH_SHORT[point.key - 1],
+    label: isWeekly ? weekBucketLabel(point) : MONTH_SHORT[point.key - 1],
+    range: isWeekly ? weekBucketRange(point) : "",
   }));
   const hasSales = chartData.some((point) => point.orders > 0);
 
@@ -74,7 +102,7 @@ export function SalesByPeriodChart() {
           </h2>
           <p className="page-kicker">
             {month
-              ? "Facturación por semana del mes seleccionado (pedidos cancelados excluidos)."
+              ? "Facturación por semana de negocio (sábado a viernes) del mes seleccionado; la primera y la última pueden ser parciales. Pedidos cancelados excluidos."
               : "Facturación mensual del año seleccionado. Haz clic en un mes para ver sus semanas."}
           </p>
         </div>
@@ -145,9 +173,10 @@ export function SalesByPeriodChart() {
                 itemStyle={{ color: "var(--glam-blue)" }}
                 labelStyle={{ color: "#9aa3b5", fontWeight: 700 }}
                 formatter={(value) => [formatMoney(Number(value)), "Ventas"]}
-                labelFormatter={(label, payload) =>
-                  `${label} · ${payload?.[0]?.payload?.orders ?? 0} pedidos`
-                }
+                labelFormatter={(label, payload) => {
+                  const range = payload?.[0]?.payload?.range;
+                  return `${label}${range ? ` · ${range}` : ""} · ${payload?.[0]?.payload?.orders ?? 0} pedidos`;
+                }}
               />
               <Bar
                 dataKey="sales"
