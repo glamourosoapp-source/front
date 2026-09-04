@@ -19,7 +19,7 @@ import {
   Bar,
   Legend,
 } from "recharts";
-import { ShoppingBag, TrendingUp, DollarSign, Activity, Sparkles, Users, Wallet } from "lucide-react";
+import { CalendarDays, TrendingUp, DollarSign, Activity, Sparkles, Users, Wallet } from "lucide-react";
 import type { PermissionModule } from "@glamouroso/shared";
 import { useAuthStore } from "@/stores/auth.store";
 import { usePermissions } from "@/lib/permissions";
@@ -122,6 +122,9 @@ export default function DashboardPage() {
     ventas: point.sales,
     pedidos: point.orders,
   }));
+  // Se suma de currentWeek en vez de pedirlo aparte, para que la tarjeta y la gráfica
+  // "Ventas por Día — Semana Actual" cuenten exactamente lo mismo.
+  const ordersThisWeek = (data?.currentWeek || []).reduce((sum, point) => sum + point.orders, 0);
   const monthWeeksData = (data?.currentMonth?.points || []).map((point) => ({
     label: `Sem ${point.key} (${point.startDay}–${point.endDay})`,
     ventas: point.sales,
@@ -203,13 +206,13 @@ export default function DashboardPage() {
 
         <div className="card metric">
           <div className="metric-head">
-            <span>Pedidos Nuevos</span>
+            <span>Pedidos de la Semana</span>
             <div className="metric-icon">
-              <ShoppingBag size={22} />
+              <CalendarDays size={22} />
             </div>
           </div>
-          <strong>{totals?.new_orders ?? 0}</strong>
-          <small>Por atender en cola</small>
+          <strong>{ordersThisWeek}</strong>
+          <small>Lunes a domingo en curso</small>
         </div>
 
         <div className="card metric">
