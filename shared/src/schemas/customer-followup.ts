@@ -8,7 +8,7 @@ export const customerFollowupBucketSchema = z.union([z.literal(15), z.literal(30
 export const customerFollowupQuerySchema = paginationSchema.extend({
   /** Sin cubo se devuelve toda la ventana (MIN_DAYS..MAX_DAYS). */
   bucket: z.coerce.number().pipe(customerFollowupBucketSchema).optional(),
-  /** Solo administradores: filtrar por vendedor. Un no-admin siempre ve los suyos. */
+  /** Filtrar por vendedor: admin, cualquiera; scope team, solo miembros de su equipo; scope own, prohibido (403). */
   sellerId: idSchema.optional(),
 });
 
@@ -42,6 +42,8 @@ export const customerFollowupSummaryResponseSchema = z.object({
   buckets: z.object({ 15: z.number().int(), 30: z.number().int(), 60: z.number().int() }),
   minDays: z.number().int().default(CUSTOMER_FOLLOWUP.MIN_DAYS),
   maxDays: z.number().int().default(CUSTOMER_FOLLOWUP.MAX_DAYS),
+  /** Vendedores con clientes en la ventana, dentro del alcance del usuario (para el filtro). */
+  sellers: z.array(z.object({ id: idSchema, name: z.string() })),
 });
 
 export type CustomerFollowupQuery = z.infer<typeof customerFollowupQuerySchema>;

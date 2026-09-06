@@ -6,7 +6,10 @@ export interface ModulePermissions {
   create?: boolean;
   update?: boolean;
   delete?: boolean;
-  /** Aplica a "orders" y "customers": limita lectura/edición a lo creado por el usuario ("own") o por su equipo ("team"). */
+  /**
+   * Aplica a "orders" y "customers" (own/team/all) y a "customerFollowup"
+   * (solo own/team): limita lectura/edición a lo del usuario o de su equipo.
+   */
   scope?: OrderScope;
 }
 
@@ -59,6 +62,17 @@ export function getOrderScope(permissions: PermissionMap | null | undefined): Or
 export function getCustomerScope(permissions: PermissionMap | null | undefined): OrderScope {
   const scope = permissions?.customers?.scope;
   return scope === ORDER_SCOPES.OWN || scope === ORDER_SCOPES.TEAM ? scope : ORDER_SCOPES.ALL;
+}
+
+/**
+ * Scope de Seguimiento de clientes: "team" ve la cartera de todo su equipo,
+ * cualquier otro valor (own, ausente, all) es "own". No existe "all" para este
+ * módulo: ver a todos es cosa del rol admin, no del perfil.
+ */
+export function getCustomerFollowupScope(
+  permissions: PermissionMap | null | undefined
+): typeof ORDER_SCOPES.OWN | typeof ORDER_SCOPES.TEAM {
+  return permissions?.customerFollowup?.scope === ORDER_SCOPES.TEAM ? ORDER_SCOPES.TEAM : ORDER_SCOPES.OWN;
 }
 
 /** Indica si el rol del usuario es administrador (bypass total: FULL_ACCESS incluye productCosts). */

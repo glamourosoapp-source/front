@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { Button, Skeleton } from "@mui/material";
 import { CalendarClock, PhoneCall, Users } from "lucide-react";
 import { toast } from "sonner";
+import { getCustomerFollowupScope, ORDER_SCOPES } from "@glamouroso/shared";
 import { CUSTOMER_FOLLOWUP } from "@glamouroso/shared/constants";
 import type { CustomerFollowupBucket } from "@glamouroso/shared/constants";
 import type {
@@ -18,30 +19,31 @@ import { useDebounce } from "@/hooks/useDebounce";
 import { usePermissions } from "@/lib/permissions";
 import { httpClient, getApiErrorMessage } from "@/services/http-client";
 import { useAuthStore } from "@/stores/auth.store";
-import type { ListResponse, User } from "@/types";
 
 const emptySummary: CustomerFollowupSummaryResponse = {
   total: 0,
   buckets: { 15: 0, 30: 0, 60: 0 },
   minDays: CUSTOMER_FOLLOWUP.MIN_DAYS,
   maxDays: CUSTOMER_FOLLOWUP.MAX_DAYS,
+  sellers: [],
 };
 
 /**
  * Seguimiento de clientes: los que el vendedor atendió por última vez y llevan
  * entre 15 y 65 días sin comprar, para escribirles o llamarles desde su propio
  * teléfono. Pasados 65 días (o si la última venta fue del agente IA) el cliente
- * pasa a Reactivación y deja de salir aquí. El admin ve la cartera de todos.
+ * pasa a Reactivación y deja de salir aquí. Con alcance "team" en el perfil se
+ * ve la cartera de todo el equipo; el admin ve la de todos.
  */
 export default function SeguimientoPage() {
-  const { can, isAdmin } = usePermissions();
+  const { can, isAdmin, permissions } = usePermissions();
   const user = useAuthStore((s) => s.user);
+  const teamScope = isAdmin || getCustomerFollowupScope(permissions) === ORDER_SCOPES.TEAM;
 
   const [bucket, setBucket] = useState<CustomerFollowupBucket | null>(null);
   const [search, setSearch] = useState("");
   const debouncedSearch = useDebounce(search, 300);
   const [sellerId, setSellerId] = useState("");
-  const [sellers, setSellers] = useState<User[]>([]);
   const [page, setPage] = useState(1);
   const [limit, setLimit] = useState(25);
 
@@ -53,15 +55,6 @@ export default function SeguimientoPage() {
   const [summaryError, setSummaryError] = useState<string | null>(null);
 
   const canView = can("customerFollowup");
-
-  // El filtro por vendedor es solo de admins; el server ya acota a los demás.
-  useEffect(() => {
-    if (!isAdmin) return;
-    httpClient
-      .get<ListResponse<User>>("/users", { limit: 200 })
-      .then((r) => setSellers(r.items))
-      .catch(() => undefined);
-  }, [isAdmin]);
 
   const loadSummary = useCallback(async () => {
     try {
@@ -153,7 +146,9 @@ export default function SeguimientoPage() {
           <p className="page-kicker">
             {isAdmin
               ? "Clientes atendidos por un vendedor que llevan tiempo sin comprar. "
-              : "Clientes a los que les vendiste por última vez y llevan tiempo sin comprar. "}
+              : teamScope
+                ? "Clientes a los que tu equipo les vendió por última vez y llevan tiempo sin comprar. "
+                : "Clientes a los que les vendiste por última vez y llevan tiempo sin comprar. "}
             Escríbeles o llámales desde tu teléfono. Pasados {CUSTOMER_FOLLOWUP.MAX_DAYS} días pasan
             a Reactivación con el agente IA.
           </p>
@@ -228,10 +223,10 @@ export default function SeguimientoPage() {
             ))}
           </div>
           <div className="flex flex-wrap items-center gap-2">
-            {isAdmin ? (
+            {teamScope ? (
               <select className="input" value={sellerId} onChange={(e) => setSellerId(e.target.value)}>
-                <option value="">Todos los vendedores</option>
-                {sellers.map((seller) => (
+                <option value="">{isAdmin ? "Todos los vendedores" : "Todo mi equipo"}</option>
+                {summary.sellers.map((seller) => (
                   <option key={seller.id} value={seller.id}>
                     {seller.name}
                   </option>
@@ -262,7 +257,7 @@ export default function SeguimientoPage() {
           </p>
         ) : (
           <>
-            <CustomerFollowupTable rows={rows} showSeller={isAdmin} senderName={user?.name} />
+            <CustomerFollowupTable rows={rows} showSeller={teamScope} senderName={user?.name} />
             <ListPagination
               page={page}
               totalPages={totalPages}

@@ -88,6 +88,12 @@ export function ProfileFormDialog({ open, profile, onClose, onSaved }: ProfileFo
     setPermissions((prev) => ({ ...prev, customers: { ...(prev.customers ?? {}), scope: value } }));
   };
 
+  // Seguimiento no tiene "todos": ver la cartera completa es cosa del rol admin.
+  const followupScope = permissions.customerFollowup?.scope === ORDER_SCOPES.TEAM ? ORDER_SCOPES.TEAM : ORDER_SCOPES.OWN;
+  const setFollowupScope = (value: OrderScope) => {
+    setPermissions((prev) => ({ ...prev, customerFollowup: { ...(prev.customerFollowup ?? {}), scope: value } }));
+  };
+
   async function save(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const form = new FormData(event.currentTarget);
@@ -178,6 +184,14 @@ export function ProfileFormDialog({ open, profile, onClose, onSaved }: ProfileFo
           <RadioGroup row value={customerScope} onChange={(e) => setCustomerScope(e.target.value as OrderScope)}>
             <FormControlLabel value={ORDER_SCOPES.ALL} control={<Radio size="small" />} label="Todos los clientes" />
             <FormControlLabel value={ORDER_SCOPES.TEAM} control={<Radio size="small" />} label="Solo su equipo" />
+            <FormControlLabel value={ORDER_SCOPES.OWN} control={<Radio size="small" />} label="Solo los suyos" />
+          </RadioGroup>
+
+          <Typography variant="subtitle2" sx={{ mt: 2, mb: 0.5, color: "var(--glam-navy)" }}>
+            Alcance de seguimiento (clientes por recomprar)
+          </Typography>
+          <RadioGroup row value={followupScope} onChange={(e) => setFollowupScope(e.target.value as OrderScope)}>
+            <FormControlLabel value={ORDER_SCOPES.TEAM} control={<Radio size="small" />} label="Los de su equipo" />
             <FormControlLabel value={ORDER_SCOPES.OWN} control={<Radio size="small" />} label="Solo los suyos" />
           </RadioGroup>
         </DialogContent>
