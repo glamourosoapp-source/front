@@ -506,6 +506,9 @@ export function CampaignsTab({
               onValidityChange={setTemplateValid}
               permissionModule={permissionModule}
               preferPrefix={isReactivation ? "reactivacion" : undefined}
+              previewName={
+                options.find((o) => selectedIds.has(o.id))?.name || (isReactivation ? "cliente" : "su negocio")
+              }
               helperText={
                 isReactivation
                   ? "Plantilla aprobada por Meta. Usa {{1}} para el nombre del cliente."

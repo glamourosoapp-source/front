@@ -327,6 +327,7 @@ export function ProspectOutreachPanel({ onSelectionChange, onContacted }: Prospe
 
           {showWhatsApp && (
             <TemplatePicker
+              previewName="su negocio"
               value={templateName}
               onChange={setTemplateName}
               onValidityChange={setTemplateValid}

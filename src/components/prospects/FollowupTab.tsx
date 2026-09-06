@@ -180,6 +180,7 @@ export function FollowupTab({ onContacted }: { onContacted?: () => void }) {
         <form onSubmit={handleSend} className="grid gap-4">
           {canSend && (
             <TemplatePicker
+              previewName="su negocio"
               value={templateName}
               onChange={setTemplateName}
               onValidityChange={setTemplateValid}

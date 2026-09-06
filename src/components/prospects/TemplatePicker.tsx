@@ -44,6 +44,16 @@ interface TemplatePickerProps {
    * en Reactivación): el resto del catálogo sigue disponible en el desplegable.
    */
   preferPrefix?: string;
+  /**
+   * Valor de ejemplo para {{1}} en la vista previa (nombre del cliente o del
+   * negocio). Idealmente el primer destinatario seleccionado.
+   */
+  previewName?: string;
+}
+
+/** Sustituye {{1}}, {{2}}… por valores de ejemplo para la vista previa. */
+function renderTemplatePreview(bodyText: string, name: string): string {
+  return bodyText.replace(/\{\{\s*(\d+)\s*\}\}/g, (_m, index: string) => (index === "1" ? name : `[valor ${index}]`));
 }
 
 /** Cuántas plantillas aprobadas se muestran como botón; el resto queda en el desplegable. */
@@ -63,6 +73,7 @@ export function TemplatePicker({
   onValidityChange,
   permissionModule = "outreach",
   preferPrefix,
+  previewName = "cliente",
 }: TemplatePickerProps) {
   const { can } = usePermissions();
   const [templates, setTemplates] = useState<WhatsAppTemplateDto[]>([]);
@@ -266,6 +277,30 @@ export function TemplatePicker({
           Esta plantilla no existe en Meta: elige una del catálogo o créala con “Nueva”.
         </span>
       )}
+      {selected?.bodyText && (
+        <div className="grid gap-1" style={{ marginTop: 4 }}>
+          <span className="page-kicker" style={{ margin: 0 }}>
+            Así le llegará a <strong>{previewName}</strong>:
+          </span>
+          <div
+            style={{
+              alignSelf: "flex-start",
+              maxWidth: 420,
+              background: "#dcf8c6",
+              color: "#111b21",
+              borderRadius: "12px 12px 12px 2px",
+              padding: "10px 12px",
+              fontSize: 14,
+              lineHeight: 1.45,
+              whiteSpace: "pre-wrap",
+              boxShadow: "0 1px 1px rgba(0,0,0,0.08)",
+            }}
+          >
+            {renderTemplatePreview(selected.bodyText, previewName)}
+          </div>
+        </div>
+      )}
+
       {selected && selected.status !== "APPROVED" && (
         <span className="page-kicker" style={{ margin: 0, color: "var(--glam-navy)" }}>
           Esta plantilla aun no esta aprobada por Meta; el envio fallara hasta que lo este.
