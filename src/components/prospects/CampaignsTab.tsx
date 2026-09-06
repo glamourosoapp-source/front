@@ -505,6 +505,7 @@ export function CampaignsTab({
               onChange={setTemplateName}
               onValidityChange={setTemplateValid}
               permissionModule={permissionModule}
+              preferPrefix={isReactivation ? "reactivacion" : undefined}
               helperText={
                 isReactivation
                   ? "Plantilla aprobada por Meta. Usa {{1}} para el nombre del cliente."

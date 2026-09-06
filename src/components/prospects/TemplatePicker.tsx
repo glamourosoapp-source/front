@@ -4,6 +4,7 @@ import { FormEvent, useCallback, useEffect, useRef, useState } from "react";
 import {
   Autocomplete,
   Button,
+  Chip,
   CircularProgress,
   Dialog,
   DialogActions,
@@ -38,7 +39,15 @@ interface TemplatePickerProps {
    * outreach o reactivation (checkAnyPermission) en POST /campaigns/templates.
    */
   permissionModule?: PermissionModule;
+  /**
+   * Prefijo de nombre que va primero en los accesos rápidos (ej. "reactivacion"
+   * en Reactivación): el resto del catálogo sigue disponible en el desplegable.
+   */
+  preferPrefix?: string;
 }
+
+/** Cuántas plantillas aprobadas se muestran como botón; el resto queda en el desplegable. */
+const QUICK_PICK_LIMIT = 6;
 
 /**
  * Selector de plantillas de Meta conectado a Kapso: lista las plantillas del
@@ -53,6 +62,7 @@ export function TemplatePicker({
   required,
   onValidityChange,
   permissionModule = "outreach",
+  preferPrefix,
 }: TemplatePickerProps) {
   const { can } = usePermissions();
   const [templates, setTemplates] = useState<WhatsAppTemplateDto[]>([]);
@@ -81,6 +91,21 @@ export function TemplatePicker({
   }, [load]);
 
   const selected = templates.find((t) => t.name === value) || null;
+
+  // Accesos rápidos: el desplegable "vacío" de un Autocomplete freeSolo parece
+  // una caja de texto y nadie descubre que hay catálogo. Las aprobadas se ven
+  // como botones sin tener que hacer clic dentro del campo.
+  const quickPicks = templates
+    .filter((t) => t.status === "APPROVED")
+    .sort((a, b) => {
+      if (preferPrefix) {
+        const pa = a.name.startsWith(preferPrefix) ? 0 : 1;
+        const pb = b.name.startsWith(preferPrefix) ? 0 : 1;
+        if (pa !== pb) return pa - pb;
+      }
+      return a.name.localeCompare(b.name);
+    })
+    .slice(0, QUICK_PICK_LIMIT);
   const unknownTemplate = Boolean(
     !loadError && templates.length > 0 && value.trim() && !selected
   );
@@ -130,6 +155,8 @@ export function TemplatePicker({
           loading={loading}
           value={selected}
           freeSolo
+          forcePopupIcon
+          openOnFocus
           inputValue={value}
           onInputChange={(_e, next) => onChange(next)}
           onChange={(_e, next) => {
@@ -204,6 +231,35 @@ export function TemplatePicker({
           </Button>
         )}
       </div>
+
+      {!loading && !loadError && quickPicks.length > 0 && (
+        <div className="flex flex-wrap items-center gap-1" style={{ marginTop: 2 }}>
+          <span className="page-kicker" style={{ margin: 0, marginRight: 4 }}>
+            Aprobadas:
+          </span>
+          {quickPicks.map((template) => (
+            <Chip
+              key={template.id}
+              size="small"
+              label={template.name}
+              title={template.bodyText || template.name}
+              color={template.name === value ? "primary" : "default"}
+              variant={template.name === value ? "filled" : "outlined"}
+              onClick={() => onChange(template.name)}
+            />
+          ))}
+          {templates.length > quickPicks.length && (
+            <span className="page-kicker" style={{ margin: 0 }}>
+              y {templates.length - quickPicks.length} más en la lista
+            </span>
+          )}
+        </div>
+      )}
+      {!loading && !loadError && templates.length === 0 && (
+        <span className="page-kicker" style={{ margin: 0 }}>
+          No hay plantillas en el catálogo de Meta todavía. Crea una con “Nueva”.
+        </span>
+      )}
 
       {unknownTemplate && (
         <span className="page-kicker" style={{ margin: 0, color: "var(--glam-danger, #b3261e)" }}>
