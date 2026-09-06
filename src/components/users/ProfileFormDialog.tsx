@@ -47,6 +47,7 @@ const ACTION_LABELS: Record<PermissionAction, string> = {
 const MODULE_ACTIONS: Partial<Record<PermissionModule, readonly PermissionAction[]>> = {
   productCosts: ["view", "update"],
   orderPrint: ["view"],
+  customerFollowup: ["view"],
 };
 
 const actionApplies = (module: PermissionModule, action: PermissionAction) =>

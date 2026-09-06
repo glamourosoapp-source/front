@@ -123,7 +123,7 @@ export default function ReactivacionPage() {
             <RotateCcw size={18} style={{ color: "var(--glam-blue)" }} />
           </div>
           <strong>{metrics.inactive}</strong>
-          <small>Con {days}+ días sin comprar</small>
+          <small>Del agente IA con {days}+ días; de vendedores, pasados 65</small>
         </div>
         <div className="card metric">
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>

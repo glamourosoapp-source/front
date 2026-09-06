@@ -158,6 +158,7 @@ export const PERMISSION_MODULES = [
   { key: "orderDrafts", label: "Pedidos: borradores" },
   { key: "orderPrint", label: "Pedidos: imprimir notas" },
   { key: "customers", label: "Clientes" },
+  { key: "customerFollowup", label: "Seguimiento: clientes por recomprar" },
   { key: "products", label: "Catalogo" },
   { key: "productCosts", label: "Catalogo: precio de costo" },
   { key: "conversations", label: "Conversaciones" },
@@ -170,6 +171,19 @@ export const PERMISSION_MODULES = [
   { key: "settings", label: "Configuracion" },
   { key: "users", label: "Usuarios" },
 ] as const;
+
+/**
+ * Seguimiento de clientes (página del vendedor): un cliente pertenece al
+ * vendedor humano de su último pedido efectivo mientras lleve entre MIN_DAYS y
+ * MAX_DAYS sin comprar. Pasado MAX_DAYS deja de ser suyo y pasa a Reactivación
+ * (agente IA). Los cubos son excluyentes: 15 = 15-29 días, 30 = 30-59, 60 = 60-MAX.
+ */
+export const CUSTOMER_FOLLOWUP = {
+  MIN_DAYS: 15,
+  MAX_DAYS: 65,
+  BUCKETS: [15, 30, 60],
+} as const;
+export type CustomerFollowupBucket = (typeof CUSTOMER_FOLLOWUP.BUCKETS)[number];
 
 export type PermissionAction = (typeof PERMISSION_ACTIONS)[number];
 export type OrderScope = (typeof ORDER_SCOPES)[keyof typeof ORDER_SCOPES];

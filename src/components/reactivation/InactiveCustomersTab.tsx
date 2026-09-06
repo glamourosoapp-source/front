@@ -18,10 +18,13 @@ import { httpClient, getApiErrorMessage } from "@/services/http-client";
 import { usePermissions } from "@/lib/permissions";
 import { useDebounce } from "@/hooks/useDebounce";
 import { formatMxPhone } from "@/utils/format-phone";
+import { CUSTOMER_FOLLOWUP } from "@glamouroso/shared/constants";
 import type { ReactivationSegmentResponse, ReactivationCustomer } from "@glamouroso/shared/schemas/campaign";
 import { toast } from "sonner";
 
-const DAY_OPTIONS = [15, 30, 60, 90];
+// Los clientes de un vendedor humano solo entran pasados CUSTOMER_FOLLOWUP.MAX_DAYS
+// (antes los trabaja él desde Seguimiento); los del agente IA, desde 15.
+const DAY_OPTIONS = [15, CUSTOMER_FOLLOWUP.MAX_DAYS, 90, 120];
 const MAX_RECIPIENTS = 60;
 
 function formatDate(iso: string | null): string {
@@ -39,9 +42,11 @@ interface InactiveCustomersTabProps {
 }
 
 /**
- * Clientes que ya compraron y llevan N+ días sin pedir. El segmento excluye a
- * los que pidieron no ser contactados y a los que están conversando con
- * nosotros ahora mismo (no molestarlos con una campaña).
+ * Clientes del agente IA que llevan N+ días sin pedir: los que atendió el
+ * agente por última vez y los de vendedores que ya superaron la ventana de
+ * Seguimiento (CUSTOMER_FOLLOWUP.MAX_DAYS). El segmento excluye a los que
+ * pidieron no ser contactados y a los que están conversando con nosotros
+ * ahora mismo (no molestarlos con una campaña).
  */
 export function InactiveCustomersTab({ days, onDaysChange, onCreateCampaign }: InactiveCustomersTabProps) {
   const router = useRouter();
@@ -119,7 +124,8 @@ export function InactiveCustomersTab({ days, onDaysChange, onCreateCampaign }: I
         <div>
           <h2>Clientes inactivos</h2>
           <p className="page-kicker">
-            Clientes que ya te compraron y llevan {days}+ días sin pedir. Se excluyen los que
+            Clientes del agente IA con {days}+ días sin pedir; los de un vendedor entran solo
+            pasados los {CUSTOMER_FOLLOWUP.MAX_DAYS} días de Seguimiento. Se excluyen los que
             pidieron no ser contactados y los que están conversando ahora.
           </p>
         </div>

@@ -5,22 +5,23 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import {
   BarChart3,
+  Bell,
   Bot,
   Boxes,
   ChevronDown,
   ChevronLeft,
   ChevronRight,
   LogOut,
-  Bell,
   MessageCircle,
   MessageSquareText,
   PackageCheck,
+  PhoneCall,
   RotateCcw,
   Settings,
   Sparkles,
+  type LucideIcon,
   UserCog,
   Users,
-  type LucideIcon,
 } from "lucide-react";
 import type { PermissionModule } from "@glamouroso/shared";
 import { useAuthStore } from "@/stores/auth.store";
@@ -57,6 +58,7 @@ const sections: NavSection[] = [
       { href: "/dashboard", label: "Overview", icon: BarChart3, module: "dashboard" },
       { href: "/dashboard/orders", label: "Pedidos", icon: PackageCheck, module: "orders" },
       { href: "/dashboard/customers", label: "Clientes", icon: Users, module: "customers" },
+      { href: "/dashboard/seguimiento", label: "Seguimiento", icon: PhoneCall, module: "customerFollowup" },
       { href: "/dashboard/products", label: "Catálogo", icon: Boxes, module: "products" },
     ],
   },
