@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Image from "next/image";
 import { Button, Chip, Tab, Tabs, TextField } from "@mui/material";
-import { LogOut, PackageCheck, RefreshCw, Send, Truck } from "lucide-react";
+import { AlertTriangle, LogOut, PackageCheck, RefreshCw, Send, Truck } from "lucide-react";
 import { httpClient, getApiErrorMessage } from "@/services/http-client";
 import { useAuthStore } from "@/stores/auth.store";
 import { useRealtime } from "@/components/realtime/RealtimeProvider";
@@ -42,6 +42,8 @@ export default function FactoryPage() {
   const [to, setTo] = useState(todayInMexico());
   const [loading, setLoading] = useState(false);
   const [sendingId, setSendingId] = useState<string | null>(null);
+  /** Nota de envío en captura, por pedido. Se manda al marcar enviado. */
+  const [dispatchNotes, setDispatchNotes] = useState<Record<string, string>>({});
 
   const loadPending = useCallback(async () => {
     setLoading(true);
@@ -119,11 +121,30 @@ export default function FactoryPage() {
     }
   }
 
+  async function setItemNotes(order: RestockOrder, item: RestockOrderItem, value: string) {
+    try {
+      const updated = await httpClient.put<RestockOrder>(
+        `/factory/orders/${order.id}/items/${item.id}`,
+        { notes: value }
+      );
+      setPending((current) => current.map((row) => (row.id === updated.id ? updated : row)));
+    } catch (error) {
+      toast.error(getApiErrorMessage(error, "No se pudo guardar la nota"));
+    }
+  }
+
   async function send(order: RestockOrder) {
     setSendingId(order.id);
     try {
-      await httpClient.post(`/factory/orders/${order.id}/send`, {});
+      await httpClient.post(`/factory/orders/${order.id}/send`, {
+        notes: dispatchNotes[order.id]?.trim() || null,
+      });
       toast.success(`Pedido de ${order.branch?.code} enviado: el inventario de la sucursal ya subió`);
+      setDispatchNotes((current) => {
+        const next = { ...current };
+        delete next[order.id];
+        return next;
+      });
       await loadPending();
     } catch (error) {
       toast.error(getApiErrorMessage(error, "No se pudo enviar el pedido"));
@@ -131,6 +152,26 @@ export default function FactoryPage() {
       setSendingId(null);
     }
   }
+
+  /**
+   * Partidas donde se manda MENOS de lo pedido. Es el caso que hay que
+   * explicar: quien pidió ve el pedido después y sin motivo no sabe si fue
+   * falta de inventario, un error de captura o que se le olvidó a alguien.
+   */
+  const shortItems = useMemo(
+    () =>
+      new Map(
+        pending.map((order) => [
+          order.id,
+          (order.items ?? []).filter(
+            (item) =>
+              item.dispatchedQty != null &&
+              Number(item.dispatchedQty) < Number(item.requestedQty)
+          ),
+        ])
+      ),
+    [pending]
+  );
 
   const readyToSend = useMemo(
     () =>
@@ -214,11 +255,19 @@ export default function FactoryPage() {
                       <th>Producto</th>
                       <th style={{ width: 130, textAlign: "right" }}>Pedido</th>
                       <th style={{ width: 150, textAlign: "right" }}>Despachado</th>
+                      <th>Motivo (si mandas menos)</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {(order.items ?? []).map((item) => (
-                      <tr key={item.id} className={item.prepared ? "prepared" : ""}>
+                    {(order.items ?? []).map((item) => {
+                      const short =
+                        item.dispatchedQty != null &&
+                        Number(item.dispatchedQty) < Number(item.requestedQty);
+                      return (
+                      <tr
+                        key={item.id}
+                        className={`${item.prepared ? "prepared" : ""} ${short ? "short" : ""}`}
+                      >
                         <td>
                           <input
                             type="checkbox"
@@ -247,14 +296,65 @@ export default function FactoryPage() {
                             aria-label={`Despachado ${item.productName}`}
                           />
                         </td>
+                        <td>
+                          <input
+                            className={`factory-note ${short && !item.notes ? "needed" : ""}`}
+                            defaultValue={item.notes ?? ""}
+                            placeholder={
+                              short ? "Por qué mandas menos" : "Opcional"
+                            }
+                            maxLength={500}
+                            onBlur={(event) => {
+                              const value = event.target.value.trim();
+                              if (value === (item.notes ?? "")) return;
+                              void setItemNotes(order, item, value);
+                            }}
+                            aria-label={`Motivo de ${item.productName}`}
+                          />
+                        </td>
                       </tr>
-                    ))}
+                      );
+                    })}
                   </tbody>
                 </table>
                 <p className="page-kicker" style={{ marginBottom: 0 }}>
                   Si mandas una cantidad distinta, escríbela: el inventario de la sucursal sube con
                   lo que realmente despachaste. En blanco se usa lo pedido.
                 </p>
+
+                {(shortItems.get(order.id) ?? []).length ? (
+                  <div className="factory-short-warning">
+                    <AlertTriangle size={18} style={{ flex: "0 0 auto", marginTop: 1 }} />
+                    <span>
+                      Vas a mandar menos de lo pedido en{" "}
+                      <strong>
+                        {(shortItems.get(order.id) ?? []).length}{" "}
+                        {(shortItems.get(order.id) ?? []).length === 1 ? "partida" : "partidas"}
+                      </strong>
+                      . Escribe el motivo de cada una: {order.origin === RESTOCK_ORIGIN.FRANCHISE
+                        ? "la franquicia lo ve en su historial de pedidos."
+                        : "queda en el pedido para quien lo revise."}
+                    </span>
+                  </div>
+                ) : null}
+
+                <div className="factory-dispatch-note">
+                  <label htmlFor={`nota-${order.id}`}>
+                    Nota del envío (la lee quien pidió)
+                  </label>
+                  <textarea
+                    id={`nota-${order.id}`}
+                    value={dispatchNotes[order.id] ?? ""}
+                    placeholder="Ej. Faltó desengrasante, el resto sale el jueves."
+                    maxLength={500}
+                    onChange={(event) =>
+                      setDispatchNotes((current) => ({
+                        ...current,
+                        [order.id]: event.target.value,
+                      }))
+                    }
+                  />
+                </div>
               </div>
             ))}
             {!pending.length && !loading ? (
@@ -291,17 +391,35 @@ export default function FactoryPage() {
                 </div>
                 <table className="factory-table">
                   <tbody>
-                    {(order.items ?? []).map((item) => (
-                      <tr key={item.id}>
-                        <td>{item.productName}</td>
-                        <td style={{ textAlign: "right" }}>
-                          {formatQuantity(item.dispatchedQty ?? item.requestedQty)}{" "}
-                          {item.unit === "bidon" ? "bidones" : "pz"}
-                        </td>
-                      </tr>
-                    ))}
+                    {(order.items ?? []).map((item) => {
+                      const enviado = Number(item.dispatchedQty ?? item.requestedQty);
+                      const short = enviado < Number(item.requestedQty);
+                      return (
+                        <tr key={item.id} className={short ? "short" : ""}>
+                          <td>
+                            {item.productName}
+                            {item.notes ? (
+                              <p className="factory-note-read">{item.notes}</p>
+                            ) : null}
+                          </td>
+                          <td style={{ textAlign: "right" }}>
+                            {formatQuantity(enviado)} {item.unit === "bidon" ? "bidones" : "pz"}
+                            {short ? (
+                              <div className="page-kicker" style={{ margin: 0 }}>
+                                de {formatQuantity(item.requestedQty)} pedidos
+                              </div>
+                            ) : null}
+                          </td>
+                        </tr>
+                      );
+                    })}
                   </tbody>
                 </table>
+                {order.dispatchNotes ? (
+                  <div className="factory-short-warning" style={{ marginTop: 12 }}>
+                    <span>{order.dispatchNotes}</span>
+                  </div>
+                ) : null}
               </div>
             ))}
             {!history.length && !loading ? (

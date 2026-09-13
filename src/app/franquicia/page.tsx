@@ -15,6 +15,7 @@ import {
   TextField,
 } from "@mui/material";
 import {
+  AlertTriangle,
   Droplets,
   LogOut,
   Minus,
@@ -711,24 +712,63 @@ export default function FranchisePortalPage() {
                     Repetir este pedido
                   </Button>
                 </div>
-                <table className="table">
-                  <tbody>
-                    {(order.items ?? []).map((item) => (
-                      <tr key={item.id}>
-                        <td>{item.productName}</td>
-                        <td style={{ textAlign: "right" }}>
-                          {formatQuantity(item.requestedQty)}{" "}
-                          {item.unit === "bidon"
-                            ? pluralize(Number(item.requestedQty), "bidón", "bidones")
-                            : "pz"}
-                        </td>
-                        <td style={{ textAlign: "right" }}>
-                          {item.unitPrice ? formatMoney(item.unitPrice) : "—"}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+                <div>
+                  {(order.items ?? []).map((item) => {
+                    const pedido = Number(item.requestedQty);
+                    const unidad = (qty: number) =>
+                      item.unit === "bidon" ? pluralize(qty, "bidón", "bidones") : "pz";
+                    /*
+                     * `dispatchedQty` en null significa "fábrica no capturó
+                     * nada": mientras el pedido no se envía no hay diferencia
+                     * que mostrar, y ya enviado equivale a lo pedido.
+                     */
+                    const enviado = item.dispatchedQty == null ? null : Number(item.dispatchedQty);
+                    const short = enviado != null && enviado < pedido;
+                    return (
+                      <div key={item.id} className={`fr-order-item ${short ? "is-short" : ""}`}>
+                        <div className="fr-order-line">
+                          <span className="fr-order-name">{item.productName}</span>
+                          <span className="fr-order-qty">
+                            {short ? (
+                              <>
+                                <s>{formatQuantity(pedido)}</s>{" "}
+                                <strong>{formatQuantity(enviado!)}</strong> {unidad(enviado!)}
+                              </>
+                            ) : (
+                              <>
+                                {formatQuantity(pedido)} {unidad(pedido)}
+                              </>
+                            )}
+                          </span>
+                          <span className="fr-order-price">
+                            {item.unitPrice ? formatMoney(item.unitPrice) : "—"}
+                          </span>
+                        </div>
+                        {short ? (
+                          <div className="fr-order-note">
+                            <AlertTriangle size={14} />
+                            <span>
+                              Fábrica mandó {formatQuantity(enviado!)} de {formatQuantity(pedido)}
+                              {item.notes ? <> · {item.notes}</> : null}
+                            </span>
+                          </div>
+                        ) : item.notes ? (
+                          <div className="fr-order-note">
+                            <AlertTriangle size={14} />
+                            <span>{item.notes}</span>
+                          </div>
+                        ) : null}
+                      </div>
+                    );
+                  })}
+                </div>
+
+                {order.dispatchNotes ? (
+                  <div className="fr-order-dispatch">
+                    <strong>Nota de fábrica</strong>
+                    <p>{order.dispatchNotes}</p>
+                  </div>
+                ) : null}
               </div>
             ))}
             {!orders.length ? (

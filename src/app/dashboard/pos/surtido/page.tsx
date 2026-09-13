@@ -334,7 +334,15 @@ export default function PosSurtidoPage() {
                 <tbody>
                   {(order.items ?? []).map((item) => (
                     <tr key={item.id}>
-                      <td>{item.productName}</td>
+                      <td>
+                        {item.productName}
+                        {/* El motivo que escribió fábrica al mandar menos. */}
+                        {item.notes ? (
+                          <div className="page-kicker" style={{ margin: 0, color: "#92400e" }}>
+                            {item.notes}
+                          </div>
+                        ) : null}
+                      </td>
                       <td style={{ textAlign: "right" }}>
                         {formatQuantity(item.requestedQty)} {item.unit === "bidon" ? "bidones" : "pz"}
                       </td>
@@ -351,6 +359,11 @@ export default function PosSurtidoPage() {
                   ))}
                 </tbody>
               </table>
+              {order.dispatchNotes ? (
+                <p className="page-kicker" style={{ marginBottom: 0, color: "#92400e" }}>
+                  <strong>Nota de fábrica:</strong> {order.dispatchNotes}
+                </p>
+              ) : null}
             </div>
           ))}
           {!orders.length && !loading ? (

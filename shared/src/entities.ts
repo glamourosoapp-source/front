@@ -519,6 +519,8 @@ export interface RestockOrderItem {
   litersPerUnit?: string | number | null;
   prepared: boolean;
   unitPrice?: string | number | null;
+  /** Por qué esta partida se despachó distinto de lo pedido. Lo escribe fábrica. */
+  notes?: string | null;
 }
 
 export interface RestockOrder {
@@ -535,7 +537,10 @@ export interface RestockOrder {
   sentAt?: string | null;
   receivedBy?: string | null;
   receivedAt?: string | null;
+  /** Nota de quien pidió. */
   notes?: string | null;
+  /** Nota de fábrica sobre el envío. Separada para no pisar la de quien pidió. */
+  dispatchNotes?: string | null;
   items?: RestockOrderItem[];
   createdAt?: string;
   updatedAt?: string;

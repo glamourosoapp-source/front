@@ -83,6 +83,8 @@ export const prepareRestockItemSchema = z.object({
   // null = fábrica aún no captura cuánto despacha (se usa lo pedido). Sin
   // poner z.null() primero, z.coerce lo volvería 0 = "no mandé nada".
   dispatchedQty: z.union([z.null(), z.coerce.number().min(0).max(100_000)]).optional(),
+  /** Por qué se manda distinto de lo pedido; lo ve quien hizo el pedido. */
+  notes: z.union([z.null(), z.string().max(500)]).optional(),
 });
 
 export const sendRestockOrderSchema = z.object({

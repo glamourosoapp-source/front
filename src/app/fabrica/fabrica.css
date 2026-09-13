@@ -143,3 +143,92 @@
   height: 30px;
   cursor: pointer;
 }
+
+/*
+ * Faltó producto: fábrica manda menos de lo pedido.
+ *
+ * El ajuste no puede ser solo un número distinto en la celda. Quien pidió
+ * —sucursal o franquicia— ve el pedido después y necesita saber POR QUÉ llegó
+ * menos, así que la partida corta se pinta en ámbar y pide su motivo.
+ */
+.factory-table tr.short {
+  background: rgba(217, 119, 6, 0.09);
+}
+
+.factory-table tr.short.prepared {
+  background: rgba(217, 119, 6, 0.14);
+}
+
+.factory-note {
+  width: 100%;
+  min-width: 180px;
+  height: 44px;
+  padding: 0 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  font-size: 15px;
+  background: #fff;
+}
+
+.factory-note:focus {
+  outline: 2px solid var(--glam-blue);
+  outline-offset: -2px;
+}
+
+.factory-note.needed {
+  border-color: #d97706;
+  background: #fffbeb;
+}
+
+.factory-short-warning {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin: 14px 0 0;
+  padding: 12px 14px;
+  border-radius: 10px;
+  background: #fffbeb;
+  border: 1px solid #fcd34d;
+  color: #92400e;
+  font-size: 14px;
+  line-height: 1.45;
+}
+
+.factory-dispatch-note {
+  margin-top: 14px;
+}
+
+.factory-dispatch-note label {
+  display: block;
+  margin-bottom: 6px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.factory-dispatch-note textarea {
+  width: 100%;
+  min-height: 64px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  font-size: 15px;
+  font-family: inherit;
+  resize: vertical;
+  background: #fff;
+}
+
+.factory-dispatch-note textarea:focus {
+  outline: 2px solid var(--glam-blue);
+  outline-offset: -2px;
+}
+
+/* Lo que se le dice a quien pidió, en el historial de fábrica. */
+.factory-note-read {
+  margin: 0;
+  color: #92400e;
+  font-size: 13.5px;
+  line-height: 1.4;
+}

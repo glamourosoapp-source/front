@@ -642,3 +642,91 @@
     font-size: 13px;
   }
 }
+
+/* ---------- Historial: lo que pediste vs lo que llegó ---------- */
+
+/*
+ * Fábrica ajusta la cantidad cuando no alcanzó el inventario. La franquicia ve
+ * el pedido días después, así que la diferencia no puede ser un número
+ * distinto y nada más: se marca la partida, se tacha lo pedido y se muestra el
+ * motivo que escribió fábrica.
+ */
+.fr-order-item {
+  padding: 9px 0;
+  border-top: 1px solid var(--border);
+}
+
+.fr-order-item:first-child {
+  border-top: 0;
+}
+
+.fr-order-item.is-short {
+  background: #fffbeb;
+  margin: 0 -10px;
+  padding: 9px 10px;
+  border-radius: 8px;
+  border-top-color: transparent;
+}
+
+.fr-order-line {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+}
+
+.fr-order-name {
+  flex: 1;
+  min-width: 0;
+}
+
+.fr-order-qty {
+  flex: 0 0 auto;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+.fr-order-qty s {
+  color: var(--muted);
+  margin-right: 2px;
+}
+
+.fr-order-price {
+  flex: 0 0 auto;
+  min-width: 90px;
+  text-align: right;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+.fr-order-note {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  margin-top: 4px;
+  color: #92400e;
+  font-size: 12.5px;
+  line-height: 1.4;
+}
+
+.fr-order-dispatch {
+  margin-top: 12px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: #fffbeb;
+  border: 1px solid #fcd34d;
+}
+
+.fr-order-dispatch strong {
+  display: block;
+  color: #92400e;
+  font-size: 12px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.fr-order-dispatch p {
+  margin: 4px 0 0;
+  color: #92400e;
+  font-size: 13.5px;
+  line-height: 1.45;
+}
