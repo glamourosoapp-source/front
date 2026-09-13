@@ -8,6 +8,8 @@ const customerPayload = {
   name: z.string().min(2).max(140),
   phone: z.string().min(7).max(24),
   email: z.union([z.string().email(), z.literal(""), z.null()]).optional(),
+  /** Fecha de nacimiento (DATEONLY); la captura la caja al registrar en mostrador. */
+  birthday: z.union([z.string().regex(/^\d{4}-\d{2}-\d{2}$/), z.literal(""), z.null()]).optional(),
   street: optionalString,
   colony: optionalString,
   postalCode: z.union([z.string().max(10), z.literal(""), z.null()]).optional(),
@@ -26,6 +28,7 @@ export const updateCustomerSchema = z.object({
   name: customerPayload.name.optional(),
   phone: customerPayload.phone.optional(),
   email: customerPayload.email,
+  birthday: customerPayload.birthday,
   street: optionalString,
   colony: optionalString,
   postalCode: customerPayload.postalCode,

@@ -15,7 +15,7 @@ import {
 import { ADMIN_ROLES, ROLES } from "@glamouroso/shared/constants";
 import { httpClient, getApiErrorMessage } from "@/services/http-client";
 import { usePermissions } from "@/lib/permissions";
-import { Profile, Team, User } from "@/types";
+import { Branch, Profile, Team, User } from "@/types";
 import { toast } from "sonner";
 
 interface UserFormDialogProps {
@@ -23,6 +23,8 @@ interface UserFormDialogProps {
   user: User | null;
   profiles: Profile[];
   teams: Team[];
+  /** Sucursales del POS: un cajero o una franquicia quedan fijados a una. */
+  branches?: Branch[];
   onClose: () => void;
   onSaved: () => void;
 }
@@ -33,7 +35,15 @@ function accessTypeFromRole(role?: string | null): AccessType {
   return role && ADMIN_ROLES.includes(role) ? "admin" : "profile";
 }
 
-export function UserFormDialog({ open, user, profiles, teams, onClose, onSaved }: UserFormDialogProps) {
+export function UserFormDialog({
+  open,
+  user,
+  profiles,
+  teams,
+  branches = [],
+  onClose,
+  onSaved,
+}: UserFormDialogProps) {
   const isEdit = Boolean(user);
   const { isAdmin } = usePermissions();
   const [isActive, setIsActive] = useState(user?.isActive ?? true);
@@ -57,6 +67,7 @@ export function UserFormDialog({ open, user, profiles, teams, onClose, onSaved }
     const profileIdRaw = String(form.get("profileId") || "");
     const profileId = profileIdRaw ? profileIdRaw : null;
     const teamIdRaw = String(form.get("teamId") || "");
+    const branchIdRaw = String(form.get("branchId") || "");
     const selectedAccess = (String(form.get("accessType") || accessType) as AccessType) || "profile";
 
     const payload: Record<string, unknown> = {
@@ -65,6 +76,7 @@ export function UserFormDialog({ open, user, profiles, teams, onClose, onSaved }
       phone: phone || null,
       profileId: selectedAccess === "profile" ? profileId : null,
       teamId: teamIdRaw ? teamIdRaw : null,
+      branchId: branchIdRaw ? branchIdRaw : null,
     };
     if (isAdmin) {
       payload.role = selectedAccess === "admin" ? ROLES.ADMIN : ROLES.ASSISTANT;
@@ -165,6 +177,23 @@ export function UserFormDialog({ open, user, profiles, teams, onClose, onSaved }
               </MenuItem>
             ))}
           </TextField>
+          {branches.length ? (
+            <TextField
+              select
+              name="branchId"
+              label="Sucursal del punto de venta"
+              defaultValue={user?.branchId || ""}
+              fullWidth
+              helperText="Un usuario con sucursal solo puede cobrar y consultar esa sucursal."
+            >
+              <MenuItem value="">Sin sucursal</MenuItem>
+              {branches.map((branch) => (
+                <MenuItem key={branch.id} value={branch.id}>
+                  {branch.code} · {branch.name}
+                </MenuItem>
+              ))}
+            </TextField>
+          ) : null}
           {isEdit ? (
             <FormControlLabel
               control={<Switch checked={isActive} onChange={(e) => setIsActive(e.target.checked)} />}

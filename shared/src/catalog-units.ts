@@ -41,28 +41,99 @@ export function normalizeUnit(value: string): ProductUnit {
   return UNIT_SYNONYMS[key] ?? "pieza";
 }
 
+/** Cantidad + unidad, con fracciones ("1/2 LITRO") o decimales ("1.15 KG"). */
+const QUANTITY_UNIT_TOKEN =
+  /\b(?:\d+\s*\/\s*\d+|\d+(?:\.\d+)?)\s*(?:LITROS?|LTS?|ML|KG|KILOS?|GAL(?:ONES?)?)\b/gi;
+
+const FRACTION_QUANTITY = /\b(\d+)\s*\/\s*(\d+)\s*(LITROS?|ML|KG|KILOS?)\b/;
+const DECIMAL_QUANTITY = /\b(\d+(?:\.\d+)?)\s*(LITROS?|ML|KG|KILOS?)\b/;
+
+/** 0.5 en vez de "0.50"; 20 en vez de "20.00". */
+function formatQuantity(value: number): string {
+  return String(Number(value.toFixed(4)));
+}
+
+function presentationSuffix(unitWord: string): "L" | "ml" | "kg" {
+  const upper = unitWord.toUpperCase();
+  if (upper.startsWith("ML")) return "ml";
+  if (upper.startsWith("KG") || upper.startsWith("KILO")) return "kg";
+  return "L";
+}
+
+/**
+ * Presentación normalizada a partir del nombre: "20L", "0.5L", "500ml", "1.15kg".
+ *
+ * Las fracciones se resuelven antes que los decimales: el catálogo real trae 33
+ * productos "… 1/2 LITRO" que antes caían en el patrón decimal y quedaban
+ * marcados como "2L" (media garrafa vendida como dos litros).
+ */
 export function extractPresentation(name: string): string | null {
   const upper = name.toUpperCase();
-  const liters = upper.match(/\b(\d+(?:\.\d+)?)\s*LITROS?\b/);
-  if (liters) return `${liters[1]}L`;
-  const ml = upper.match(/\b(\d+(?:\.\d+)?)\s*ML\b/);
-  if (ml) return `${ml[1]}ml`;
-  const kg = upper.match(/\b(\d+(?:\.\d+)?)\s*(?:KG|KILOS?)\b/);
-  if (kg) return `${kg[1]}kg`;
+  const fraction = upper.match(FRACTION_QUANTITY);
+  if (fraction) {
+    const numerator = Number(fraction[1]);
+    const denominator = Number(fraction[2]);
+    if (denominator > 0) {
+      return `${formatQuantity(numerator / denominator)}${presentationSuffix(fraction[3]!)}`;
+    }
+  }
+  const decimal = upper.match(DECIMAL_QUANTITY);
+  if (decimal) return `${decimal[1]}${presentationSuffix(decimal[2]!)}`;
   return null;
 }
 
+/**
+ * Nombre de la línea de producto: el nombre sin su presentación, para que
+ * "AJAX HESPEL 1 LITRO" y "AJAX HESPEL 20 LITROS" compartan clave.
+ */
 export function extractProductGroupKey(name: string): string | null {
   const presentation = extractPresentation(name);
   let group = name.trim();
   if (presentation) {
     group = group
       .replace(new RegExp(`\\b${presentation.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b`, "i"), "")
-      .replace(/\b\d+(?:\.\d+)?\s*(?:LITROS?|ML|KG|KILOS?|GAL(?:ONES?)?)\b/gi, "")
+      .replace(QUANTITY_UNIT_TOKEN, "")
       .replace(/\s+/g, " ")
       .trim();
   }
   return group.length >= 3 ? group.slice(0, 80) : null;
+}
+
+/**
+ * Litros que representa UNA unidad del producto, para el inventario por
+ * sucursal (los líquidos se inventarían en litros, no en envases).
+ *
+ * Prioridad: la columna explícita `litersPerUnit` del catálogo, y si no está,
+ * la presentación del nombre. Devuelve null para lo que no se mide en volumen
+ * (kilos, piezas) y para los galones y bases sin presentación, que necesitan
+ * captura manual.
+ */
+export function litersFromPresentation(presentation: string | null | undefined): number | null {
+  const value = (presentation ?? "").trim();
+  if (!value) return null;
+  const match = value.match(/^(\d+(?:\.\d+)?)\s*(L|ml)$/i);
+  if (!match) return null;
+  const amount = Number(match[1]);
+  if (!Number.isFinite(amount) || amount <= 0) return null;
+  return match[2]!.toLowerCase() === "ml" ? amount / 1000 : amount;
+}
+
+/** Producto del catálogo visto por el POS para resolver sus litros por unidad. */
+export interface LitersPerUnitProduct {
+  name: string;
+  litersPerUnit?: number | string | null;
+  variants?: Record<string, unknown> | null;
+}
+
+export function productLitersPerUnit(product: LitersPerUnitProduct): number | null {
+  const explicit = Number(product.litersPerUnit ?? 0);
+  if (Number.isFinite(explicit) && explicit > 0) return explicit;
+  const fromVariants = product.variants?.presentacion;
+  const presentation =
+    typeof fromVariants === "string" && fromVariants.trim()
+      ? fromVariants.trim()
+      : extractPresentation(product.name);
+  return litersFromPresentation(presentation);
 }
 
 export function inferProductUnit(name: string): ProductUnit {
@@ -106,9 +177,9 @@ export function parseProductCatalogFields(name: string): ParsedProductCatalogFie
  * cubeta, palangana) y no llevan bidón. Espejo de la regla del agente en
  * `Agent/agent/lib/ops/bidon.ts` (carriesBidon): cambios van a ambos lados.
  */
-const CONTAINER_CATEGORIES = new Set(["liquidos", "limpieza a granel"]);
+export const CONTAINER_CATEGORIES = new Set(["liquidos", "limpieza a granel"]);
 
-function normalizeCategory(value: string | null | undefined): string {
+export function normalizeCategory(value: string | null | undefined): string {
   return (value ?? "")
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "")

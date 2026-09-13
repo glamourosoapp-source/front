@@ -119,6 +119,8 @@ export const NOTIFICATION_TYPES = {
   OUTREACH_PAUSED: "outreach_paused",
   /** El quality rating del número de WhatsApp se degradó (amarillo/rojo). */
   WHATSAPP_QUALITY_ALERT: "whatsapp_quality_alert",
+  /** El scheduler generó el pedido de surtido del día de corte de una sucursal. */
+  RESTOCK_ORDER_CREATED: "restock_order_created",
 } as const;
 
 /** Path del gateway WebSocket del Back (mismo host que la API). */
@@ -128,6 +130,7 @@ export const NOTIFICATION_ENTITY_TYPES = {
   CONVERSATION: "conversation",
   ORDER: "order",
   CAMPAIGN: "campaign",
+  RESTOCK_ORDER: "restock_order",
 } as const;
 
 export const PRICING_TIERS = {
@@ -140,6 +143,73 @@ export const MAX_CUSTOMER_LOCATIONS = 3;
 
 /** Precio del bidón (envase retornable de presentaciones 20L). Futuro: mover a organizations.brand_settings. */
 export const CONTAINER_UNIT_PRICE = 25;
+
+/** Tipo de punto: sucursal propia con POS, o franquicia que solo levanta pedidos a fábrica. */
+export const BRANCH_TYPES = {
+  BRANCH: "branch",
+  FRANCHISE: "franchise",
+} as const;
+
+/** Litros que trae un bidón de surtido. Fábrica siempre despacha líquidos en bidones. */
+export const BIDON_LITERS = 20;
+
+export const POS_SALE_STATUS = {
+  COMPLETED: "completed",
+  VOIDED: "voided",
+} as const;
+
+/** Métodos de cobro en caja. v1 solo efectivo; el enum queda abierto para tarjeta/transferencia. */
+export const POS_PAYMENT_METHODS = {
+  CASH: "cash",
+} as const;
+
+/**
+ * Cómo se cobra una partida del ticket:
+ * - `piece`: una unidad del catálogo (botella 1 L, garrafa 5 L, bidón sellado).
+ *   Si el producto pertenece a una línea de líquido, descuenta sus litros.
+ * - `liter`: litros sueltos servidos de una línea (decimales).
+ */
+export const POS_SALE_UNITS = {
+  PIECE: "piece",
+  LITER: "liter",
+} as const;
+
+/** Tipos de movimiento del kardex de inventario por sucursal. */
+export const INVENTORY_MOVEMENT_TYPES = {
+  SALE: "sale",
+  SALE_VOID: "sale_void",
+  RESTOCK_IN: "restock_in",
+  ADJUSTMENT: "adjustment",
+  INITIAL: "initial",
+} as const;
+
+/** Origen de un pedido de surtido a fábrica. */
+export const RESTOCK_ORIGIN = {
+  /** Lo generó el scheduler el día de corte de la sucursal. */
+  SHORTAGE_AUTO: "shortage_auto",
+  /** Lo armó el administrador desde el panel de faltantes. */
+  SHORTAGE_MANUAL: "shortage_manual",
+  /** Lo levantó una franquicia desde su portal. */
+  FRANCHISE: "franchise",
+} as const;
+
+export const RESTOCK_ORDER_STATUS = {
+  PENDING: "pending",
+  APPROVED: "approved",
+  PREPARING: "preparing",
+  SENT: "sent",
+  RECEIVED: "received",
+  CANCELLED: "cancelled",
+} as const;
+
+/** Unidad en la que fábrica despacha una partida de surtido. */
+export const RESTOCK_ITEM_UNITS = {
+  PIECE: "pieza",
+  BIDON: "bidon",
+} as const;
+
+/** Anchos de papel soportados por las impresoras térmicas de sucursal. */
+export const TICKET_PAPER_WIDTHS = [58, 80] as const;
 
 /** Acciones disponibles por módulo para perfiles de permisos. */
 export const PERMISSION_ACTIONS = ["view", "create", "update", "delete"] as const;
@@ -170,6 +240,13 @@ export const PERMISSION_MODULES = [
   { key: "notifications", label: "Notificaciones" },
   { key: "settings", label: "Configuracion" },
   { key: "users", label: "Usuarios" },
+  { key: "pos", label: "POS: caja (cobrar)" },
+  { key: "posBranches", label: "POS: sucursales" },
+  { key: "posInventory", label: "POS: inventario por sucursal" },
+  { key: "posReports", label: "POS: cortes y reportes" },
+  { key: "posRestock", label: "POS: faltantes y surtido" },
+  { key: "factory", label: "Fábrica: pedidos por enviar" },
+  { key: "franchise", label: "Franquicia: pedidos a fábrica" },
 ] as const;
 
 /**
@@ -206,3 +283,14 @@ export type NotificationType = (typeof NOTIFICATION_TYPES)[keyof typeof NOTIFICA
 export type NotificationEntityType =
   (typeof NOTIFICATION_ENTITY_TYPES)[keyof typeof NOTIFICATION_ENTITY_TYPES];
 export type PricingTier = (typeof PRICING_TIERS)[keyof typeof PRICING_TIERS];
+export type BranchType = (typeof BRANCH_TYPES)[keyof typeof BRANCH_TYPES];
+export type PosSaleStatus = (typeof POS_SALE_STATUS)[keyof typeof POS_SALE_STATUS];
+export type PosPaymentMethod = (typeof POS_PAYMENT_METHODS)[keyof typeof POS_PAYMENT_METHODS];
+export type PosSaleUnit = (typeof POS_SALE_UNITS)[keyof typeof POS_SALE_UNITS];
+export type InventoryMovementType =
+  (typeof INVENTORY_MOVEMENT_TYPES)[keyof typeof INVENTORY_MOVEMENT_TYPES];
+export type RestockOrigin = (typeof RESTOCK_ORIGIN)[keyof typeof RESTOCK_ORIGIN];
+export type RestockOrderStatus =
+  (typeof RESTOCK_ORDER_STATUS)[keyof typeof RESTOCK_ORDER_STATUS];
+export type RestockItemUnit = (typeof RESTOCK_ITEM_UNITS)[keyof typeof RESTOCK_ITEM_UNITS];
+export type TicketPaperWidth = (typeof TICKET_PAPER_WIDTHS)[number];

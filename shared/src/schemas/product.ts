@@ -24,6 +24,12 @@ export const createProductSchema = z.object({
   // Exento del control de existencias: se puede vender aunque stock sea 0.
   unlimitedStock: z.boolean().default(true),
   isAvailable: z.boolean().default(true),
+  /** Código de barras del envase; lo escanea la caja del POS. */
+  barcode: z.union([z.string().max(64), z.literal(""), z.null()]).optional(),
+  /** Línea de líquido: su inventario en sucursal se lleva en litros. */
+  lineId: z.union([z.string().uuid(), z.null()]).optional(),
+  /** Litros que representa UNA unidad de este producto (20, 4, 1, 0.5…). */
+  litersPerUnit: z.union([z.null(), z.coerce.number().positive().max(1000)]).optional(),
   imageUrl: z.union([z.string().url(), z.literal(""), z.null()]).optional(),
   variants: z.record(z.unknown()).optional(),
   metadata: z.record(z.unknown()).default({}),

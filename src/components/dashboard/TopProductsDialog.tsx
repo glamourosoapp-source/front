@@ -10,6 +10,7 @@ import {
   type DashboardTopProducts,
   type DashboardTopProductsOrderBy,
 } from "@glamouroso/shared/schemas/dashboard";
+import { formatMoney } from "@/lib/format-money";
 
 interface TopProductsDialogProps {
   onClose: () => void;
@@ -20,9 +21,6 @@ interface TopProductsDialogProps {
   availableYears: number[];
 }
 
-function formatMoney(value: number): string {
-  return `$${value.toLocaleString("es-MX", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-}
 
 function periodLabel(year: number | null, month: number | null): string {
   if (year === null) return "Todo el tiempo";

@@ -88,6 +88,24 @@ export function ProductFormDialog({ open, editing, categories, saving = false, o
           <p className="form-section-title">Informacion general</p>
           <TextField name="name" label="Nombre del producto" defaultValue={editing?.name || ""} fullWidth required />
           <TextField name="sku" label="SKU" defaultValue={editing?.sku || ""} fullWidth />
+          <TextField
+            name="barcode"
+            label="Código de barras"
+            defaultValue={editing?.barcode || ""}
+            fullWidth
+            helperText="Lo que escanea el lector de la caja."
+          />
+          {editing?.lineId ? (
+            <TextField
+              name="litersPerUnit"
+              label="Litros por unidad"
+              type="number"
+              defaultValue={editing?.litersPerUnit ?? ""}
+              fullWidth
+              inputProps={{ min: 0, step: 0.01 }}
+              helperText={`Pertenece a la línea ${editing?.line?.name ?? "de líquidos"}: al venderse descuenta estos litros del inventario de la sucursal.`}
+            />
+          ) : null}
           <TextField select name="categoryId" label="Categoria" defaultValue={editing?.category?.id || ""} fullWidth>
             <MenuItem value="">Sin categoria</MenuItem>
             {categories

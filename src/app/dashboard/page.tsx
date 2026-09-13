@@ -29,6 +29,7 @@ import { CalendarDays, TrendingUp, DollarSign, Activity, Sparkles, Users, Wallet
 import type { PermissionModule } from "@glamouroso/shared";
 import { useAuthStore } from "@/stores/auth.store";
 import { usePermissions } from "@/lib/permissions";
+import { formatMoney } from "@/lib/format-money";
 
 // Primera ruta a la que se redirige a quien no puede ver el Overview (orden del sidebar).
 const NAV_ROUTES: { module: PermissionModule; href: string }[] = [
@@ -43,11 +44,13 @@ const NAV_ROUTES: { module: PermissionModule; href: string }[] = [
   { module: "notifications", href: "/dashboard/notifications" },
   { module: "users", href: "/dashboard/users" },
   { module: "settings", href: "/dashboard/settings" },
+  // Punto de venta: un perfil que solo administra el POS aterriza aquí.
+  { module: "posBranches", href: "/dashboard/pos/sucursales" },
+  { module: "posInventory", href: "/dashboard/pos/inventario" },
+  { module: "posReports", href: "/dashboard/pos/cortes" },
+  { module: "posRestock", href: "/dashboard/pos/surtido" },
 ];
 
-function formatMoney(value: number): string {
-  return `$${value.toLocaleString("es-MX", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-}
 
 /** Etiqueta "vie 15" para una fecha DATEONLY sin correrla de día por timezone. */
 function weekdayLabel(dateOnly: string): string {

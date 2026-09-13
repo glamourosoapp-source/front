@@ -6,7 +6,8 @@
     "dev": "next dev --turbopack",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "icons:pos": "bun run scripts/generate-pos-icons.ts"
   },
   "dependencies": {
     "@emotion/cache": "^11.14.0",
@@ -15,6 +16,7 @@
     "@glamouroso/shared": "file:./shared",
     "@mui/icons-material": "^7.2.0",
     "@mui/material": "^7.2.0",
+    "@mui/material-nextjs": "^7",
     "@mui/x-date-pickers": "^9.3.0",
     "axios": "^1.11.0",
     "clsx": "^2.1.1",

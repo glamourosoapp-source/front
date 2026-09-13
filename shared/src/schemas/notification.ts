@@ -9,6 +9,7 @@ const notificationType = z.enum([
   NOTIFICATION_TYPES.CAMPAIGN_COMPLETED,
   NOTIFICATION_TYPES.OUTREACH_PAUSED,
   NOTIFICATION_TYPES.WHATSAPP_QUALITY_ALERT,
+  NOTIFICATION_TYPES.RESTOCK_ORDER_CREATED,
 ]);
 
 export const queryNotificationSchema = paginationSchema.extend({

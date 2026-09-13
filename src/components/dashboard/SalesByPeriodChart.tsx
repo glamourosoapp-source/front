@@ -12,6 +12,7 @@ import {
   CartesianGrid,
   Tooltip as ChartTooltip,
 } from "recharts";
+import { formatMoney } from "@/lib/format-money";
 
 const MONTH_SHORT = ["Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"];
 export const MONTH_LONG = [
@@ -29,9 +30,6 @@ export const MONTH_LONG = [
   "Diciembre",
 ];
 
-function formatMoney(value: number): string {
-  return `$${value.toLocaleString("es-MX", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-}
 
 /** "29 ago" (o "sáb 29 ago" con `withWeekday`) para una fecha DATEONLY sin correrla de día por timezone. */
 function shortDate(dateOnly: string, withWeekday = false): string {

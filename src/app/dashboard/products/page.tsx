@@ -152,6 +152,7 @@ export default function ProductsPage() {
     const payload: Record<string, unknown> = {
       name: String(form.get("name")),
       sku: String(form.get("sku") || ""),
+      barcode: String(form.get("barcode") || "") || null,
       unit: String(form.get("unit") || "pieza"),
       unitType: unitType || null,
       unitsPerPackage: unitsPerPackageRaw ? Number(unitsPerPackageRaw) : null,
@@ -165,6 +166,10 @@ export default function ProductsPage() {
       isAvailable: String(form.get("isAvailable") || "true") === "true",
       variants,
     };
+    // Solo viaja si el producto ya pertenece a una línea: la asignación se hace
+    // desde Líneas de líquidos, que es donde se decide el precio del granel.
+    const litersRaw = String(form.get("litersPerUnit") || "");
+    if (litersRaw !== "") payload.litersPerUnit = Number(litersRaw);
     if (can("productCosts", "update")) payload.cost = Number(form.get("cost") || 0);
     setSaving(true);
     try {

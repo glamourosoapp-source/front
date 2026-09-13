@@ -1,0 +1,644 @@
+/*
+ * Portal de franquicias.
+ *
+ * Estilos propios en vez de `sx` suelto porque la pantalla necesita media
+ * queries y estados de hover/foco, que no se pueden escribir inline.
+ *
+ * Dos cosas mandan el diseño:
+ *
+ * 1. Un pedido de franquicia son **decenas de partidas**, no tres. La cantidad
+ *    se ajusta desde la fila del catálogo y el carrito es una lista de repaso
+ *    con el total siempre a la vista.
+ * 2. El carrito venía armado con tres `Button` de MUI (menos, más, borrar) en
+ *    una fila. Cada uno trae `min-width: 64px`, así que la fila pedía 368 px
+ *    dentro de un panel de 318: la cantidad se partía en dos renglones y el
+ *    bote de basura quedaba cortado. Aquí los controles son botones cuadrados.
+ */
+
+/* ---------- Armazón ---------- */
+
+.fr-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 360px;
+  gap: 20px;
+  align-items: start;
+}
+
+.fr-cart {
+  display: flex;
+  flex-direction: column;
+  position: sticky;
+  top: 20px;
+  /* Deja siempre visibles el total y el botón, aunque el pedido sea largo. */
+  max-height: calc(100vh - 40px);
+}
+
+/* La barra, el velo y el tirador solo existen en la versión de una columna. */
+.fr-bar,
+.fr-scrim,
+.fr-cart-close {
+  display: none;
+}
+
+/*
+ * Debajo de esto el carrito de 360 px deja al catálogo sin ancho útil, así que
+ * la pantalla se apila. Pero apilar deja el carrito **después** de 60 renglones
+ * de catálogo: en un celular el pedido se armaría a ciegas. Por eso aquí el
+ * carrito pasa a ser una hoja que sube desde abajo, con una barra fija que
+ * siempre canta cuántas partidas van y cuánto suman.
+ */
+@media (max-width: 1040px) {
+  .fr-layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  /* Espacio para que la barra no tape el último renglón del catálogo. */
+  .fr-page {
+    padding-bottom: 84px;
+  }
+
+  .fr-cart {
+    position: fixed;
+    z-index: 1200;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    /*
+     * Sin esto la hoja hereda el `top: 20px` del modo escritorio: con `top` y
+     * `bottom` a la vez queda anclada arriba, y cerrada asomaba 87 px sobre la
+     * barra en vez de esconderse.
+     */
+    top: auto;
+    max-height: 86vh;
+    border-radius: 16px 16px 0 0;
+    box-shadow: 0 -10px 40px rgba(18, 24, 38, 0.18);
+    transform: translateY(101%);
+    transition: transform 0.22s ease;
+  }
+
+  .fr-cart.is-open {
+    transform: none;
+  }
+
+  .fr-cart-close {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 34px;
+    height: 34px;
+    margin-left: 4px;
+    border: 0;
+    border-radius: 8px;
+    background: transparent;
+    color: var(--muted);
+    cursor: pointer;
+  }
+
+  .fr-scrim {
+    display: block;
+    position: fixed;
+    inset: 0;
+    z-index: 1199;
+    background: rgba(18, 24, 38, 0.42);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.22s ease;
+  }
+
+  .fr-scrim.is-open {
+    opacity: 1;
+    pointer-events: auto;
+  }
+
+  .fr-bar {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    position: fixed;
+    z-index: 1100;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    padding: 10px 16px calc(10px + env(safe-area-inset-bottom));
+    background: #fff;
+    border-top: 1px solid var(--border);
+    box-shadow: 0 -4px 18px rgba(18, 24, 38, 0.08);
+  }
+
+  .fr-bar-info {
+    min-width: 0;
+    line-height: 1.2;
+  }
+
+  .fr-bar-count {
+    color: var(--muted);
+    font-size: 12.5px;
+  }
+
+  .fr-bar-total {
+    font-size: 20px;
+    font-weight: 700;
+    color: var(--glam-navy);
+    font-variant-numeric: tabular-nums;
+  }
+
+  .fr-bar-btn {
+    margin-left: auto;
+    flex: 0 0 auto;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    height: 44px;
+    padding: 0 18px;
+    border: 0;
+    border-radius: 10px;
+    background: var(--glam-blue);
+    color: #fff;
+    font-size: 15px;
+    font-weight: 700;
+    cursor: pointer;
+  }
+
+  .fr-bar-btn:disabled {
+    background: #cfd7e4;
+    cursor: default;
+  }
+
+}
+
+/* ---------- Carrito ---------- */
+
+.fr-cart-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 12px;
+  color: var(--glam-navy);
+  font-size: 17px;
+}
+
+.fr-cart-count {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 24px;
+  height: 22px;
+  padding: 0 7px;
+  border-radius: 999px;
+  background: var(--soft-blue);
+  color: var(--glam-blue);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.fr-cart-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.fr-cart-list {
+  overflow-y: auto;
+  margin: 0 -4px;
+  padding: 0 4px;
+  /* El scroll de la lista no arrastra la página de atrás. */
+  overscroll-behavior: contain;
+}
+
+.fr-cart-item {
+  padding: 8px 0;
+  border-top: 1px solid var(--border);
+}
+
+.fr-cart-item:first-child {
+  border-top: 0;
+  padding-top: 0;
+}
+
+.fr-cart-title {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+/*
+ * Dos renglones por partida, no tres: con 22 partidas la versión de tres
+ * líneas pedía 2,400 px de scroll en una columna de 360.
+ */
+.fr-cart-name {
+  flex: 1;
+  min-width: 0;
+  font-weight: 600;
+  line-height: 1.3;
+  color: var(--text);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.fr-cart-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 6px;
+}
+
+.fr-cart-each {
+  color: var(--muted);
+  font-size: 12.5px;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+.fr-cart-amount {
+  margin-left: auto;
+  font-weight: 700;
+  font-size: 15px;
+  color: var(--glam-navy);
+  /* El importe nunca se parte: es el dato que se revisa antes de confirmar. */
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+.fr-cart-remove {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  flex: 0 0 28px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+
+.fr-cart-remove:hover {
+  background: #fdeaea;
+  color: #c62828;
+}
+
+.fr-cart-empty {
+  display: grid;
+  place-items: center;
+  gap: 6px;
+  padding: 26px 8px;
+  text-align: center;
+  color: var(--muted);
+  font-size: 13.5px;
+}
+
+.fr-cart-foot {
+  border-top: 1px solid var(--border);
+  padding-top: 12px;
+  margin-top: 12px;
+}
+
+.fr-cart-total {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.fr-cart-total-label {
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.fr-cart-total-value {
+  font-size: 24px;
+  font-weight: 700;
+  color: var(--glam-navy);
+  font-variant-numeric: tabular-nums;
+}
+
+.fr-cart-note {
+  margin: 8px 0 0;
+  color: var(--muted);
+  font-size: 12.5px;
+  line-height: 1.45;
+}
+
+/* ---------- Paso de cantidad ---------- */
+
+.fr-stepper {
+  display: inline-flex;
+  align-items: center;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: #fff;
+  overflow: hidden;
+}
+
+.fr-step-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border: 0;
+  background: transparent;
+  color: var(--glam-blue);
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.fr-step-btn:hover:not(:disabled) {
+  background: var(--soft-blue);
+}
+
+.fr-step-btn:disabled {
+  color: #c3cad8;
+  cursor: default;
+}
+
+/*
+ * Editable a mano: pedir 12 bidones a base de clics es de las cosas que hacen
+ * que la gente termine mandando la lista por WhatsApp.
+ */
+.fr-step-input {
+  width: 44px;
+  height: 30px;
+  border: 0;
+  border-left: 1px solid var(--border);
+  border-right: 1px solid var(--border);
+  text-align: center;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+  -moz-appearance: textfield;
+}
+
+.fr-step-input::-webkit-outer-spin-button,
+.fr-step-input::-webkit-inner-spin-button {
+  appearance: none;
+  margin: 0;
+}
+
+.fr-step-input:focus {
+  outline: 2px solid var(--glam-blue);
+  outline-offset: -2px;
+}
+
+/* ---------- Catálogo ---------- */
+
+.fr-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 14px;
+}
+
+.fr-toolbar-hint {
+  width: 100%;
+  margin: 0;
+  color: var(--muted);
+  font-size: 12.5px;
+}
+
+.fr-section-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 10px;
+  color: var(--glam-navy);
+  font-size: 16px;
+}
+
+.fr-section-count {
+  margin-left: auto;
+  color: var(--muted);
+  font-size: 12.5px;
+  font-weight: 400;
+}
+
+/*
+ * La fila del catálogo lleva su propio paso de cantidad: en un pedido de 20
+ * partidas, ir al carrito a ajustar cada una es el trabajo pesado. Aquí se
+ * agrega y se corrige sin salir de la lista.
+ *
+ * Es una fila flex y no una `<table>` para que en celular pueda partirse en dos
+ * renglones —nombre arriba, precio y cantidad abajo— sin pelear con el ancho de
+ * las columnas.
+ */
+.fr-catalog-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 0;
+  border-top: 1px solid var(--border);
+}
+
+.fr-catalog-row:first-child {
+  border-top: 0;
+}
+
+.fr-catalog-row.is-in-order {
+  background: var(--soft-blue);
+  margin: 0 -10px;
+  padding: 10px;
+  border-radius: 8px;
+  border-top-color: transparent;
+}
+
+.fr-catalog-main {
+  flex: 1;
+  min-width: 0;
+}
+
+.fr-catalog-name {
+  font-weight: 500;
+  line-height: 1.3;
+}
+
+.fr-catalog-meta {
+  margin-top: 2px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.fr-catalog-price {
+  flex: 0 0 auto;
+  font-weight: 700;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+.fr-catalog-action {
+  flex: 0 0 auto;
+  display: flex;
+  justify-content: flex-end;
+  min-width: 132px;
+}
+
+.fr-add-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 30px;
+  padding: 0 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: #fff;
+  color: var(--glam-blue);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
+}
+
+.fr-add-btn:hover {
+  background: var(--soft-blue);
+  border-color: var(--glam-blue);
+}
+
+.fr-more {
+  padding: 12px 4px 0;
+  color: var(--muted);
+  font-size: 12.5px;
+  text-align: center;
+}
+
+.fr-empty-row {
+  padding: 24px;
+  text-align: center;
+  color: var(--muted);
+}
+
+/* En celular el nombre se queda con todo el ancho y baja el resto. */
+@media (max-width: 620px) {
+  .fr-catalog-row {
+    flex-wrap: wrap;
+    row-gap: 8px;
+  }
+
+  .fr-catalog-main {
+    flex: 1 0 100%;
+  }
+
+  .fr-catalog-action {
+    margin-left: auto;
+  }
+}
+
+/* ---------- Botones de texto y revisión ---------- */
+
+.fr-link-btn {
+  border: 0;
+  background: transparent;
+  color: var(--glam-blue);
+  font-size: 12.5px;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 2px 4px;
+  border-radius: 6px;
+}
+
+.fr-link-btn:hover {
+  background: var(--soft-blue);
+}
+
+.fr-link-btn.danger {
+  color: var(--muted);
+}
+
+.fr-link-btn.danger:hover {
+  background: #fdeaea;
+  color: #c62828;
+}
+
+.fr-confirm-list {
+  max-height: 44vh;
+  overflow-y: auto;
+  margin: 4px 0 0;
+}
+
+.fr-confirm-row {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  padding: 7px 0;
+  border-top: 1px solid var(--border);
+  font-size: 14px;
+}
+
+.fr-confirm-row:first-child {
+  border-top: 0;
+}
+
+.fr-confirm-qty {
+  flex: 0 0 74px;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.fr-confirm-amount {
+  margin-left: auto;
+  font-weight: 700;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+/* La revisión, a pantalla completa en celular: es la última mirada al pedido. */
+@media (max-width: 620px) {
+  .fr-confirm .MuiDialog-paper {
+    margin: 0;
+    width: 100%;
+    max-width: 100%;
+    height: 100%;
+    max-height: 100%;
+    border-radius: 0;
+  }
+
+  .fr-confirm-list {
+    max-height: none;
+  }
+
+  .fr-confirm .MuiDialogActions-root button {
+    min-height: 44px;
+  }
+}
+
+/*
+ * Tamaños para el dedo. Va al FINAL del archivo a propósito: estas reglas
+ * tienen la misma especificidad que las base y, a igualdad, gana la última.
+ * Puestas dentro del bloque de arriba quedaban antes de `.fr-step-btn` y no
+ * hacían nada (los botones seguían de 30 px en el celular).
+ */
+@media (max-width: 1040px) {
+  .fr-step-btn {
+    width: 40px;
+    height: 40px;
+  }
+
+  .fr-step-input {
+    width: 52px;
+    height: 40px;
+    /* 16px o Safari hace zoom al enfocar el campo. */
+    font-size: 16px;
+  }
+
+  .fr-cart-remove {
+    width: 36px;
+    height: 36px;
+    flex-basis: 36px;
+  }
+
+  .fr-add-btn {
+    height: 38px;
+    padding: 0 16px;
+  }
+
+  .fr-link-btn {
+    padding: 6px 8px;
+    font-size: 13px;
+  }
+}

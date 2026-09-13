@@ -10,7 +10,7 @@ import { TeamFormDialog } from "@/components/users/TeamFormDialog";
 import { httpClient, getApiErrorMessage } from "@/services/http-client";
 import { ADMIN_ROLES } from "@glamouroso/shared/constants";
 import { usePermissions } from "@/lib/permissions";
-import { ListResponse, Profile, Team, User } from "@/types";
+import { Branch, ListResponse, Profile, Team, User } from "@/types";
 import { toast } from "sonner";
 
 export default function UsersPage() {
@@ -22,6 +22,7 @@ export default function UsersPage() {
   const [users, setUsers] = useState<User[]>([]);
   const [profiles, setProfiles] = useState<Profile[]>([]);
   const [teams, setTeams] = useState<Team[]>([]);
+  const [branches, setBranches] = useState<Branch[]>([]);
 
   const [userDialogOpen, setUserDialogOpen] = useState(false);
   const [editingUser, setEditingUser] = useState<User | null>(null);
@@ -37,6 +38,11 @@ export default function UsersPage() {
         httpClient.get<ListResponse<Profile>>("/profiles", { limit: 200 }),
         httpClient.get<ListResponse<Team>>("/teams", { limit: 200 }),
       ]);
+      // Las sucursales son opcionales: sin permiso de POS el selector no sale.
+      const branchesRes = await httpClient
+        .get<ListResponse<Branch>>("/pos/branches", { limit: 200 })
+        .catch(() => null);
+      if (branchesRes) setBranches(branchesRes.items);
       setUsers(usersRes.items);
       setProfiles(profilesRes.items);
       setTeams(teamsRes.items);
@@ -260,6 +266,7 @@ export default function UsersPage() {
         user={editingUser}
         profiles={profiles}
         teams={teams}
+        branches={branches}
         onClose={() => setUserDialogOpen(false)}
         onSaved={() => void load()}
       />

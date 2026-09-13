@@ -4,6 +4,8 @@ import { FormEvent, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Sparkles } from "lucide-react";
 import { useAuthStore } from "@/stores/auth.store";
+import { landingRouteFor } from "@/lib/permissions";
+import { resolvePermissions } from "@glamouroso/shared";
 import { getApiErrorMessage } from "@/services/http-client";
 import "./login.css";
 
@@ -20,7 +22,12 @@ export default function LoginPage() {
     const form = new FormData(event.currentTarget);
     try {
       await login(String(form.get("email")), String(form.get("password")));
-      router.push("/dashboard");
+      // Un cajero, fábrica o franquicia no tienen dashboard: entran a su propia
+      // pantalla. El resto sigue aterrizando en /dashboard como siempre.
+      const user = useAuthStore.getState().user;
+      router.push(
+        landingRouteFor(resolvePermissions(user?.role, user?.profile?.permissions ?? null))
+      );
     } catch (err) {
       setError(getApiErrorMessage(err, "No se pudo iniciar sesión"));
       setLoading(false);

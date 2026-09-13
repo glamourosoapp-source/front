@@ -1,4 +1,17 @@
-import type { NotificationType, Role } from "./constants";
+import type {
+  BranchType,
+  InventoryMovementType,
+  NotificationType,
+  PosPaymentMethod,
+  PosSaleStatus,
+  PosSaleUnit,
+  PricingTier,
+  RestockItemUnit,
+  RestockOrderStatus,
+  RestockOrigin,
+  Role,
+} from "./constants";
+import type { TicketSettings } from "./utils/pos-ticket-settings";
 import type { PermissionMap } from "./permissions";
 
 export interface Profile {
@@ -31,6 +44,9 @@ export interface User {
   profile?: Profile | null;
   teamId?: string | null;
   team?: Team | null;
+  /** Sucursal del POS a la que está fijado el usuario (cajero o franquicia). */
+  branchId?: string | null;
+  branch?: Branch | null;
   /** true mientras el usuario siga usando la contraseña que le puso el admin. */
   mustChangePassword?: boolean;
   /** Última vez que el usuario eligió su propia contraseña. */
@@ -53,8 +69,18 @@ export interface Customer {
   notes?: string;
   source?: string;
   pricingTier?: "retail" | "wholesale";
+  /** Fecha de nacimiento (DATEONLY); la captura la caja al registrar en mostrador. */
+  birthday?: string | null;
   totalOrders?: number;
   totalSpent?: string | number;
+  /**
+   * Compras en sucursal, contadas aparte de los pedidos del CRM: una venta de
+   * mostrador no altera `totalOrders`/`totalSpent`/`lastOrderAt`, así que no
+   * mueve Seguimiento ni Reactivación.
+   */
+  posSalesCount?: number;
+  posSpent?: string | number;
+  lastPosSaleAt?: string | null;
   createdBy?: string | null;
   creator?: { id: string; name: string } | null;
   teamId?: string | null;
@@ -97,8 +123,39 @@ export interface Product {
   /** true = no depende del inventario: existencias infinitas. */
   unlimitedStock?: boolean;
   isAvailable: boolean;
+  /** Código de barras del envase; lo escanea la caja. */
+  barcode?: string | null;
+  /** Línea de líquido a la que pertenece: su inventario en sucursal va en litros. */
+  lineId?: string | null;
+  line?: ProductLine | null;
+  /** Litros que representa UNA unidad de este producto (1, 4, 20, 0.5…). */
+  litersPerUnit?: string | number | null;
   variants?: Record<string, unknown>;
   category?: { id: string; name: string; externalCode?: string };
+}
+
+/**
+ * Línea de líquido: el conjunto de presentaciones (1 L, 4 L, 20 L) que comparten
+ * producto y que en sucursal se inventarían como un solo saldo en litros.
+ */
+export interface ProductLine {
+  id: string;
+  organizationId?: string;
+  name: string;
+  categoryId?: string | null;
+  /** SKU de 20 L: unidad de surtido de fábrica y precio del bidón completo. */
+  bidonProductId: string | null;
+  bidonProduct?: Product | null;
+  /** SKU de 1 L: precio de los litros sueltos. */
+  literProductId: string | null;
+  literProduct?: Product | null;
+  litersPerBidon: string | number;
+  isActive: boolean;
+  /** true si tiene los dos SKU y puede venderse por litro. */
+  canSellByLiter?: boolean;
+  productsCount?: number;
+  createdAt?: string;
+  updatedAt?: string;
 }
 
 export interface Order {
@@ -270,5 +327,248 @@ export interface NotificationStreamEvent {
 export type RealtimeServerEvent =
   | ConversationStreamEvent
   | OrdersChangedEvent
+  | PosSalesChangedEvent
+  | RestockOrdersChangedEvent
   | NotificationStreamEvent
   | RealtimeControlEvent;
+
+/** Sucursal con POS, o franquicia que solo levanta pedidos a fábrica. */
+export interface Branch {
+  id: string;
+  organizationId?: string;
+  /** Prefijo del folio de ticket, p. ej. "SUC01". */
+  code: string;
+  name: string;
+  type: BranchType;
+  street?: string | null;
+  colony?: string | null;
+  city?: string | null;
+  postalCode?: string | null;
+  phone?: string | null;
+  isActive: boolean;
+  /** Día de la semana (0 domingo … 6 sábado) en que se calculan los faltantes. */
+  restockCutoffDow?: number | null;
+  ticketSettings?: Record<string, unknown> | null;
+  notes?: string | null;
+  usersCount?: number;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+/** Existencia de una sucursal: litros de una línea, o piezas de un producto. */
+export interface BranchInventoryRow {
+  id: string;
+  branchId: string;
+  productId?: string | null;
+  product?: Product | null;
+  lineId?: string | null;
+  line?: ProductLine | null;
+  stock: string | number;
+  /** Stock mínimo de ESTA sucursal; es el nivel ideal que repone el surtido. */
+  minStock: string | number;
+  updatedAt?: string;
+}
+
+export interface InventoryMovement {
+  id: string;
+  branchId: string;
+  productId?: string | null;
+  product?: Product | null;
+  lineId?: string | null;
+  line?: ProductLine | null;
+  type: InventoryMovementType;
+  quantity: string | number;
+  balanceAfter: string | number;
+  refType?: string | null;
+  refId?: string | null;
+  userId?: string | null;
+  user?: { id: string; name: string } | null;
+  notes?: string | null;
+  createdAt?: string;
+}
+
+export interface PosSaleItem {
+  id: string;
+  saleId: string;
+  productId?: string | null;
+  product?: Product | null;
+  lineId?: string | null;
+  line?: ProductLine | null;
+  productName: string;
+  sku?: string | null;
+  saleUnit: PosSaleUnit;
+  quantity: string | number;
+  /** Litros descontados del inventario de la línea (null si se cobró por pieza sin línea). */
+  litersDeducted?: string | number | null;
+  unitPrice: string | number;
+  priceTier: PricingTier;
+  /** Desglose de bidones + litros sueltos cuando la partida se cobró por litro. */
+  pricingBreakdown?: Record<string, unknown> | null;
+  total: string | number;
+}
+
+export interface PosSale {
+  id: string;
+  organizationId?: string;
+  branchId: string;
+  branch?: Branch | null;
+  ticketNumber: string;
+  cashierUserId: string;
+  cashier?: { id: string; name: string } | null;
+  customerId?: string | null;
+  customer?: Customer | null;
+  status: PosSaleStatus;
+  subtotal: string | number;
+  discount: string | number;
+  total: string | number;
+  paymentMethod: PosPaymentMethod;
+  amountTendered: string | number;
+  changeAmount: string | number;
+  itemsCount: string | number;
+  notes?: string | null;
+  soldAt: string;
+  printedAt?: string | null;
+  printTarget?: string | null;
+  voidedAt?: string | null;
+  voidedBy?: string | null;
+  voidReason?: string | null;
+  items?: PosSaleItem[];
+}
+
+/** Lo que la caja necesita al abrir: sucursal, ticket y cajero. */
+export interface PosSession {
+  branch: Branch;
+  ticketSettings: TicketSettings;
+  walkInCustomerName: string;
+  cashier: { id: string; name: string };
+  lastSale?: PosSale | null;
+  catalogVersion: string;
+}
+
+/** Producto tal como lo consume la caja (catálogo ligero, sin embeddings ni descripción). */
+export interface PosCatalogProduct {
+  id: string;
+  name: string;
+  sku?: string | null;
+  barcode?: string | null;
+  posId?: string | null;
+  unit: string;
+  price: string | number;
+  wholesalePrice?: string | number | null;
+  categoryName?: string | null;
+  lineId?: string | null;
+  litersPerUnit?: string | number | null;
+  /**
+   * Existencia en la sucursal: piezas del producto, o litros si tiene línea.
+   * `null` cuando quien consulta no tiene `posInventory:view` (el cajero no ve
+   * inventario, ni en pantalla ni en la respuesta).
+   */
+  stock: string | number | null;
+}
+
+/** Línea de líquido vista por la caja, con su existencia en litros. */
+export interface PosCatalogLine {
+  id: string;
+  name: string;
+  bidonProductId: string | null;
+  literProductId: string | null;
+  bidonPrice: string | number | null;
+  bidonWholesalePrice?: string | number | null;
+  literPrice: string | number | null;
+  literWholesalePrice?: string | number | null;
+  litersPerBidon: string | number;
+  canSellByLiter: boolean;
+  /** `null` sin `posInventory:view`, igual que `stock` del producto. */
+  stockLiters: string | number | null;
+  /** `null` sin `posInventory:view`. */
+  minStockLiters: string | number | null;
+}
+
+export interface PosCatalog {
+  version: string;
+  products: PosCatalogProduct[];
+  lines: PosCatalogLine[];
+}
+
+export interface CashCut {
+  id: string;
+  organizationId?: string;
+  branchId?: string | null;
+  branch?: Branch | null;
+  periodStart: string;
+  periodEnd: string;
+  granularity: string;
+  generatedBy?: string | null;
+  generatedByUser?: { id: string; name: string } | null;
+  summary: Record<string, unknown>;
+  createdAt?: string;
+}
+
+export interface RestockOrderItem {
+  id: string;
+  restockOrderId: string;
+  productId?: string | null;
+  product?: Product | null;
+  lineId?: string | null;
+  line?: ProductLine | null;
+  productName: string;
+  unit: RestockItemUnit;
+  requestedQty: string | number;
+  dispatchedQty?: string | number | null;
+  /** Litros por unidad despachada (20 para bidones); congela la conversión del surtido. */
+  litersPerUnit?: string | number | null;
+  prepared: boolean;
+  unitPrice?: string | number | null;
+}
+
+export interface RestockOrder {
+  id: string;
+  organizationId?: string;
+  branchId: string;
+  branch?: Branch | null;
+  origin: RestockOrigin;
+  status: RestockOrderStatus;
+  generatedForDate?: string | null;
+  requestedBy?: string | null;
+  approvedBy?: string | null;
+  sentBy?: string | null;
+  sentAt?: string | null;
+  receivedBy?: string | null;
+  receivedAt?: string | null;
+  notes?: string | null;
+  items?: RestockOrderItem[];
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+/** Faltante calculado de una sucursal, listo para convertirse en pedido de surtido. */
+export interface BranchShortage {
+  lineId?: string | null;
+  productId?: string | null;
+  name: string;
+  unit: RestockItemUnit;
+  /** Litros o piezas en existencia (puede ser negativo). */
+  stock: number;
+  minStock: number;
+  /** Litros o piezas que faltan para el mínimo. */
+  shortage: number;
+  /** Bidones o piezas a pedir, ya redondeados. */
+  requestedQty: number;
+  litersPerUnit?: number | null;
+}
+
+/** Señal de refetch: hubo una venta (o anulación) en una sucursal. */
+export interface PosSalesChangedEvent {
+  type: "pos_sales_changed";
+  action: "created" | "voided";
+  branchId: string;
+  saleId: string;
+}
+
+/** Señal de refetch: cambió un pedido de surtido (creado, aprobado, enviado, recibido). */
+export interface RestockOrdersChangedEvent {
+  type: "restock_orders_changed";
+  action: "created" | "updated" | "sent" | "received" | "cancelled";
+  branchId: string;
+  restockOrderId: string;
+}

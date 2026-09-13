@@ -53,6 +53,7 @@ export function CustomerFormDialog({ open, customer, onClose, onSaved }: Custome
       name: String(form.get("name")),
       phone: String(form.get("phone")),
       email: String(form.get("email") || ""),
+      birthday: String(form.get("birthday") || "") || null,
       notes: String(form.get("notes") || ""),
       pricingTier: String(form.get("pricingTier") || "retail"),
       ...(showTeamSelect ? { teamId: teamIdRaw ? teamIdRaw : null } : {}),
@@ -122,6 +123,14 @@ export function CustomerFormDialog({ open, customer, onClose, onSaved }: Custome
           <TextField name="name" label="Nombre" defaultValue={customer?.name || ""} fullWidth required />
           <TextField name="phone" label="WhatsApp" defaultValue={customer?.phone || ""} fullWidth required />
           <TextField name="email" label="Correo" type="email" defaultValue={customer?.email || ""} fullWidth />
+          <TextField
+            name="birthday"
+            label="Fecha de nacimiento"
+            type="date"
+            defaultValue={customer?.birthday || ""}
+            fullWidth
+            InputLabelProps={{ shrink: true }}
+          />
 
           <Typography variant="subtitle2" sx={{ gridColumn: "1 / -1", mt: 1 }}>
             {isEdit ? "Datos de contacto" : "Domicilio de entrega"}

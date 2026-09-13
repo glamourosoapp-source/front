@@ -22,6 +22,11 @@ import {
   type LucideIcon,
   UserCog,
   Users,
+  Store,
+  Droplets,
+  Warehouse,
+  Receipt,
+  Truck,
 } from "lucide-react";
 import type { PermissionModule } from "@glamouroso/shared";
 import { useAuthStore } from "@/stores/auth.store";
@@ -96,6 +101,17 @@ const sections: NavSection[] = [
           },
         ],
       },
+    ],
+  },
+  {
+    id: "punto-de-venta",
+    label: "Punto de venta",
+    links: [
+      { href: "/dashboard/pos/sucursales", label: "Sucursales", icon: Store, module: "posBranches" },
+      { href: "/dashboard/pos/lineas", label: "Líneas de líquidos", icon: Droplets, module: "posInventory" },
+      { href: "/dashboard/pos/inventario", label: "Inventario", icon: Warehouse, module: "posInventory" },
+      { href: "/dashboard/pos/cortes", label: "Cortes y reportes", icon: Receipt, module: "posReports" },
+      { href: "/dashboard/pos/surtido", label: "Faltantes y surtido", icon: Truck, module: "posRestock" },
     ],
   },
   {

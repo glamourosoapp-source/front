@@ -17,13 +17,11 @@ import {
   CartesianGrid,
   Tooltip as ChartTooltip,
 } from "recharts";
+import { formatMoney } from "@/lib/format-money";
 
 /** Cuántos productos se pintan en la gráfica y en la tabla resumen del panel. */
 const SUMMARY_LIMIT = 5;
 
-function formatMoney(value: number): string {
-  return `$${value.toLocaleString("es-MX", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-}
 
 /** Los nombres del catálogo son largos y en mayúsculas: el eje X solo aguanta un pedazo. */
 function shortName(name: string): string {

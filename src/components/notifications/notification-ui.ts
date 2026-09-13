@@ -2,6 +2,7 @@ import {
   Megaphone,
   MessageCircle,
   PackageCheck,
+  Truck,
   type LucideIcon,
 } from "lucide-react";
 import { NOTIFICATION_TYPES } from "@glamouroso/shared/constants";
@@ -11,7 +12,7 @@ import type { Notification } from "@/types";
 export interface NotificationTypeConfig {
   label: string;
   icon: LucideIcon;
-  tone: "handoff" | "order" | "order-update" | "campaign";
+  tone: "handoff" | "order" | "order-update" | "campaign" | "restock";
 }
 
 export function getNotificationTypeConfig(type: string): NotificationTypeConfig {
@@ -24,6 +25,8 @@ export function getNotificationTypeConfig(type: string): NotificationTypeConfig 
       return { label: "Pedido actualizado", icon: PackageCheck, tone: "order-update" };
     case NOTIFICATION_TYPES.CAMPAIGN_COMPLETED:
       return { label: "Campaña", icon: Megaphone, tone: "campaign" };
+    case NOTIFICATION_TYPES.RESTOCK_ORDER_CREATED:
+      return { label: "Surtido", icon: Truck, tone: "restock" };
     default:
       return { label: "Aviso", icon: MessageCircle, tone: "handoff" };
   }
@@ -32,6 +35,10 @@ export function getNotificationTypeConfig(type: string): NotificationTypeConfig 
 export function hrefForNotification(n: Notification): string {
   if (n.entityType === NOTIFICATION_ENTITY_TYPES.ORDER) {
     return `/dashboard/orders/${n.entityId}`;
+  }
+  if (n.entityType === NOTIFICATION_ENTITY_TYPES.RESTOCK_ORDER) {
+    // El pedido de surtido se atiende desde el panel de faltantes.
+    return "/dashboard/pos/surtido";
   }
   if (n.entityType === NOTIFICATION_ENTITY_TYPES.CONVERSATION) {
     // entityId ES el conversationId: abrir esa conversación, no el inbox genérico.
