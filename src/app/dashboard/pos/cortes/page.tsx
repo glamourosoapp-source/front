@@ -12,7 +12,16 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
-import { FileDown, FileText, Lock, ShieldAlert } from "lucide-react";
+import {
+  Calculator,
+  FileDown,
+  FileText,
+  Lock,
+  Package,
+  Receipt,
+  ShieldAlert,
+  Wallet,
+} from "lucide-react";
 import { httpClient, getApiErrorMessage } from "@/services/http-client";
 import { formatMoney, formatMoneyShort, formatQuantity } from "@/lib/format-money";
 import { usePermissions } from "@/lib/permissions";
@@ -69,6 +78,14 @@ function rangeFor(granularity: Granularity, anchor: string): { from: string; to:
   }
   return { from: anchor, to: anchor };
 }
+
+/** El corte guarda la granularidad en inglés; la etiqueta la lee una persona. */
+const GRANULARITY_LABELS: Record<string, string> = {
+  day: "Día",
+  week: "Semana",
+  month: "Mes",
+  range: "Periodo",
+};
 
 export default function PosCortesPage() {
   const { can } = usePermissions();
@@ -259,24 +276,54 @@ export default function PosCortesPage() {
         </Button>
       </div>
 
-      <div className="grid-4">
-        <div className="metric">
-          <div className="metric-small">Total vendido</div>
-          <div className="metric-strong">{formatMoney(summary?.total ?? 0)}</div>
+      {/*
+        Mismo armado que las tarjetas del Overview: `grid` pone el display,
+        `grid-4` las columnas y `card` el recuadro. Antes iba `grid-4` y
+        `metric` a secas, con `metric-small`/`metric-strong` que no existen en
+        ninguna hoja, y las cuatro cifras salían apiladas y sin tarjeta.
+      */}
+      <section className="grid grid-4">
+        <div className="card metric">
+          <div className="metric-head">
+            <span>Total vendido</span>
+            <div className="metric-icon">
+              <Wallet size={22} />
+            </div>
+          </div>
+          <strong>{formatMoney(summary?.total ?? 0)}</strong>
+          <small>{periodLabel}</small>
         </div>
-        <div className="metric">
-          <div className="metric-small">Tickets</div>
-          <div className="metric-strong">{summary?.ticketsCount ?? 0}</div>
+        <div className="card metric">
+          <div className="metric-head">
+            <span>Tickets</span>
+            <div className="metric-icon">
+              <Receipt size={22} />
+            </div>
+          </div>
+          <strong>{summary?.ticketsCount ?? 0}</strong>
+          <small>Cobrados, sin los anulados</small>
         </div>
-        <div className="metric">
-          <div className="metric-small">Ticket promedio</div>
-          <div className="metric-strong">{formatMoney(summary?.avgTicket ?? 0)}</div>
+        <div className="card metric">
+          <div className="metric-head">
+            <span>Ticket promedio</span>
+            <div className="metric-icon">
+              <Calculator size={22} />
+            </div>
+          </div>
+          <strong>{formatMoney(summary?.avgTicket ?? 0)}</strong>
+          <small>Vendido entre tickets</small>
         </div>
-        <div className="metric">
-          <div className="metric-small">Artículos</div>
-          <div className="metric-strong">{formatQuantity(summary?.itemsCount ?? 0)}</div>
+        <div className="card metric">
+          <div className="metric-head">
+            <span>Artículos</span>
+            <div className="metric-icon">
+              <Package size={22} />
+            </div>
+          </div>
+          <strong>{formatQuantity(summary?.itemsCount ?? 0)}</strong>
+          <small>Piezas y litros sumados</small>
         </div>
-      </div>
+      </section>
 
       <Tabs value={tab} onChange={(_e, value) => setTab(value)}>
         <Tab label="Productos vendidos" />
@@ -409,7 +456,11 @@ export default function PosCortesPage() {
                     <td>{cut.branch ? `${cut.branch.code} · ${cut.branch.name}` : "Todas"}</td>
                     <td>
                       {String(s.from ?? "")} a {String(s.to ?? "")}
-                      <Chip label={cut.granularity} size="small" sx={{ ml: 1, height: 18, fontSize: 10 }} />
+                      <Chip
+                        label={GRANULARITY_LABELS[cut.granularity] ?? cut.granularity}
+                        size="small"
+                        sx={{ ml: 1, height: 18, fontSize: 10 }}
+                      />
                     </td>
                     <td style={{ textAlign: "right", fontWeight: 700 }}>
                       {formatMoney(Number(s.total ?? 0))}

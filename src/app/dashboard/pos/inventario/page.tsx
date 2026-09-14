@@ -19,6 +19,7 @@ import { useDebounce } from "@/hooks/useDebounce";
 import { formatQuantity } from "@/lib/format-money";
 import { usePermissions } from "@/lib/permissions";
 import { Branch, InventoryMovement, ListResponse } from "@/types";
+import { BRANCH_TYPES } from "@glamouroso/shared/constants";
 import { toast } from "sonner";
 
 interface LineRow {
@@ -82,8 +83,12 @@ export default function BranchInventoryPage() {
     httpClient
       .get<ListResponse<Branch>>("/pos/branches", { limit: 200, isActive: "true" })
       .then((res) => {
-        setBranches(res.items);
-        if (res.items.length && !branchId) setBranchId(res.items[0]!.id);
+        // Una franquicia lleva su propio inventario fuera del sistema: aquí
+        // no tiene nada que mostrar, y como primera opción del selector
+        // dejaba la pantalla vacía nada más entrar.
+        const withInventory = res.items.filter((branch) => branch.type !== BRANCH_TYPES.FRANCHISE);
+        setBranches(withInventory);
+        if (withInventory.length && !branchId) setBranchId(withInventory[0]!.id);
       })
       .catch((error) => toast.error(getApiErrorMessage(error, "Error al cargar las sucursales")));
     // Solo al montar: el selector maneja los cambios.
@@ -96,7 +101,9 @@ export default function BranchInventoryPage() {
     try {
       const result = await httpClient.get<InventoryResponse>(
         `/pos/branches/${branchId}/inventory`,
-        { search: debouncedSearch, limit: 300, ...(belowMin ? { belowMin: "true" } : {}) }
+        // 500 es el tope del endpoint (y del servicio): una sucursal tiene
+        // cientos de líneas y productos aunque nunca los haya movido.
+        { search: debouncedSearch, limit: 500, ...(belowMin ? { belowMin: "true" } : {}) }
       );
       setData(result);
     } catch (error) {
@@ -210,14 +217,20 @@ export default function BranchInventoryPage() {
         <Tab
           icon={<Droplets size={15} />}
           iconPosition="start"
-          label={`Líquidos en litros (${data.lines.length})`}
+          label={`Líquidos en litros (${data.lines.length >= 500 ? "500+" : data.lines.length})`}
         />
         <Tab
           icon={<Package size={15} />}
           iconPosition="start"
-          label={`Piezas (${data.products.length})`}
+          label={`Piezas (${data.products.length >= 500 ? "500+" : data.products.length})`}
         />
       </Tabs>
+
+      {(tab === 0 ? data.lines : data.products).length >= 500 ? (
+        <p className="page-kicker" style={{ margin: "8px 0 0" }}>
+          Se muestran los primeros 500. Usa el buscador para llegar al resto.
+        </p>
+      ) : null}
 
       <div className="table-container-premium">
         <table className="table">

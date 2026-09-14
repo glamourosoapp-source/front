@@ -71,13 +71,21 @@ export default function PosSurtidoPage() {
 
   const loadOrders = useCallback(
     async (origin?: string) => {
+      // "branch" agrupa los dos orígenes de sucursal; el endpoint filtra por
+      // un solo `origin`, así que se descartan las franquicias al recibir.
+      const wantBranch = origin === "branch";
+      if (wantBranch) origin = undefined;
       setLoading(true);
       try {
         const result = await httpClient.get<ListResponse<RestockOrder>>("/pos/restock/orders", {
           limit: 100,
           ...(origin ? { origin } : {}),
         });
-        setOrders(result.items);
+        setOrders(
+          wantBranch
+            ? result.items.filter((order) => order.origin !== RESTOCK_ORIGIN.FRANCHISE)
+            : result.items
+        );
       } catch (error) {
         toast.error(getApiErrorMessage(error, "Error al cargar los pedidos"));
       } finally {
@@ -90,7 +98,10 @@ export default function PosSurtidoPage() {
   useEffect(() => {
     if (!canView) return;
     if (tab === 0) void loadShortages();
-    else if (tab === 1) void loadOrders();
+    // Sin filtro, la segunda pestaña traía también los de franquicia y el
+    // mismo pedido salía en las dos. Surtido = lo que sale del corte de
+    // faltantes de una sucursal, automático o manual.
+    else if (tab === 1) void loadOrders("branch");
     else void loadOrders(RESTOCK_ORIGIN.FRANCHISE);
   }, [canView, tab, loadShortages, loadOrders]);
 
@@ -144,7 +155,7 @@ export default function PosSurtidoPage() {
         await httpClient.post(`/pos/restock/orders/${order.id}/cancel`, {});
         toast.success("Pedido cancelado");
       }
-      await loadOrders(tab === 2 ? RESTOCK_ORIGIN.FRANCHISE : undefined);
+      await loadOrders(tab === 2 ? RESTOCK_ORIGIN.FRANCHISE : "branch");
     } catch (error) {
       toast.error(getApiErrorMessage(error, "No se pudo actualizar el pedido"));
     }
@@ -344,10 +355,24 @@ export default function PosSurtidoPage() {
                         ) : null}
                       </td>
                       <td style={{ textAlign: "right" }}>
-                        {formatQuantity(item.requestedQty)} {item.unit === "bidon" ? "bidones" : "pz"}
+                        {formatQuantity(item.requestedQty)}{" "}
+                        {item.unit === "bidon"
+                          ? Number(item.requestedQty) === 1
+                            ? "bidón"
+                            : "bidones"
+                          : "pz"}
                       </td>
                       <td style={{ textAlign: "right" }}>
-                        {item.dispatchedQty == null ? "—" : formatQuantity(item.dispatchedQty)}
+                        {/*
+                          Sin captura de fábrica se despacha lo pedido: en un
+                          pedido ya enviado, "—" leía como "no se mandó nada".
+                        */}
+                        {item.dispatchedQty != null
+                          ? formatQuantity(item.dispatchedQty)
+                          : order.status === RESTOCK_ORDER_STATUS.SENT ||
+                              order.status === RESTOCK_ORDER_STATUS.RECEIVED
+                            ? formatQuantity(item.requestedQty)
+                            : "—"}
                       </td>
                       {order.origin === RESTOCK_ORIGIN.FRANCHISE ? (
                         <td style={{ textAlign: "right" }}>

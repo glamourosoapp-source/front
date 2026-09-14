@@ -391,6 +391,18 @@
   display: none;
 }
 
+/*
+ * En pantallas bajas la ilustración se come el espacio de la navegación: con
+ * la sección "Punto de venta" el menú ya no cabe en 100vh y lo primero que
+ * desaparece bajo la familia es justo esa sección, la más nueva. Los enlaces
+ * mandan sobre el adorno.
+ */
+@media (max-height: 900px) {
+  .sidebar-family {
+    display: none;
+  }
+}
+
 .logout {
   display: flex;
   align-items: center;

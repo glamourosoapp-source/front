@@ -62,6 +62,13 @@ export const bulkBranchInventorySchema = z.object({
 });
 
 export const queryBranchInventorySchema = paginationSchema.extend({
+  /**
+   * El inventario de una sucursal lista TODAS sus líneas y productos, incluso
+   * los que nunca movió (aparecen en 0 para poder fijarles mínimo): son
+   * cientos de renglones. El tope sube a 500 solo aquí, igual que el servicio;
+   * el `paginationSchema` compartido sigue en 200.
+   */
+  limit: z.coerce.number().int().min(1).max(500).default(100),
   /** "lines" = líquidos en litros; "products" = lo que se cuenta por pieza. */
   kind: z.union([z.enum(["lines", "products", "all"]), z.literal(""), z.null()]).optional(),
   categoryId: z.union([z.string().uuid(), z.literal(""), z.null()]).optional(),
