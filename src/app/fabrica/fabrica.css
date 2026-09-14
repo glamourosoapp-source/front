@@ -132,10 +132,27 @@
   cursor: not-allowed;
 }
 
+/*
+ * Columna centrada y no `text-align` a secas: el icono es un `<svg>` que el
+ * reset global pone en `display: block`, así que con solo alinear texto se iba
+ * pegado a la izquierda.
+ */
 .factory-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
   padding: 60px 20px;
   text-align: center;
   color: var(--muted);
+}
+
+.factory-empty h2 {
+  margin: 6px 0 0;
+}
+
+.factory-empty p {
+  margin: 0;
 }
 
 .factory-check {
@@ -231,4 +248,183 @@
   color: #92400e;
   font-size: 13.5px;
   line-height: 1.4;
+}
+
+/* ---------- Información: resumen de lo despachado ---------- */
+
+/*
+ * Este tab usaba `grid-4` y `metric` del dashboard, pero `.grid-4` solo define
+ * las columnas —el `display: grid` vive en `.grid`, que no estaba— y `.metric`
+ * depende de `.card` para el recuadro. Además `metric-small` y `metric-strong`
+ * no existen en ninguna hoja. Resultado: las cuatro cifras salían apiladas,
+ * sin tarjeta y con huecos enormes. Aquí tienen sus propios estilos, con el
+ * tamaño de la app de fábrica, que se usa en tablet.
+ */
+
+.factory-range {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 18px;
+}
+
+.factory-presets {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.factory-preset {
+  height: 40px;
+  padding: 0 14px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: #fff;
+  color: var(--glam-navy);
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s, color 0.15s;
+}
+
+.factory-preset:hover {
+  background: var(--soft-blue);
+  border-color: var(--glam-blue);
+}
+
+.factory-preset.active {
+  background: var(--glam-navy);
+  border-color: var(--glam-navy);
+  color: #fff;
+}
+
+.factory-metrics {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 14px;
+  margin-bottom: 20px;
+}
+
+.factory-metric {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 16px 18px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: #fff;
+}
+
+.factory-metric-icon {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  flex: 0 0 44px;
+  border-radius: 12px;
+  background: var(--soft-blue);
+  color: var(--glam-blue);
+}
+
+.factory-metric-body {
+  min-width: 0;
+}
+
+.factory-metric-label {
+  color: var(--muted);
+  font-size: 11.5px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  line-height: 1.2;
+  /* Dos renglones reservados: con una etiqueta larga ("Productos distintos")
+     el número se bajaba y dejaba de alinearse con los de las otras tarjetas. */
+  min-height: 2.4em;
+}
+
+.factory-metric-value {
+  margin-top: 4px;
+  color: var(--glam-navy);
+  font-size: 26px;
+  font-weight: 700;
+  line-height: 1.1;
+  letter-spacing: -0.01em;
+  font-variant-numeric: tabular-nums;
+}
+
+.factory-metric-value small {
+  margin-left: 3px;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--muted);
+}
+
+/* Ranking: el nombre con una barra de fondo proporcional a lo despachado. */
+.factory-rank {
+  display: inline-grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 7px;
+  background: #f1f5f9;
+  color: var(--muted);
+  font-size: 12.5px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.factory-rank.top {
+  background: var(--soft-blue);
+  color: var(--glam-blue);
+}
+
+.factory-bar {
+  position: relative;
+  height: 6px;
+  /* La columna del producto es muy ancha; la barra se compara mejor corta. */
+  max-width: 320px;
+  margin-top: 6px;
+  border-radius: 999px;
+  background: #eef2f7;
+  overflow: hidden;
+}
+
+.factory-bar span {
+  display: block;
+  height: 100%;
+  border-radius: 999px;
+  background: var(--glam-blue);
+}
+
+.factory-num {
+  text-align: right;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+.factory-num strong {
+  font-size: 17px;
+  color: var(--glam-navy);
+}
+
+.factory-table tfoot td {
+  height: 52px;
+  background: #f8fafc;
+  border-top: 2px solid var(--border);
+  border-bottom: 0;
+  font-weight: 700;
+  color: var(--glam-navy);
+}
+
+@media (max-width: 1100px) {
+  .factory-metrics {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 560px) {
+  .factory-metrics {
+    grid-template-columns: minmax(0, 1fr);
+  }
 }

@@ -3,7 +3,18 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Image from "next/image";
 import { Button, Chip, Tab, Tabs, TextField } from "@mui/material";
-import { AlertTriangle, LogOut, PackageCheck, RefreshCw, Send, Truck } from "lucide-react";
+import {
+  AlertTriangle,
+  Boxes,
+  Droplets,
+  LogOut,
+  Package,
+  PackageCheck,
+  RefreshCw,
+  Send,
+  Tags,
+  Truck,
+} from "lucide-react";
 import { httpClient, getApiErrorMessage } from "@/services/http-client";
 import { useAuthStore } from "@/stores/auth.store";
 import { useRealtime } from "@/components/realtime/RealtimeProvider";
@@ -28,6 +39,35 @@ const ORIGIN_LABELS: Record<string, string> = {
 function todayInMexico(): string {
   return new Date().toLocaleDateString("en-CA", { timeZone: "America/Mexico_City" });
 }
+
+/** Día de Ciudad de México desplazado, para los rangos rápidos. */
+function dayInMexico(offset: number): string {
+  const now = new Date();
+  now.setDate(now.getDate() + offset);
+  return now.toLocaleDateString("en-CA", { timeZone: "America/Mexico_City" });
+}
+
+function firstOfMonthInMexico(): string {
+  return `${todayInMexico().slice(0, 7)}-01`;
+}
+
+/** "1 bidón" y no "1 bidones": lo lee una persona de almacén. */
+function unitLabel(quantity: number, unit: string): string {
+  if (unit === "bidon") return quantity === 1 ? "bidón" : "bidones";
+  return quantity === 1 ? "pieza" : "piezas";
+}
+
+/**
+ * Rangos que de verdad se usan en almacén: cuánto salió hoy, cuánto ayer,
+ * cuánto en la semana. Teclear dos fechas para ver el día de hoy es trabajo
+ * que no hacía falta.
+ */
+const RANGES: Array<{ key: string; label: string; from: () => string; to: () => string }> = [
+  { key: "hoy", label: "Hoy", from: todayInMexico, to: todayInMexico },
+  { key: "ayer", label: "Ayer", from: () => dayInMexico(-1), to: () => dayInMexico(-1) },
+  { key: "7d", label: "Últimos 7 días", from: () => dayInMexico(-6), to: todayInMexico },
+  { key: "mes", label: "Este mes", from: firstOfMonthInMexico, to: todayInMexico },
+];
 
 export default function FactoryPage() {
   const user = useAuthStore((s) => s.user);
@@ -430,10 +470,29 @@ export default function FactoryPage() {
 
         {tab === 2 ? (
           <div className="factory-card">
-            <div className="factory-card-head">
+            <div className="factory-range">
+              <div className="factory-presets">
+                {RANGES.map((range) => (
+                  <button
+                    key={range.key}
+                    type="button"
+                    className={`factory-preset ${
+                      from === range.from() && to === range.to() ? "active" : ""
+                    }`}
+                    onClick={() => {
+                      setFrom(range.from());
+                      setTo(range.to());
+                    }}
+                  >
+                    {range.label}
+                  </button>
+                ))}
+              </div>
+              <div style={{ flex: 1 }} />
               <TextField
                 label="Desde"
                 type="date"
+                size="small"
                 value={from}
                 onChange={(event) => setFrom(event.target.value)}
                 InputLabelProps={{ shrink: true }}
@@ -441,6 +500,7 @@ export default function FactoryPage() {
               <TextField
                 label="Hasta"
                 type="date"
+                size="small"
                 value={to}
                 onChange={(event) => setTo(event.target.value)}
                 InputLabelProps={{ shrink: true }}
@@ -450,56 +510,120 @@ export default function FactoryPage() {
               </Button>
             </div>
 
-            <div className="grid-4" style={{ marginBottom: 18 }}>
-              <div className="metric">
-                <div className="metric-small">Litros despachados</div>
-                <div className="metric-strong">{formatQuantity(stats?.totalLiters ?? 0)} L</div>
+            <div className="factory-metrics">
+              <div className="factory-metric">
+                <span className="factory-metric-icon">
+                  <Droplets size={22} />
+                </span>
+                <div className="factory-metric-body">
+                  <div className="factory-metric-label">Litros despachados</div>
+                  <div className="factory-metric-value">
+                    {formatQuantity(stats?.totalLiters ?? 0)}
+                    <small>L</small>
+                  </div>
+                </div>
               </div>
-              <div className="metric">
-                <div className="metric-small">Bidones</div>
-                <div className="metric-strong">{formatQuantity(stats?.totalBidones ?? 0)}</div>
+              <div className="factory-metric">
+                <span className="factory-metric-icon">
+                  <Boxes size={22} />
+                </span>
+                <div className="factory-metric-body">
+                  <div className="factory-metric-label">Bidones</div>
+                  <div className="factory-metric-value">
+                    {formatQuantity(stats?.totalBidones ?? 0)}
+                  </div>
+                </div>
               </div>
-              <div className="metric">
-                <div className="metric-small">Piezas</div>
-                <div className="metric-strong">{formatQuantity(stats?.totalPieces ?? 0)}</div>
+              <div className="factory-metric">
+                <span className="factory-metric-icon">
+                  <Package size={22} />
+                </span>
+                <div className="factory-metric-body">
+                  <div className="factory-metric-label">Piezas</div>
+                  <div className="factory-metric-value">
+                    {formatQuantity(stats?.totalPieces ?? 0)}
+                  </div>
+                </div>
               </div>
-              <div className="metric">
-                <div className="metric-small">Productos distintos</div>
-                <div className="metric-strong">{stats?.items.length ?? 0}</div>
+              <div className="factory-metric">
+                <span className="factory-metric-icon">
+                  <Tags size={22} />
+                </span>
+                <div className="factory-metric-body">
+                  <div className="factory-metric-label">Productos distintos</div>
+                  <div className="factory-metric-value">{stats?.items.length ?? 0}</div>
+                </div>
               </div>
             </div>
 
-            <table className="factory-table">
-              <thead>
-                <tr>
-                  <th>Producto más solicitado</th>
-                  <th style={{ textAlign: "right" }}>Despachado</th>
-                  <th style={{ textAlign: "right" }}>Litros</th>
-                  <th style={{ textAlign: "right" }}>Pedidos</th>
-                </tr>
-              </thead>
-              <tbody>
-                {(stats?.items ?? []).map((row) => (
-                  <tr key={`${row.name}-${row.unit}`}>
-                    <td>{row.name}</td>
-                    <td style={{ textAlign: "right" }}>
-                      {formatQuantity(row.dispatched)} {row.unit === "bidon" ? "bidones" : "pz"}
-                    </td>
-                    <td style={{ textAlign: "right" }}>
-                      {row.liters ? `${formatQuantity(row.liters)} L` : "—"}
-                    </td>
-                    <td style={{ textAlign: "right" }}>{row.orders}</td>
-                  </tr>
-                ))}
-                {!stats?.items.length ? (
+            {stats?.items.length ? (
+              <table className="factory-table">
+                <thead>
                   <tr>
-                    <td colSpan={4} className="factory-empty">
-                      Sin despachos en este periodo.
-                    </td>
+                    <th style={{ width: 56 }}>#</th>
+                    <th>Producto</th>
+                    <th style={{ width: 150, textAlign: "right" }}>Despachado</th>
+                    <th style={{ width: 110, textAlign: "right" }}>Litros</th>
+                    <th style={{ width: 110, textAlign: "right" }}>Pedidos</th>
                   </tr>
-                ) : null}
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  {stats.items.map((row, index) => (
+                    <tr key={`${row.name}-${row.unit}`}>
+                      <td>
+                        <span className={`factory-rank ${index < 3 ? "top" : ""}`}>
+                          {index + 1}
+                        </span>
+                      </td>
+                      <td>
+                        <strong>{row.name}</strong>
+                        {/*
+                          Barra proporcional al más despachado del periodo: de un
+                          vistazo se ve qué hay que producir primero, sin comparar
+                          números renglón por renglón.
+                        */}
+                        <div className="factory-bar">
+                          <span
+                            style={{
+                              width: `${Math.max(
+                                2,
+                                (row.dispatched / (stats.items[0]?.dispatched || 1)) * 100
+                              )}%`,
+                            }}
+                          />
+                        </div>
+                      </td>
+                      <td className="factory-num">
+                        <strong>{formatQuantity(row.dispatched)}</strong>{" "}
+                        {unitLabel(row.dispatched, row.unit)}
+                      </td>
+                      <td className="factory-num">
+                        {row.liters ? `${formatQuantity(row.liters)} L` : "—"}
+                      </td>
+                      <td className="factory-num">{row.orders}</td>
+                    </tr>
+                  ))}
+                </tbody>
+                <tfoot>
+                  <tr>
+                    <td />
+                    <td>Total del periodo</td>
+                    <td className="factory-num">
+                      {formatQuantity(stats.totalBidones)} bidones ·{" "}
+                      {formatQuantity(stats.totalPieces)} pz
+                    </td>
+                    <td className="factory-num">{formatQuantity(stats.totalLiters)} L</td>
+                    <td />
+                  </tr>
+                </tfoot>
+              </table>
+            ) : (
+              <div className="factory-empty" style={{ padding: "34px 12px" }}>
+                <PackageCheck size={30} style={{ color: "var(--muted)" }} />
+                <h2 style={{ fontSize: 18 }}>Sin despachos en este periodo</h2>
+                <p>Elige otro rango de fechas o marca un pedido como enviado.</p>
+              </div>
+            )}
           </div>
         ) : null}
 
