@@ -53,6 +53,17 @@ export interface Customer {
   notes?: string;
   source?: string;
   pricingTier?: "retail" | "wholesale";
+  /**
+   * Datos de facturación del cliente como receptor de CFDI 4.0. Todo-o-nada:
+   * con RFC son obligatorios razón social, régimen, uso y CP fiscal (el
+   * correo es opcional). Reglas en `utils/customer-billing.ts`.
+   */
+  taxId?: string | null;
+  legalName?: string | null;
+  taxRegime?: string | null;
+  cfdiUse?: string | null;
+  taxPostalCode?: string | null;
+  billingEmail?: string | null;
   totalOrders?: number;
   totalSpent?: string | number;
   createdBy?: string | null;

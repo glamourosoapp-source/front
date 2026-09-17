@@ -11,6 +11,7 @@ import {
 } from "@/constants/orders";
 import { businessTimeZone } from "@/lib/business-time";
 import { formatDateOnly } from "@/lib/format-date-only";
+import { taxRegimeLabel } from "@glamouroso/shared";
 import type { Order } from "@/types";
 
 function money(value: string | number | undefined) {
@@ -142,6 +143,16 @@ export function OrderNote({ order }: { order: PrintableOrder }) {
       ["Código postal", customer?.postalCode || "—"],
       ["Estatus", `${orderStatusLabel(order.status)} · ${paymentStatusLabel(order.paymentStatus)}`],
     ],
+    // Solo cuando el cliente factura: la nota de los demás no cambia de alto.
+    ...(customer?.taxId
+      ? [
+          [
+            ["RFC", customer.taxId],
+            ["Razón social", customer.legalName || "—"],
+            ["Régimen fiscal", taxRegimeLabel(customer.taxRegime) || customer.taxRegime || "—"],
+          ] as Array<[string, string]>,
+        ]
+      : []),
     [
       ["Zona de entrega", order.deliveryZone || "—"],
       ["Fecha de entrega", deliveryDate],

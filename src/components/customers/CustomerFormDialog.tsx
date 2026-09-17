@@ -12,10 +12,18 @@ import {
   TextField,
   Typography,
 } from "@mui/material";
-import { httpClient } from "@/services/http-client";
+import { httpClient, getApiErrorMessage } from "@/services/http-client";
 import { usePermissions } from "@/lib/permissions";
 import { Customer, ListResponse, Team } from "@/types";
 import { toast } from "sonner";
+import {
+  cfdiUsesFor,
+  hasBillingInfo,
+  normalizeBillingInfo,
+  personTypeFromTaxId,
+  taxRegimesFor,
+  validateBillingInfo,
+} from "@glamouroso/shared";
 import {
   CustomerLocationsEditor,
   type CustomerLocationsEditorHandle,
@@ -35,6 +43,23 @@ export function CustomerFormDialog({ open, customer, onClose, onSaved }: Custome
   const [teams, setTeams] = useState<Team[]>([]);
   const locationsEditorRef = useRef<CustomerLocationsEditorHandle>(null);
 
+  // Facturación (receptor CFDI 4.0). Los seis campos van controlados: la
+  // sección se desmonta al plegarla y así no se pierde lo escrito; además el
+  // RFC decide qué regímenes y usos de CFDI aplican (persona física o moral).
+  const [billingOpen, setBillingOpen] = useState(hasBillingInfo(customer));
+  const [taxId, setTaxId] = useState(customer?.taxId ?? "");
+  const [legalName, setLegalName] = useState(customer?.legalName ?? "");
+  const [taxRegime, setTaxRegime] = useState(customer?.taxRegime ?? "");
+  const [cfdiUse, setCfdiUse] = useState(customer?.cfdiUse ?? "");
+  const [taxPostalCode, setTaxPostalCode] = useState(customer?.taxPostalCode ?? "");
+  const [billingEmail, setBillingEmail] = useState(customer?.billingEmail ?? "");
+  const personType = personTypeFromTaxId(taxId);
+  const regimes = taxRegimesFor(personType);
+  const uses = cfdiUsesFor(personType);
+  // Si el RFC cambió de tipo de persona, la clave elegida puede ya no aplicar.
+  const taxRegimeValue = regimes.some((r) => r.code === taxRegime) ? taxRegime : "";
+  const cfdiUseValue = uses.some((u) => u.code === cfdiUse) ? cfdiUse : "";
+
   // Reasignación de equipo: solo admins en edición.
   const showTeamSelect = isAdmin && isEdit;
   useEffect(() => {
@@ -49,12 +74,29 @@ export function CustomerFormDialog({ open, customer, onClose, onSaved }: Custome
     event.preventDefault();
     const form = new FormData(event.currentTarget);
     const teamIdRaw = String(form.get("teamId") || "");
+    // Se valida aquí con la misma regla del Back (todo-o-nada, RFC ↔ régimen)
+    // para no mandar algo que va a rebotar. Va siempre, en alta y en edición.
+    const billing = normalizeBillingInfo({
+      taxId,
+      legalName,
+      taxRegime: taxRegimeValue,
+      cfdiUse: cfdiUseValue,
+      taxPostalCode,
+      billingEmail,
+    });
+    const billingError = validateBillingInfo(billing);
+    if (billingError) {
+      setBillingOpen(true);
+      toast.error(billingError);
+      return;
+    }
     const payload = {
       name: String(form.get("name")),
       phone: String(form.get("phone")),
       email: String(form.get("email") || ""),
       notes: String(form.get("notes") || ""),
       pricingTier: String(form.get("pricingTier") || "retail"),
+      ...billing,
       ...(showTeamSelect ? { teamId: teamIdRaw ? teamIdRaw : null } : {}),
       ...(isEdit
         ? {}
@@ -107,8 +149,8 @@ export function CustomerFormDialog({ open, customer, onClose, onSaved }: Custome
         onSaved(created);
       }
       onClose();
-    } catch {
-      toast.error("Error al guardar el cliente");
+    } catch (error) {
+      toast.error(getApiErrorMessage(error, "Error al guardar el cliente"));
     } finally {
       setSaving(false);
     }
@@ -185,6 +227,97 @@ export function CustomerFormDialog({ open, customer, onClose, onSaved }: Custome
                 onChanged={() => onSaved()}
               />
             </Box>
+          ) : null}
+
+          <Box
+            sx={{
+              gridColumn: "1 / -1",
+              mt: 1,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              gap: 1,
+            }}
+          >
+            <Typography variant="subtitle2">Datos de facturación</Typography>
+            <Button size="small" onClick={() => setBillingOpen((value) => !value)} sx={{ py: 0 }}>
+              {billingOpen ? "Ocultar" : hasBillingInfo(customer) ? "Editar" : "Agregar"}
+            </Button>
+          </Box>
+          {/* Sin Collapse: dentro del grid del diálogo el contenedor quedaba con
+              altura 0 y el resto del formulario se encimaba. Los valores viven
+              en estado, así que plegar no pierde nada. */}
+          {billingOpen ? (
+            <>
+              <TextField
+                name="taxId"
+                label="RFC"
+                value={taxId}
+                onChange={(event) => setTaxId(event.target.value.toUpperCase())}
+                fullWidth
+                inputProps={{ maxLength: 13, style: { textTransform: "uppercase" } }}
+                helperText={
+                  personType === "moral"
+                    ? "Persona moral"
+                    : personType === "fisica"
+                      ? "Persona física"
+                      : "12 caracteres para persona moral, 13 para persona física"
+                }
+              />
+              <TextField
+                name="legalName"
+                label="Razón social o nombre fiscal"
+                value={legalName}
+                onChange={(event) => setLegalName(event.target.value)}
+                fullWidth
+                inputProps={{ maxLength: 254 }}
+                helperText="Como aparece en la Constancia de Situación Fiscal, sin S.A. de C.V."
+              />
+              <TextField
+                select
+                label="Régimen fiscal"
+                value={taxRegimeValue}
+                onChange={(event) => setTaxRegime(event.target.value)}
+                fullWidth
+              >
+                <MenuItem value="">Sin seleccionar</MenuItem>
+                {regimes.map((regime) => (
+                  <MenuItem key={regime.code} value={regime.code}>
+                    {regime.code} · {regime.label}
+                  </MenuItem>
+                ))}
+              </TextField>
+              <TextField
+                select
+                label="Uso de CFDI"
+                value={cfdiUseValue}
+                onChange={(event) => setCfdiUse(event.target.value)}
+                fullWidth
+              >
+                <MenuItem value="">Sin seleccionar</MenuItem>
+                {uses.map((use) => (
+                  <MenuItem key={use.code} value={use.code}>
+                    {use.code} · {use.label}
+                  </MenuItem>
+                ))}
+              </TextField>
+              <TextField
+                name="taxPostalCode"
+                label="Código postal fiscal"
+                value={taxPostalCode}
+                onChange={(event) => setTaxPostalCode(event.target.value.replace(/\D/g, ""))}
+                fullWidth
+                inputProps={{ maxLength: 5, inputMode: "numeric" }}
+              />
+              <TextField
+                name="billingEmail"
+                label="Correo para facturas"
+                type="email"
+                value={billingEmail}
+                onChange={(event) => setBillingEmail(event.target.value)}
+                fullWidth
+              />
+            </>
           ) : null}
 
           <TextField name="notes" label="Notas" defaultValue={customer?.notes || ""} fullWidth multiline minRows={2} />

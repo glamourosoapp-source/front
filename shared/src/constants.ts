@@ -138,6 +138,95 @@ export const PRICING_TIERS = {
 /** Máximo de ubicaciones de entrega guardadas por cliente. */
 export const MAX_CUSTOMER_LOCATIONS = 3;
 
+/**
+ * Catálogos del SAT para los datos de facturación del **cliente** (receptor
+ * de un CFDI 4.0). `persons` dice a qué tipo de contribuyente aplica cada
+ * clave: el RFC lo delata (12 caracteres = persona moral, 13 = física) y el
+ * SAT rechaza el timbrado cuando no coinciden.
+ */
+export const SAT_TAX_REGIMES = [
+  { code: "601", label: "General de Ley Personas Morales", persons: ["moral"] },
+  { code: "603", label: "Personas Morales con Fines no Lucrativos", persons: ["moral"] },
+  { code: "605", label: "Sueldos y Salarios e Ingresos Asimilados a Salarios", persons: ["fisica"] },
+  { code: "606", label: "Arrendamiento", persons: ["fisica"] },
+  { code: "607", label: "Régimen de Enajenación o Adquisición de Bienes", persons: ["fisica"] },
+  { code: "608", label: "Demás ingresos", persons: ["fisica"] },
+  {
+    code: "610",
+    label: "Residentes en el Extranjero sin Establecimiento Permanente en México",
+    persons: ["fisica", "moral"],
+  },
+  { code: "611", label: "Ingresos por Dividendos (socios y accionistas)", persons: ["fisica"] },
+  {
+    code: "612",
+    label: "Personas Físicas con Actividades Empresariales y Profesionales",
+    persons: ["fisica"],
+  },
+  { code: "614", label: "Ingresos por intereses", persons: ["fisica"] },
+  { code: "615", label: "Régimen de los ingresos por obtención de premios", persons: ["fisica"] },
+  { code: "616", label: "Sin obligaciones fiscales", persons: ["fisica"] },
+  {
+    code: "620",
+    label: "Sociedades Cooperativas de Producción que optan por diferir sus ingresos",
+    persons: ["moral"],
+  },
+  { code: "621", label: "Incorporación Fiscal", persons: ["fisica"] },
+  {
+    code: "622",
+    label: "Actividades Agrícolas, Ganaderas, Silvícolas y Pesqueras",
+    persons: ["moral"],
+  },
+  { code: "623", label: "Opcional para Grupos de Sociedades", persons: ["moral"] },
+  { code: "624", label: "Coordinados", persons: ["moral"] },
+  {
+    code: "625",
+    label: "Régimen de las Actividades Empresariales con ingresos a través de Plataformas Tecnológicas",
+    persons: ["fisica"],
+  },
+  { code: "626", label: "Régimen Simplificado de Confianza", persons: ["fisica", "moral"] },
+] as const;
+
+/**
+ * Usos de CFDI que puede pedir un receptor en una factura de venta. Fuera
+ * quedan CP01 (complemento de pago) y CN01 (nómina), que no son de este flujo.
+ */
+export const SAT_CFDI_USES = [
+  { code: "G01", label: "Adquisición de mercancías", persons: ["fisica", "moral"] },
+  { code: "G02", label: "Devoluciones, descuentos o bonificaciones", persons: ["fisica", "moral"] },
+  { code: "G03", label: "Gastos en general", persons: ["fisica", "moral"] },
+  { code: "I01", label: "Construcciones", persons: ["fisica", "moral"] },
+  { code: "I02", label: "Mobiliario y equipo de oficina por inversiones", persons: ["fisica", "moral"] },
+  { code: "I03", label: "Equipo de transporte", persons: ["fisica", "moral"] },
+  { code: "I04", label: "Equipo de cómputo y accesorios", persons: ["fisica", "moral"] },
+  {
+    code: "I05",
+    label: "Dados, troqueles, moldes, matrices y herramental",
+    persons: ["fisica", "moral"],
+  },
+  { code: "I06", label: "Comunicaciones telefónicas", persons: ["fisica", "moral"] },
+  { code: "I07", label: "Comunicaciones satelitales", persons: ["fisica", "moral"] },
+  { code: "I08", label: "Otra maquinaria y equipo", persons: ["fisica", "moral"] },
+  { code: "D01", label: "Honorarios médicos, dentales y gastos hospitalarios", persons: ["fisica"] },
+  { code: "D02", label: "Gastos médicos por incapacidad o discapacidad", persons: ["fisica"] },
+  { code: "D03", label: "Gastos funerales", persons: ["fisica"] },
+  { code: "D04", label: "Donativos", persons: ["fisica"] },
+  {
+    code: "D05",
+    label: "Intereses reales efectivamente pagados por créditos hipotecarios (casa habitación)",
+    persons: ["fisica"],
+  },
+  { code: "D06", label: "Aportaciones voluntarias al SAR", persons: ["fisica"] },
+  { code: "D07", label: "Primas por seguros de gastos médicos", persons: ["fisica"] },
+  { code: "D08", label: "Gastos de transportación escolar obligatoria", persons: ["fisica"] },
+  {
+    code: "D09",
+    label: "Depósitos en cuentas para el ahorro, primas que tengan como base planes de pensiones",
+    persons: ["fisica"],
+  },
+  { code: "D10", label: "Pagos por servicios educativos (colegiaturas)", persons: ["fisica"] },
+  { code: "S01", label: "Sin efectos fiscales", persons: ["fisica", "moral"] },
+] as const;
+
 /** Precio del bidón (envase retornable de presentaciones 20L). Futuro: mover a organizations.brand_settings. */
 export const CONTAINER_UNIT_PRICE = 25;
 
@@ -206,3 +295,7 @@ export type NotificationType = (typeof NOTIFICATION_TYPES)[keyof typeof NOTIFICA
 export type NotificationEntityType =
   (typeof NOTIFICATION_ENTITY_TYPES)[keyof typeof NOTIFICATION_ENTITY_TYPES];
 export type PricingTier = (typeof PRICING_TIERS)[keyof typeof PRICING_TIERS];
+/** Tipo de contribuyente según el RFC: 13 caracteres = física, 12 = moral. */
+export type PersonType = "fisica" | "moral";
+export type SatTaxRegimeCode = (typeof SAT_TAX_REGIMES)[number]["code"];
+export type SatCfdiUseCode = (typeof SAT_CFDI_USES)[number]["code"];
