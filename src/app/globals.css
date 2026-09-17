@@ -269,6 +269,15 @@ textarea {
   grid-template-columns: repeat(5, minmax(0, 1fr));
 }
 
+.grid-3 {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+/* Dos columnas iguales: para pares de gráficas o tablas del mismo peso. */
+.grid-2-even {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
 .grid-2 {
   grid-template-columns: minmax(300px, 0.78fr) minmax(0, 1.22fr);
 }
@@ -430,6 +439,171 @@ textarea {
   align-items: center;
   justify-content: space-between;
   margin-bottom: 18px;
+}
+
+/* ---- Ventas de sucursal agrupadas por día ----
+   Una tabla por día de negocio, con su encabezado y su total: en una lista
+   plana no se distinguía dónde terminaba un día y empezaba otro. */
+.pos-day {
+  display: grid;
+  gap: 10px;
+}
+
+.pos-day-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 10px;
+}
+
+.pos-day-title {
+  margin: 0;
+  color: var(--glam-navy);
+  font-family: var(--font-display);
+  font-size: 16px;
+  font-style: italic;
+  font-weight: 700;
+}
+
+.pos-day-total {
+  margin-left: auto;
+  color: var(--muted);
+  font-family: var(--font-body);
+  font-size: 13px;
+  white-space: nowrap;
+}
+
+.pos-day-total strong {
+  color: var(--glam-navy);
+  font-size: 15px;
+}
+
+/* Cada renglón abre el ticket: tiene que verse tocable. */
+.pos-day .table tbody tr {
+  cursor: pointer;
+  transition: background 140ms ease;
+}
+
+.pos-day .table tbody tr:hover {
+  background: var(--soft-blue);
+}
+
+.pos-day .table tbody tr.is-voided td {
+  color: var(--muted);
+}
+
+/* ---- Barra de filtros (pantallas del punto de venta) ----
+
+   `.toolbar` reparte a sus hijos con `space-between`: con tres controles los
+   deja desperdigados de orilla a orilla y la fila se lee como un error. Aquí
+   los controles van juntos a la izquierda, el buscador se come el espacio que
+   sobra y solo el contador se va al extremo derecho. */
+.filter-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 14px;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  box-shadow: var(--shadow-sm);
+}
+
+/* El buscador manda: crece hasta llenar la fila y nunca baja de 240px. */
+.filter-bar .filter-search {
+  flex: 1 1 420px;
+  min-width: 240px;
+}
+
+/* Empuja al extremo derecho lo que va después (el contador del listado). */
+.filter-bar .filter-meta {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  /* Separador propio: pegado al control anterior se leía como parte de él. */
+  padding-left: 14px;
+  border-left: 1px solid var(--border);
+  color: var(--muted);
+  font-family: var(--font-body);
+  font-size: 13px;
+  white-space: nowrap;
+}
+
+.filter-bar .filter-meta strong {
+  color: var(--glam-navy);
+  font-size: 15px;
+  font-weight: 700;
+}
+
+/* Separador fino entre grupos de controles de la misma barra. */
+.filter-bar .filter-divider {
+  width: 1px;
+  align-self: stretch;
+  margin: 2px 4px;
+  background: var(--border);
+}
+
+/* Control segmentado (Hoy / 7 días / 30 días): un solo bloque, no tres botones
+   sueltos separados por huecos. */
+.filter-seg {
+  display: inline-flex;
+  flex: 0 0 auto;
+  overflow: hidden;
+  background: #fff;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+}
+
+.filter-seg button {
+  height: 40px;
+  padding: 0 14px;
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  font-family: var(--font-body);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 160ms ease, color 160ms ease;
+}
+
+.filter-seg button + button {
+  border-left: 1px solid var(--border);
+}
+
+.filter-seg button:hover {
+  background: var(--bg);
+  color: var(--glam-navy);
+}
+
+.filter-seg button.active {
+  background: var(--soft-blue);
+  color: var(--glam-blue);
+}
+
+/* Los controles de MUI dentro de la barra comparten el alto del segmentado. */
+.filter-bar .MuiOutlinedInput-root {
+  background: #fff;
+  border-radius: 10px;
+}
+
+/* Dentro de un panel la barra no repite el recuadro: solo ordena los controles. */
+.filter-bar.is-plain {
+  padding: 0;
+  background: transparent;
+  border: 0;
+  box-shadow: none;
+}
+
+@media (max-width: 720px) {
+  .filter-bar .filter-meta {
+    margin-left: 0;
+    width: 100%;
+    padding-left: 0;
+    border-left: 0;
+  }
 }
 
 .form-grid {
@@ -679,7 +853,9 @@ textarea.input {
 @media (max-width: 1180px) {
   .grid-4,
   .grid-5,
-  .grid-2 {
+  .grid-3,
+  .grid-2,
+  .grid-2-even {
     grid-template-columns: 1fr;
   }
 }
@@ -922,4 +1098,43 @@ textarea.input {
   .print-only tr {
     break-inside: avoid;
   }
+}
+
+/* ---- Configuración del ticket de venta ---- */
+
+/* Formulario a la izquierda y vista previa pegada a la derecha. Por debajo de
+   1100px la vista previa pasa abajo: con el sidebar puesto, la columna del
+   formulario se quedaba sin ancho para dos campos por renglón. */
+.ticket-settings {
+  display: grid;
+  gap: 16px;
+  grid-template-columns: minmax(0, 1fr) minmax(320px, 420px);
+}
+
+.ticket-settings__preview {
+  position: sticky;
+  top: 16px;
+  align-self: start;
+}
+
+@media (max-width: 1100px) {
+  .ticket-settings {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .ticket-settings__preview {
+    position: static;
+  }
+}
+
+/* `.form-grid` es de una columna; aquí caben dos cuando hay espacio. */
+.ticket-fields {
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+}
+
+/* El papel de la vista previa, sobre el fondo de la pantalla. */
+.ticket-preview-paper {
+  background: #fff;
+  padding: 12px 8px;
+  border-radius: 2px;
+  box-shadow: 0 1px 6px rgba(0, 0, 0, 0.18);
 }

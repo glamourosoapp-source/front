@@ -73,8 +73,13 @@ export const queryRestockOrdersSchema = paginationSchema.extend({
       z.null(),
     ])
     .optional(),
-  from: z.union([z.string(), z.literal(""), z.null()]).optional(),
-  to: z.union([z.string(), z.literal(""), z.null()]).optional(),
+  /** Día de negocio del pedido (YYYY-MM-DD), inclusive en ambos extremos. */
+  from: z
+    .union([z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Usa el formato YYYY-MM-DD"), z.literal(""), z.null()])
+    .optional(),
+  to: z
+    .union([z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Usa el formato YYYY-MM-DD"), z.literal(""), z.null()])
+    .optional(),
 });
 
 /** Fábrica marca una partida como preparada y captura lo que realmente despacha. */

@@ -11,6 +11,7 @@ import {
   ChevronDown,
   ChevronLeft,
   ChevronRight,
+  ClipboardList,
   LogOut,
   MessageCircle,
   MessageSquareText,
@@ -27,6 +28,9 @@ import {
   Warehouse,
   Receipt,
   Truck,
+  Factory,
+  Handshake,
+  ReceiptText,
 } from "lucide-react";
 import type { PermissionModule } from "@glamouroso/shared";
 import { useAuthStore } from "@/stores/auth.store";
@@ -108,10 +112,27 @@ const sections: NavSection[] = [
     label: "Punto de venta",
     links: [
       { href: "/dashboard/pos/sucursales", label: "Sucursales", icon: Store, module: "posBranches" },
-      { href: "/dashboard/pos/lineas", label: "Líneas de líquidos", icon: Droplets, module: "posInventory" },
       { href: "/dashboard/pos/inventario", label: "Inventario", icon: Warehouse, module: "posInventory" },
+      { href: "/dashboard/pos/lineas", label: "Líneas de líquidos", icon: Droplets, module: "posInventory" },
       { href: "/dashboard/pos/cortes", label: "Cortes y reportes", icon: Receipt, module: "posReports" },
       { href: "/dashboard/pos/surtido", label: "Faltantes y surtido", icon: Truck, module: "posRestock" },
+      { href: "/dashboard/pos/ticket", label: "Ticket de venta", icon: ReceiptText, module: "settings" },
+    ],
+  },
+  {
+    id: "fabrica",
+    label: "Fábrica",
+    links: [
+      { href: "/dashboard/fabrica", label: "Pedidos de surtido", icon: Factory, module: "posRestock" },
+      { href: "/dashboard/fabrica/produccion", label: "Producción y compras", icon: ClipboardList, module: "posRestock" },
+    ],
+  },
+  {
+    id: "franquicias",
+    label: "Franquicias",
+    links: [
+      { href: "/dashboard/franquicias", label: "Franquicias", icon: Handshake, module: "posBranches" },
+      { href: "/dashboard/franquicias/pedidos", label: "Pedidos a fábrica", icon: Truck, module: "posRestock" },
     ],
   },
   {
@@ -129,6 +150,20 @@ function isLinkActive(pathname: string, href: string) {
   if (href === "#") return false;
   if (href === "/dashboard") return pathname === "/dashboard";
   return pathname === href || pathname.startsWith(`${href}/`);
+}
+
+/**
+ * De todos los links que calzan con la ruta se ilumina solo el más específico:
+ * en /dashboard/franquicias/pedidos calza también /dashboard/franquicias, y
+ * sin esto se pintaban los dos.
+ */
+function findActiveHref(pathname: string, links: NavLink[]): string | null {
+  let best: string | null = null;
+  for (const link of links) {
+    if (!isLinkActive(pathname, link.href)) continue;
+    if (!best || link.href.length > best.length) best = link.href;
+  }
+  return best;
 }
 
 function sectionHasActive(pathname: string, section: NavSection) {
@@ -220,6 +255,7 @@ export function Sidebar({ mobileOpen = false, onNavigate }: SidebarProps) {
   const { can } = usePermissions();
   const visibleSections = filterSectionsByPermissions(can);
   const allNavLinks = getAllNavLinks(visibleSections);
+  const activeHref = findActiveHref(pathname, allNavLinks);
   // Inbox a 3 columnas: colapsar al entrar da mas ancho util.
   const [isCollapsed, setIsCollapsed] = useState(() => isConversationsRoute(pathname));
   const [openSections, setOpenSections] = useState<Record<string, boolean>>(() =>
@@ -278,7 +314,7 @@ export function Sidebar({ mobileOpen = false, onNavigate }: SidebarProps) {
 
   const renderNavLink = (item: NavLink, nested = false) => {
     const Icon = item.icon;
-    const active = isLinkActive(pathname, item.href);
+    const active = item.href === activeHref;
 
     return (
       <Link

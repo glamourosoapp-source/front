@@ -37,8 +37,9 @@ export function hrefForNotification(n: Notification): string {
     return `/dashboard/orders/${n.entityId}`;
   }
   if (n.entityType === NOTIFICATION_ENTITY_TYPES.RESTOCK_ORDER) {
-    // El pedido de surtido se atiende desde el panel de faltantes.
-    return "/dashboard/pos/surtido";
+    // Fábrica lista todos los pedidos de surtido (sucursales y franquicias)
+    // y es donde se aprueban.
+    return "/dashboard/fabrica";
   }
   if (n.entityType === NOTIFICATION_ENTITY_TYPES.CONVERSATION) {
     // entityId ES el conversationId: abrir esa conversación, no el inbox genérico.

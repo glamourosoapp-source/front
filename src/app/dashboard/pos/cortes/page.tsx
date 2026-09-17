@@ -25,6 +25,7 @@ import {
 import { httpClient, getApiErrorMessage } from "@/services/http-client";
 import { formatMoney, formatMoneyShort, formatQuantity } from "@/lib/format-money";
 import { usePermissions } from "@/lib/permissions";
+import { FilterBar, FilterDivider, FilterMeta } from "@/components/pos-admin/FilterBar";
 import {
   exportPosReportToPdf,
   exportPosReportToXlsx,
@@ -208,13 +209,16 @@ export default function PosCortesPage() {
         ) : null}
       </div>
 
-      <div className="toolbar">
+      <FilterBar>
         <TextField
           select
+          size="small"
           label="Sucursal"
           value={branchId}
           onChange={(event) => setBranchId(event.target.value)}
-          sx={{ minWidth: 230 }}
+          InputLabelProps={{ shrink: true }}
+          SelectProps={{ displayEmpty: true }}
+          sx={{ minWidth: 250 }}
         >
           <MenuItem value="">Todas las sucursales</MenuItem>
           {branches.map((branch) => (
@@ -225,10 +229,12 @@ export default function PosCortesPage() {
         </TextField>
         <TextField
           select
+          size="small"
           label="Periodo"
           value={granularity}
           onChange={(event) => setGranularity(event.target.value as Granularity)}
-          sx={{ minWidth: 170 }}
+          InputLabelProps={{ shrink: true }}
+          sx={{ minWidth: 185 }}
         >
           <MenuItem value="day">Día</MenuItem>
           <MenuItem value="week">Semana (sáb–vie)</MenuItem>
@@ -236,26 +242,32 @@ export default function PosCortesPage() {
           <MenuItem value="range">Rango</MenuItem>
         </TextField>
         <TextField
+          size="small"
           label={granularity === "range" ? "Desde" : "Fecha"}
           type="date"
           value={anchor}
           onChange={(event) => setAnchor(event.target.value)}
           InputLabelProps={{ shrink: true }}
+          sx={{ minWidth: 165 }}
         />
         {granularity === "range" ? (
           <TextField
+            size="small"
             label="Hasta"
             type="date"
             value={rangeTo}
             onChange={(event) => setRangeTo(event.target.value)}
             InputLabelProps={{ shrink: true }}
+            sx={{ minWidth: 165 }}
           />
         ) : null}
-        <span className="page-kicker">{periodLabel}</span>
+        <FilterDivider />
+        {/* Exportar es acción del periodo elegido: va junto a los filtros. */}
         <Button
           variant="outlined"
           startIcon={<FileDown size={16} />}
           disabled={!summary}
+          sx={{ height: 40 }}
           onClick={() =>
             summary &&
             void exportPosReportToXlsx({ summary, branches: byBranch, periodLabel, branchLabel })
@@ -267,6 +279,7 @@ export default function PosCortesPage() {
           variant="outlined"
           startIcon={<FileText size={16} />}
           disabled={!summary}
+          sx={{ height: 40 }}
           onClick={() =>
             summary &&
             void exportPosReportToPdf({ summary, branches: byBranch, periodLabel, branchLabel })
@@ -274,7 +287,8 @@ export default function PosCortesPage() {
         >
           PDF
         </Button>
-      </div>
+        <FilterMeta>{periodLabel}</FilterMeta>
+      </FilterBar>
 
       {/*
         Mismo armado que las tarjetas del Overview: `grid` pone el display,

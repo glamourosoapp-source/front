@@ -43,6 +43,7 @@ import {
   type PrintAgentConfig,
 } from "@/lib/print/print-agent-client";
 import { buildTicketEscPos } from "@/lib/print/escpos";
+import { rasterizeLogo } from "@/lib/print/logo-raster";
 import { PosQuantityDialog } from "@/components/pos/PosQuantityDialog";
 import { PosSearchDialog } from "@/components/pos/PosSearchDialog";
 import { PosCustomerDialog } from "@/components/pos/PosCustomerDialog";
@@ -96,12 +97,19 @@ export default function PosPage() {
   /** Texto con el que abre el buscador, para no perder lo ya escrito. */
   const [searchTerm, setSearchTerm] = useState("");
   const [dialog, setDialog] = useState<DialogName>(null);
+  /**
+   * Para qué se abrió el diálogo de cliente: `F8` solo lo asigna; `F12` lo
+   * pide antes de cobrar y, elegido, sigue directo al cobro.
+   */
+  const [customerIntent, setCustomerIntent] = useState<"assign" | "charge">("assign");
   const [quantityIntent, setQuantityIntent] = useState<QuantityIntent | null>(null);
   const [charging, setCharging] = useState(false);
   const [successChange, setSuccessChange] = useState<number | null>(null);
   const [printConfig, setPrintConfig] = useState<PrintAgentConfig>(loadPrintAgentConfig());
   const [printerOnline, setPrinterOnline] = useState(false);
   const [sheetSale, setSheetSale] = useState<PosSale | null>(null);
+  /** La hoja de respaldo también tiene que decir que es reimpresión. */
+  const [sheetReprint, setSheetReprint] = useState(false);
   const [clock, setClock] = useState("");
 
   /**
@@ -318,7 +326,15 @@ export default function PosPage() {
     async (sale: PosSale, reprint = false) => {
       if (printConfig.printerName && printerOnline) {
         try {
-          await printRaw(printConfig, buildTicketEscPos(sale, ticketSettings, { reprint }));
+          // El logo se rasteriza una vez y queda memorizado: la térmica no
+          // entiende PNG. Si no se puede (sin CORS, sin red), el ticket sale igual.
+          const logo = ticketSettings.logoPosition !== "none"
+            ? await rasterizeLogo(ticketSettings.logoUrl, ticketSettings.paperWidthMm)
+            : null;
+          await printRaw(
+            printConfig,
+            buildTicketEscPos(sale, ticketSettings, { reprint, logo, walkInCustomerName: walkInName })
+          );
           await httpClient.post(`/pos/sales/${sale.id}/printed`, { target: "agent" }).catch(() => null);
           return;
         } catch (error) {
@@ -328,16 +344,32 @@ export default function PosPage() {
         }
       }
       // Respaldo: hoja térmica por el diálogo del navegador.
+      setSheetReprint(reprint);
       setSheetSale(sale);
       window.setTimeout(() => {
         window.print();
         void httpClient.post(`/pos/sales/${sale.id}/printed`, { target: "browser" }).catch(() => null);
       }, 150);
     },
-    [printConfig, printerOnline, ticketSettings]
+    [printConfig, printerOnline, ticketSettings, walkInName]
   );
 
   // ---- Cobro ----
+
+  /**
+   * F12: antes de cobrar se pide el cliente. Con teléfono registrado basta
+   * ese dato; si no existe, se registra ahí mismo (nombre y teléfono como
+   * mínimo). Un ticket que ya trae cliente va directo al cobro.
+   */
+  const startCharge = useCallback(() => {
+    if (!ticket.lines.length) return;
+    if (ticket.customerId) {
+      setDialog("charge");
+      return;
+    }
+    setCustomerIntent("charge");
+    setDialog("customer");
+  }, [ticket.lines.length, ticket.customerId]);
 
   const charge = useCallback(
     async ({
@@ -452,16 +484,17 @@ export default function PosPage() {
           toast.success("Ticket guardado como pendiente");
         },
         F7: () => openBulkForSelected(),
-        F8: () => setDialog("customer"),
+        F8: () => {
+          setCustomerIntent("assign");
+          setDialog("customer");
+        },
         F10: () => {
           // Con algo escrito en el código, F10 arranca la búsqueda con ese texto.
           setSearchTerm(code.trim());
           setDialog("search");
         },
         F11: () => toggleWholesale(),
-        F12: () => {
-          if (ticket.lines.length) setDialog("charge");
-        },
+        F12: () => startCharge(),
         Insert: () => setQuantityIntent({ mode: "multi" }),
         Delete: () => deleteSelected(),
         // Flechas sobre el ticket: arriba/abajo eligen la fila, derecha/izquierda
@@ -500,6 +533,7 @@ export default function PosPage() {
         openBulkForSelected,
         toggleWholesale,
         deleteSelected,
+        startCharge,
         ticket.lines.length,
         code,
         canSeeStock,
@@ -624,7 +658,13 @@ export default function PosPage() {
             <span className="pos-action-key">F7</span>
             <Droplets size={14} /> Litros
           </button>
-          <button className="pos-action" onClick={() => setDialog("customer")}>
+          <button
+            className="pos-action"
+            onClick={() => {
+              setCustomerIntent("assign");
+              setDialog("customer");
+            }}
+          >
             <span className="pos-action-key">F8</span>
             <UserRound size={14} /> Cliente
           </button>
@@ -798,11 +838,7 @@ export default function PosPage() {
             </span>
           </div>
 
-          <button
-            className="pos-charge"
-            onClick={() => setDialog("charge")}
-            disabled={!ticket.lines.length}
-          >
+          <button className="pos-charge" onClick={() => startCharge()} disabled={!ticket.lines.length}>
             <span className="pos-action-key">F12</span> Cobrar
           </button>
 
@@ -869,6 +905,7 @@ export default function PosPage() {
       <PosCustomerDialog
         open={dialog === "customer"}
         walkInName={walkInName}
+        purpose={customerIntent}
         onClose={() => {
           setDialog(null);
           focusCode();
@@ -880,6 +917,13 @@ export default function PosPage() {
             customerTier:
               (customer?.pricingTier as typeof PRICING_TIERS.RETAIL) ?? PRICING_TIERS.RETAIL,
           });
+          // Pedido desde F12: con el cliente resuelto se pasa directo al cobro.
+          if (customerIntent === "charge") {
+            setDialog("charge");
+          } else {
+            setDialog(null);
+            focusCode();
+          }
         }}
       />
 
@@ -963,7 +1007,12 @@ export default function PosPage() {
         </div>
       ) : null}
 
-      <PosTicketSheet sale={sheetSale} settings={ticketSettings} />
+      <PosTicketSheet
+        sale={sheetSale}
+        settings={ticketSettings}
+        reprint={sheetReprint}
+        walkInCustomerName={walkInName}
+      />
     </main>
   );
 }

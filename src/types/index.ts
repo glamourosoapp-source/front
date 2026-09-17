@@ -26,4 +26,8 @@ export type {
   RestockOrder,
   RestockOrderItem,
   BranchShortage,
+  BranchStats,
+  BranchSalesPeriod,
+  BranchOverview,
+  BranchCustomerRow,
 } from "@glamouroso/shared";

@@ -18,23 +18,43 @@ import { toast } from "sonner";
 interface PosCustomerDialogProps {
   open: boolean;
   walkInName: string;
+  /**
+   * `charge`: se abrió desde F12, antes de cobrar. Un teléfono ya registrado
+   * pasa directo al cobro sin un clic más. `assign` (F8) solo deja el cliente
+   * en el ticket.
+   */
+  purpose?: "assign" | "charge";
   onClose: () => void;
+  /** Quien recibe el cliente decide qué sigue (cobrar o volver al ticket) y cierra. */
   onPick: (customer: Customer | null) => void;
 }
 
+/** Fecha de nacimiento aproximada a partir de la edad: hoy menos N años. */
+function birthdayFromAge(age: number): string {
+  const date = new Date();
+  date.setFullYear(date.getFullYear() - age);
+  return date.toISOString().slice(0, 10);
+}
+
 /**
- * Cliente de la venta (F8).
- *
- * El registro es **opcional**: si el cliente no quiere dar sus datos, la venta
- * se cobra como mostrador y la fila no se detiene. Cuando sí se registra, el
- * cliente queda en el CRM con el mismo perfil que sus pedidos de WhatsApp.
+ * Cliente de la venta. Antes de cobrar (F12) la caja pide el teléfono: si ya
+ * está registrado, con eso basta; si no, se registra ahí mismo con nombre y
+ * teléfono como mínimo (correo y edad opcionales). El cliente queda en el CRM
+ * con el mismo perfil que sus pedidos de WhatsApp.
  */
-export function PosCustomerDialog({ open, walkInName, onClose, onPick }: PosCustomerDialogProps) {
+export function PosCustomerDialog({
+  open,
+  walkInName,
+  purpose = "assign",
+  onClose,
+  onPick,
+}: PosCustomerDialogProps) {
   const [phone, setPhone] = useState("");
   const [searching, setSearching] = useState(false);
   const [found, setFound] = useState<Customer | null>(null);
   const [notFound, setNotFound] = useState(false);
   const [saving, setSaving] = useState(false);
+  const beforeCharge = purpose === "charge";
 
   useEffect(() => {
     if (open) {
@@ -56,8 +76,16 @@ export function PosCustomerDialog({ open, walkInName, onClose, onPick }: PosCust
         "/pos/customers/lookup",
         { phone: clean }
       );
-      if (result.found && result.customer) setFound(result.customer);
-      else setNotFound(true);
+      if (result.found && result.customer) {
+        // Antes de cobrar, el teléfono registrado es todo lo que hace falta.
+        if (beforeCharge) {
+          onPick(result.customer);
+          return;
+        }
+        setFound(result.customer);
+      } else {
+        setNotFound(true);
+      }
     } catch (error) {
       toast.error(getApiErrorMessage(error, "No se pudo buscar el cliente"));
     } finally {
@@ -68,17 +96,22 @@ export function PosCustomerDialog({ open, walkInName, onClose, onPick }: PosCust
   async function register(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const form = new FormData(event.currentTarget);
+    const ageRaw = String(form.get("age") || "").trim();
+    const age = ageRaw ? Number(ageRaw) : null;
+    if (age !== null && (!Number.isInteger(age) || age < 1 || age > 120)) {
+      toast.error("La edad debe ser un número entre 1 y 120");
+      return;
+    }
     setSaving(true);
     try {
       const created = await httpClient.post<Customer>("/pos/customers", {
         name: String(form.get("name") || "").trim(),
         phone: phone.replace(/\D/g, ""),
-        birthday: String(form.get("birthday") || "") || null,
+        birthday: age !== null ? birthdayFromAge(age) : null,
         email: String(form.get("email") || "").trim() || null,
       });
       toast.success("Cliente registrado");
       onPick(created);
-      onClose();
     } catch (error) {
       toast.error(getApiErrorMessage(error, "No se pudo registrar el cliente"));
     } finally {
@@ -88,16 +121,20 @@ export function PosCustomerDialog({ open, walkInName, onClose, onPick }: PosCust
 
   return (
     <Dialog open={open} onClose={onClose} fullWidth maxWidth="sm">
-      <DialogTitle>Cliente de la venta</DialogTitle>
+      <DialogTitle>{beforeCharge ? "Cliente antes de cobrar" : "Cliente de la venta"}</DialogTitle>
       <DialogContent dividers>
         <form onSubmit={search} style={{ display: "flex", gap: 8, alignItems: "flex-start" }}>
           <TextField
-            label="WhatsApp del cliente"
+            label="Teléfono móvil del cliente"
             value={phone}
             onChange={(event) => setPhone(event.target.value)}
             autoFocus
             fullWidth
-            helperText="Buscar por teléfono. Si no existe, se puede registrar aquí mismo."
+            helperText={
+              beforeCharge
+                ? "Si ya está registrado, con el teléfono basta para cobrar. Si no, regístralo aquí."
+                : "Buscar por teléfono. Si no existe, se puede registrar aquí mismo."
+            }
             inputProps={{ inputMode: "numeric" }}
           />
           <Button type="submit" variant="contained" disabled={searching} sx={{ height: 40, mt: 0.5 }}>
@@ -110,13 +147,7 @@ export function PosCustomerDialog({ open, walkInName, onClose, onPick }: PosCust
             severity="success"
             sx={{ mt: 2 }}
             action={
-              <Button
-                size="small"
-                onClick={() => {
-                  onPick(found);
-                  onClose();
-                }}
-              >
+              <Button size="small" onClick={() => onPick(found)}>
                 Usar
               </Button>
             }
@@ -132,31 +163,26 @@ export function PosCustomerDialog({ open, walkInName, onClose, onPick }: PosCust
         {notFound ? (
           <form onSubmit={register} className="form-grid" style={{ marginTop: 16 }}>
             <Alert severity="info" sx={{ gridColumn: "1 / -1" }}>
-              No hay cliente con ese teléfono. Regístralo o cobra como {walkInName.toLowerCase()}.
+              No hay cliente con ese teléfono. Regístralo con su nombre; correo y edad son opcionales.
             </Alert>
             <TextField name="name" label="Nombre" required fullWidth autoFocus />
             <TextField
-              name="birthday"
-              label="Fecha de nacimiento"
-              type="date"
+              name="age"
+              label="Edad"
+              type="number"
               fullWidth
-              InputLabelProps={{ shrink: true }}
+              inputProps={{ min: 1, max: 120, inputMode: "numeric" }}
             />
             <TextField name="email" label="Correo" type="email" fullWidth sx={{ gridColumn: "1 / -1" }} />
             <Button type="submit" variant="contained" disabled={saving} sx={{ gridColumn: "1 / -1" }}>
-              {saving ? "Guardando..." : "Registrar y usar"}
+              {saving ? "Guardando..." : beforeCharge ? "Registrar y cobrar" : "Registrar y usar"}
             </Button>
           </form>
         ) : null}
       </DialogContent>
       <DialogActions>
-        <Button
-          onClick={() => {
-            onPick(null);
-            onClose();
-          }}
-        >
-          Cobrar como {walkInName.toLowerCase()}
+        <Button onClick={() => onPick(null)} color="inherit">
+          {beforeCharge ? `Cobrar como ${walkInName.toLowerCase()}` : `Sin cliente (${walkInName.toLowerCase()})`}
         </Button>
         <Button onClick={onClose}>Cancelar (ESC)</Button>
       </DialogActions>

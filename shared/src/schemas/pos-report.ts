@@ -21,6 +21,11 @@ export const queryPosTimeseriesSchema = queryPosReportSchema.extend({
   granularity: z.enum(["day", "week", "month"]).default("day"),
 });
 
+/** Serie por sucursal: además admite año, para la tabla de ventas por periodo del Overview. */
+export const queryPosBranchTimeseriesSchema = queryPosReportSchema.extend({
+  granularity: z.enum(["day", "week", "month", "year"]).default("day"),
+});
+
 export const queryPosTopProductsSchema = queryPosReportSchema.extend({
   limit: z.coerce.number().int().min(1).max(50).default(10),
   orderBy: z.enum(["revenue", "quantity"]).default("revenue"),

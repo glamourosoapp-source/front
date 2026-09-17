@@ -7,7 +7,8 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
-    "icons:pos": "bun run scripts/generate-pos-icons.ts"
+    "icons:pos": "bun run scripts/generate-pos-icons.ts",
+    "logo:ticket": "bun run scripts/generate-ticket-logo.ts"
   },
   "dependencies": {
     "@emotion/cache": "^11.14.0",

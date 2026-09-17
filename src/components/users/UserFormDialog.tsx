@@ -25,6 +25,8 @@ interface UserFormDialogProps {
   teams: Team[];
   /** Sucursales del POS: un cajero o una franquicia quedan fijados a una. */
   branches?: Branch[];
+  /** Sucursal preseleccionada al crear (desde el detalle de una sucursal). */
+  defaultBranchId?: string | null;
   onClose: () => void;
   onSaved: () => void;
 }
@@ -41,6 +43,7 @@ export function UserFormDialog({
   profiles,
   teams,
   branches = [],
+  defaultBranchId = null,
   onClose,
   onSaved,
 }: UserFormDialogProps) {
@@ -182,7 +185,7 @@ export function UserFormDialog({
               select
               name="branchId"
               label="Sucursal del punto de venta"
-              defaultValue={user?.branchId || ""}
+              defaultValue={user?.branchId || defaultBranchId || ""}
               fullWidth
               helperText="Un usuario con sucursal solo puede cobrar y consultar esa sucursal."
             >

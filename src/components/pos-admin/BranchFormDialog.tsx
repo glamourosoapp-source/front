@@ -1,6 +1,7 @@
 "use client";
 
 import { FormEvent, useEffect, useState } from "react";
+import Link from "next/link";
 import {
   Button,
   Dialog,
@@ -9,11 +10,12 @@ import {
   DialogTitle,
   FormControlLabel,
   MenuItem,
+  Link as MuiLink,
   Switch,
   TextField,
   Typography,
 } from "@mui/material";
-import { BRANCH_TYPES, TICKET_PAPER_WIDTHS } from "@glamouroso/shared/constants";
+import { BRANCH_TYPES, type BranchType } from "@glamouroso/shared/constants";
 import { httpClient, getApiErrorMessage } from "@/services/http-client";
 import { Branch } from "@/types";
 import { toast } from "sonner";
@@ -21,6 +23,8 @@ import { toast } from "sonner";
 interface BranchFormDialogProps {
   open: boolean;
   branch: Branch | null;
+  /** Tipo preseleccionado al crear: la lista de franquicias crea franquicias. */
+  defaultType?: BranchType;
   onClose: () => void;
   onSaved: () => void;
 }
@@ -36,12 +40,16 @@ const WEEKDAYS = [
   { value: 6, label: "Sábado" },
 ];
 
-export function BranchFormDialog({ open, branch, onClose, onSaved }: BranchFormDialogProps) {
+export function BranchFormDialog({
+  open,
+  branch,
+  defaultType = BRANCH_TYPES.BRANCH,
+  onClose,
+  onSaved,
+}: BranchFormDialogProps) {
   const isEdit = Boolean(branch);
   const [isActive, setIsActive] = useState(branch?.isActive ?? true);
   const [saving, setSaving] = useState(false);
-
-  const ticket = (branch?.ticketSettings ?? {}) as Record<string, unknown>;
 
   useEffect(() => {
     if (open) setIsActive(branch?.isActive ?? true);
@@ -51,7 +59,6 @@ export function BranchFormDialog({ open, branch, onClose, onSaved }: BranchFormD
     event.preventDefault();
     const form = new FormData(event.currentTarget);
     const cutoffRaw = String(form.get("restockCutoffDow") || "");
-    const headerRaw = String(form.get("headerLines") || "").trim();
 
     const payload: Record<string, unknown> = {
       code: String(form.get("code") || "").trim().toUpperCase(),
@@ -64,13 +71,6 @@ export function BranchFormDialog({ open, branch, onClose, onSaved }: BranchFormD
       phone: String(form.get("phone") || "").trim() || null,
       restockCutoffDow: cutoffRaw === "" ? null : Number(cutoffRaw),
       notes: String(form.get("notes") || "").trim() || null,
-      // El Back mergea esta sección: la impresora elegida en la PC de la
-      // sucursal no viaja en este formulario y no debe perderse.
-      ticketSettings: {
-        paperWidthMm: Number(form.get("paperWidthMm") || 80),
-        headerLines: headerRaw ? headerRaw.split("\n").map((line) => line.trim()).filter(Boolean) : [],
-        footerMessage: String(form.get("footerMessage") || "").trim(),
-      },
     };
 
     setSaving(true);
@@ -94,7 +94,15 @@ export function BranchFormDialog({ open, branch, onClose, onSaved }: BranchFormD
   return (
     <Dialog open={open} onClose={onClose} fullWidth maxWidth="md" key={branch?.id ?? "new"}>
       <form onSubmit={save}>
-        <DialogTitle>{isEdit ? "Editar sucursal" : "Nueva sucursal"}</DialogTitle>
+        <DialogTitle>
+          {isEdit
+            ? branch?.type === BRANCH_TYPES.FRANCHISE
+              ? "Editar franquicia"
+              : "Editar sucursal"
+            : defaultType === BRANCH_TYPES.FRANCHISE
+              ? "Nueva franquicia"
+              : "Nueva sucursal"}
+        </DialogTitle>
         <DialogContent className="form-grid" dividers>
           <TextField
             name="code"
@@ -110,7 +118,7 @@ export function BranchFormDialog({ open, branch, onClose, onSaved }: BranchFormD
             select
             name="type"
             label="Tipo"
-            defaultValue={branch?.type || BRANCH_TYPES.BRANCH}
+            defaultValue={branch?.type || defaultType}
             fullWidth
             helperText="Una franquicia solo levanta pedidos a fábrica, sin caja ni inventario."
           >
@@ -138,38 +146,17 @@ export function BranchFormDialog({ open, branch, onClose, onSaved }: BranchFormD
           <TextField name="postalCode" label="Código postal" defaultValue={branch?.postalCode || ""} fullWidth />
           <TextField name="phone" label="Teléfono" defaultValue={branch?.phone || ""} fullWidth />
 
-          <Typography variant="subtitle2" sx={{ gridColumn: "1 / -1", mt: 1 }}>
-            Ticket impreso
-          </Typography>
-          <TextField
-            select
-            name="paperWidthMm"
-            label="Ancho de papel"
-            defaultValue={Number(ticket.paperWidthMm ?? 80)}
-            fullWidth
-          >
-            {TICKET_PAPER_WIDTHS.map((width) => (
-              <MenuItem key={width} value={width}>
-                {width} mm
-              </MenuItem>
-            ))}
-          </TextField>
-          <TextField
-            name="footerMessage"
-            label="Mensaje final"
-            defaultValue={String(ticket.footerMessage ?? "")}
-            fullWidth
-          />
-          <TextField
-            name="headerLines"
-            label="Encabezado del ticket"
-            defaultValue={(Array.isArray(ticket.headerLines) ? ticket.headerLines : []).join("\n")}
-            fullWidth
-            multiline
-            minRows={2}
-            sx={{ gridColumn: "1 / -1" }}
-            helperText="Una línea por renglón: domicilio, teléfono, RFC. Se imprime bajo el logo."
-          />
+          {/* El ticket (datos de facturación, letra y qué se imprime) se configura
+              en Punto de venta → Ticket de venta, que además tiene vista previa. */}
+          {isEdit ? (
+            <Typography variant="body2" sx={{ gridColumn: "1 / -1", color: "var(--muted)" }}>
+              El ticket impreso de esta sucursal se configura en{" "}
+              <MuiLink component={Link} href={`/dashboard/pos/ticket?branch=${branch?.id}`}>
+                Ticket de venta
+              </MuiLink>
+              : ahí se eligen los datos de facturación, el tamaño de letra y qué se imprime.
+            </Typography>
+          ) : null}
           <TextField
             name="notes"
             label="Notas internas"

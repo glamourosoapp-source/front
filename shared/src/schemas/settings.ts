@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { ticketSettingsSchema } from "./branch";
 
 const dayOverrideSchema = z.object({
   cutoffTime: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, "Expected HH:mm").optional(),
@@ -28,3 +29,18 @@ export const whatsappConfigSchema = z.object({
   isActive: z.boolean().optional(),
   settings: z.record(z.unknown()).optional(),
 });
+
+/**
+ * Defaults del punto de venta de la organización (`brand_settings.pos`).
+ *
+ * Es el mismo contrato del ticket de una sucursal **sin la impresora**: esa vive
+ * en la PC de cada sucursal y no tiene sentido heredarla. Todo lo que se manda
+ * aquí se mergea sobre lo guardado.
+ */
+export const posSettingsSchema = z.object({
+  ticket: ticketSettingsSchema.omit({ defaultPrinterName: true }).optional(),
+  /** Nombre del cliente genérico cuando la venta no se registra a nadie. */
+  walkInCustomerName: z.union([z.string().max(60), z.literal(""), z.null()]).optional(),
+});
+
+export type PosSettingsInput = z.infer<typeof posSettingsSchema>;

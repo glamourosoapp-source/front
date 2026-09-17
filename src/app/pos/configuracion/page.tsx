@@ -15,54 +15,18 @@ import {
   type PrinterInfo,
 } from "@/lib/print/print-agent-client";
 import { buildTicketEscPos } from "@/lib/print/escpos";
+import { rasterizeLogo } from "@/lib/print/logo-raster";
+import { sampleSale } from "@/lib/pos/sample-ticket";
 import { usePwaInstall } from "@/hooks/usePwaInstall";
-import { DEFAULT_TICKET_SETTINGS } from "@glamouroso/shared";
-import type { PosSale, PosSession } from "@/types";
+import { DEFAULT_TICKET_SETTINGS, ticketHeaderBlock, type TicketFontSize } from "@glamouroso/shared";
+import type { PosSession } from "@/types";
 import { toast } from "sonner";
 
-/** Ticket de prueba: mismo formato que el real, con datos de muestra. */
-function sampleSale(session: PosSession | null): PosSale {
-  return {
-    id: "sample",
-    branchId: session?.branch.id ?? "",
-    branch: session?.branch,
-    ticketNumber: `${session?.branch.code ?? "SUC"}-PRUEBA-0001`,
-    cashierUserId: session?.cashier.id ?? "",
-    cashier: session?.cashier,
-    status: "completed",
-    subtotal: 258,
-    discount: 0,
-    total: 258,
-    paymentMethod: "cash",
-    amountTendered: 300,
-    changeAmount: 42,
-    itemsCount: 26,
-    soldAt: new Date().toISOString(),
-    items: [
-      {
-        id: "s1",
-        saleId: "sample",
-        productName: "Mas Color (litro)",
-        saleUnit: "liter",
-        quantity: 25,
-        unitPrice: 16,
-        priceTier: "retail",
-        total: 258,
-        pricingBreakdown: { bidones: 1, restLiters: 5, bidonPrice: 178, literPrice: 16 },
-      },
-      {
-        id: "s2",
-        saleId: "sample",
-        productName: "Escoba de plástico",
-        saleUnit: "piece",
-        quantity: 1,
-        unitPrice: 45,
-        priceTier: "retail",
-        total: 45,
-      },
-    ],
-  } as PosSale;
-}
+const FONT_SIZE_LABELS: Record<TicketFontSize, string> = {
+  small: "chica",
+  normal: "normal",
+  large: "grande",
+};
 
 /**
  * Configuración de impresión de ESTA caja.
@@ -117,8 +81,18 @@ export default function PosPrintSettingsPage() {
 
   async function testPrint() {
     const settings = session?.ticketSettings ?? DEFAULT_TICKET_SETTINGS;
+    const sale = sampleSale({ branch: session?.branch, cashierName: session?.cashier.name });
     try {
-      await printRaw(config, buildTicketEscPos(sampleSale(session), settings));
+      const logo = settings.logoPosition !== "none"
+        ? await rasterizeLogo(settings.logoUrl, settings.paperWidthMm)
+        : null;
+      await printRaw(
+        config,
+        buildTicketEscPos(sale, settings, {
+          logo,
+          walkInCustomerName: session?.walkInCustomerName,
+        })
+      );
       toast.success("Ticket de prueba enviado a la impresora");
     } catch (error) {
       toast.error(getApiErrorMessage(error, "No se pudo imprimir la prueba"));
@@ -126,6 +100,7 @@ export default function PosPrintSettingsPage() {
   }
 
   const settings = session?.ticketSettings ?? DEFAULT_TICKET_SETTINGS;
+  const header = ticketHeaderBlock(settings, session?.branch ?? null);
 
   return (
     <main style={{ padding: 24, maxWidth: 860, margin: "0 auto", overflow: "auto", height: "100vh" }}>
@@ -275,15 +250,21 @@ export default function PosPrintSettingsPage() {
       <div className="panel p-5" style={{ marginTop: 16 }}>
         <h2 style={{ marginTop: 0 }}>Ticket de esta sucursal</h2>
         <p className="page-kicker">
-          El ancho, el encabezado y el mensaje final se editan desde el panel, en Sucursales. Aquí
-          solo se elige la impresora.
+          El contenido del ticket (datos de facturación, tamaño de letra y qué se imprime) se edita
+          desde el panel, en <strong>Punto de venta → Ticket de venta</strong>. Aquí solo se elige la
+          impresora de esta computadora.
         </p>
         <ul style={{ color: "var(--muted)", fontSize: 14 }}>
           <li>Ancho de papel: {settings.paperWidthMm} mm</li>
+          <li>Tamaño de letra: {FONT_SIZE_LABELS[settings.fontSize]}</li>
           <li>
-            Encabezado: {settings.headerLines.length ? settings.headerLines.join(" · ") : "sin líneas"}
+            Encabezado: {header.lines.length ? header.lines.join(" · ") : "solo el nombre"}
           </li>
           <li>Mensaje final: {settings.footerMessage || "sin mensaje"}</li>
+          <li>
+            Copias por venta: {settings.copies}
+            {settings.cutPaper ? " · corta el papel" : " · sin corte automático"}
+          </li>
         </ul>
       </div>
     </main>

@@ -13,11 +13,12 @@ import {
   Tabs,
   TextField,
 } from "@mui/material";
-import { Droplets, History, Package, ShieldAlert } from "lucide-react";
+import { AlertTriangle, Droplets, History, Package, ShieldAlert } from "lucide-react";
 import { httpClient, getApiErrorMessage } from "@/services/http-client";
 import { useDebounce } from "@/hooks/useDebounce";
 import { formatQuantity } from "@/lib/format-money";
 import { usePermissions } from "@/lib/permissions";
+import { FilterBar, FilterMeta, FilterSearch } from "@/components/pos-admin/FilterBar";
 import { Branch, InventoryMovement, ListResponse } from "@/types";
 import { BRANCH_TYPES } from "@glamouroso/shared/constants";
 import { toast } from "sonner";
@@ -172,6 +173,8 @@ export default function BranchInventoryPage() {
     }
   }
 
+  const visibleRows = tab === 0 ? data.lines : data.products;
+
   return (
     <div className="page-stack">
       <div className="toolbar">
@@ -184,12 +187,14 @@ export default function BranchInventoryPage() {
         </div>
       </div>
 
-      <div className="toolbar">
+      <FilterBar>
         <TextField
           select
+          size="small"
           label="Sucursal"
           value={branchId}
           onChange={(event) => setBranchId(event.target.value)}
+          InputLabelProps={{ shrink: true }}
           sx={{ minWidth: 260 }}
         >
           {branches.map((branch) => (
@@ -198,20 +203,24 @@ export default function BranchInventoryPage() {
             </MenuItem>
           ))}
         </TextField>
-        <TextField
-          label="Buscar"
+        <FilterSearch
           value={search}
-          onChange={(event) => setSearch(event.target.value)}
-          sx={{ minWidth: 240 }}
+          onChange={setSearch}
+          placeholder="Buscar línea o producto por nombre"
         />
         <Button
           variant={belowMin ? "contained" : "outlined"}
           color={belowMin ? "warning" : "inherit"}
+          startIcon={<AlertTriangle size={15} />}
           onClick={() => setBelowMin((value) => !value)}
+          sx={{ whiteSpace: "nowrap", height: 40 }}
         >
-          Bajo mínimo {belowMinCount ? `(${belowMinCount})` : ""}
+          Bajo mínimo{belowMinCount ? ` (${belowMinCount})` : ""}
         </Button>
-      </div>
+        <FilterMeta>
+          <strong>{visibleRows.length}</strong> {tab === 0 ? "líneas" : "productos"}
+        </FilterMeta>
+      </FilterBar>
 
       <Tabs value={tab} onChange={(_e, value) => setTab(value)}>
         <Tab

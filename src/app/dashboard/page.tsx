@@ -10,6 +10,8 @@ import {
   weekBucketTitle,
 } from "@/components/dashboard/SalesByPeriodChart";
 import { TopProductsByPeriod } from "@/components/dashboard/TopProductsByPeriod";
+import { PosOverviewTab } from "@/components/dashboard/PosOverviewTab";
+import { Tab, Tabs } from "@mui/material";
 import type { DashboardOverview } from "@glamouroso/shared/schemas/dashboard";
 import { httpClient } from "@/services/http-client";
 import { useRealtime } from "@/components/realtime/RealtimeProvider";
@@ -66,10 +68,13 @@ function weekdayLabel(dateOnly: string): string {
 export default function DashboardPage() {
   const [data, setData] = useState<DashboardOverview | null>(null);
   const [loading, setLoading] = useState(true);
+  /** "crm" es lo de siempre (pedidos por WhatsApp); "pos" son las cajas de las sucursales. */
+  const [tab, setTab] = useState<"crm" | "pos">("crm");
   const user = useAuthStore((s) => s.user);
   const router = useRouter();
   const { can } = usePermissions();
   const canSeeOverview = can("dashboard", "view");
+  const canSeePos = can("posBranches") || can("posReports");
 
   useEffect(() => {
     // Perfiles sin acceso al Overview (ej. vendedor) van a su primera sección permitida.
@@ -190,6 +195,17 @@ export default function DashboardPage() {
         </figure>
       </section>
 
+      {canSeePos ? (
+        <Tabs value={tab} onChange={(_e, value) => setTab(value)}>
+          <Tab label="CRM y pedidos" value="crm" />
+          <Tab label="Punto de venta" value="pos" />
+        </Tabs>
+      ) : null}
+
+      {tab === "pos" ? (
+        <PosOverviewTab />
+      ) : (
+        <>
       {/* Grid de Tarjetas Métricas */}
       <section className="grid grid-5">
         <div className="card metric">
@@ -410,6 +426,8 @@ export default function DashboardPage() {
 
       {/* Top de productos e importes del periodo elegido */}
       <TopProductsByPeriod />
+        </>
+      )}
     </div>
   );
 }

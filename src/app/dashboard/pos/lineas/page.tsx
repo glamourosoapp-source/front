@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Button, Chip, TextField } from "@mui/material";
+import { Button, Chip, MenuItem, TextField } from "@mui/material";
 import { Droplets, Plus, ShieldAlert } from "lucide-react";
 import { DataTable } from "@/components/ui/DataTable";
 import { ListPagination } from "@/components/ui/ListPagination";
@@ -10,6 +10,7 @@ import { httpClient, getApiErrorMessage } from "@/services/http-client";
 import { useDebounce } from "@/hooks/useDebounce";
 import { formatMoney } from "@/lib/format-money";
 import { usePermissions } from "@/lib/permissions";
+import { FilterBar, FilterMeta, FilterSearch } from "@/components/pos-admin/FilterBar";
 import { ListResponse, ProductLine } from "@/types";
 import { toast } from "sonner";
 
@@ -108,32 +109,36 @@ export default function ProductLinesPage() {
         ) : null}
       </div>
 
-      <div className="toolbar">
-        <TextField
-          label="Buscar línea"
+      <FilterBar>
+        <FilterSearch
           value={search}
-          onChange={(e) => {
-            setSearch(e.target.value);
+          placeholder="Buscar línea por nombre"
+          onChange={(value) => {
+            setSearch(value);
             setPage(1);
           }}
-          sx={{ minWidth: 260 }}
         />
-        <select
-          className="input"
+        <TextField
+          select
+          size="small"
+          label="Venta por litro"
           value={sellable}
           onChange={(e) => {
             setSellable(e.target.value as SellableFilter);
             setPage(1);
           }}
+          InputLabelProps={{ shrink: true }}
+          SelectProps={{ displayEmpty: true }}
+          sx={{ minWidth: 250 }}
         >
-          <option value="">Todas</option>
-          <option value="true">Se venden por litro</option>
-          <option value="false">Faltan productos por asignar</option>
-        </select>
-        <span className="page-kicker">
-          {sellableCount} de {lines.length} en esta página venden por litro
-        </span>
-      </div>
+          <MenuItem value="">Todas las líneas</MenuItem>
+          <MenuItem value="true">Se venden por litro</MenuItem>
+          <MenuItem value="false">Faltan productos por asignar</MenuItem>
+        </TextField>
+        <FilterMeta>
+          <strong>{sellableCount}</strong> de {lines.length} venden por litro
+        </FilterMeta>
+      </FilterBar>
 
       <DataTable
         rows={lines}

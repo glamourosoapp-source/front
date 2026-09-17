@@ -1,32 +1,16 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Button, Chip, MenuItem, Tab, Tabs, TextField } from "@mui/material";
-import { Check, FileDown, Printer, RefreshCw, ShieldAlert, Truck, X } from "lucide-react";
+import { Button, MenuItem, Tab, Tabs, TextField } from "@mui/material";
+import { FileDown, Printer, RefreshCw, ShieldAlert, Truck } from "lucide-react";
 import { httpClient, getApiErrorMessage } from "@/services/http-client";
-import { formatMoney, formatQuantity } from "@/lib/format-money";
+import { formatQuantity } from "@/lib/format-money";
 import { usePermissions } from "@/lib/permissions";
+import { FilterBar, FilterDivider, FilterMeta } from "@/components/pos-admin/FilterBar";
+import { RestockOrderCard } from "@/components/pos-admin/RestockOrderCard";
 import { RESTOCK_ORDER_STATUS, RESTOCK_ORIGIN } from "@glamouroso/shared/constants";
 import { Branch, BranchShortage, ListResponse, RestockOrder } from "@/types";
 import { toast } from "sonner";
-
-const STATUS_LABELS: Record<string, string> = {
-  pending: "Pendiente",
-  approved: "Aprobado",
-  preparing: "En preparación",
-  sent: "Enviado",
-  received: "Recibido",
-  cancelled: "Cancelado",
-};
-
-const STATUS_COLORS: Record<string, "default" | "primary" | "warning" | "success" | "error"> = {
-  pending: "warning",
-  approved: "primary",
-  preparing: "primary",
-  sent: "success",
-  received: "success",
-  cancelled: "error",
-};
 
 export default function PosSurtidoPage() {
   const { can } = usePermissions();
@@ -69,40 +53,28 @@ export default function PosSurtidoPage() {
     }
   }, [branchId]);
 
-  const loadOrders = useCallback(
-    async (origin?: string) => {
-      // "branch" agrupa los dos orígenes de sucursal; el endpoint filtra por
-      // un solo `origin`, así que se descartan las franquicias al recibir.
-      const wantBranch = origin === "branch";
-      if (wantBranch) origin = undefined;
-      setLoading(true);
-      try {
-        const result = await httpClient.get<ListResponse<RestockOrder>>("/pos/restock/orders", {
-          limit: 100,
-          ...(origin ? { origin } : {}),
-        });
-        setOrders(
-          wantBranch
-            ? result.items.filter((order) => order.origin !== RESTOCK_ORIGIN.FRANCHISE)
-            : result.items
-        );
-      } catch (error) {
-        toast.error(getApiErrorMessage(error, "Error al cargar los pedidos"));
-      } finally {
-        setLoading(false);
-      }
-    },
-    []
-  );
+  const loadOrders = useCallback(async () => {
+    setLoading(true);
+    try {
+      // Surtido = lo que sale del corte de faltantes de una sucursal,
+      // automático o manual. Los pedidos de franquicia tienen su propio
+      // módulo (Franquicias → Pedidos); el endpoint no filtra "todo menos
+      // franquicia", así que se descartan al recibir.
+      const result = await httpClient.get<ListResponse<RestockOrder>>("/pos/restock/orders", {
+        limit: 100,
+      });
+      setOrders(result.items.filter((order) => order.origin !== RESTOCK_ORIGIN.FRANCHISE));
+    } catch (error) {
+      toast.error(getApiErrorMessage(error, "Error al cargar los pedidos"));
+    } finally {
+      setLoading(false);
+    }
+  }, []);
 
   useEffect(() => {
     if (!canView) return;
     if (tab === 0) void loadShortages();
-    // Sin filtro, la segunda pestaña traía también los de franquicia y el
-    // mismo pedido salía en las dos. Surtido = lo que sale del corte de
-    // faltantes de una sucursal, automático o manual.
-    else if (tab === 1) void loadOrders("branch");
-    else void loadOrders(RESTOCK_ORIGIN.FRANCHISE);
+    else void loadOrders();
   }, [canView, tab, loadShortages, loadOrders]);
 
   const totals = useMemo(
@@ -155,7 +127,7 @@ export default function PosSurtidoPage() {
         await httpClient.post(`/pos/restock/orders/${order.id}/cancel`, {});
         toast.success("Pedido cancelado");
       }
-      await loadOrders(tab === 2 ? RESTOCK_ORIGIN.FRANCHISE : "branch");
+      await loadOrders();
     } catch (error) {
       toast.error(getApiErrorMessage(error, "No se pudo actualizar el pedido"));
     }
@@ -185,7 +157,8 @@ export default function PosSurtidoPage() {
           <h1 className="page-title">Faltantes y surtido</h1>
           <p className="page-kicker">
             El faltante sale del stock mínimo de cada sucursal. Los líquidos se piden en bidones
-            completos, redondeando por mitad.
+            completos, redondeando por mitad. Los pedidos de las franquicias tienen su propio
+            módulo.
           </p>
         </div>
       </div>
@@ -193,18 +166,19 @@ export default function PosSurtidoPage() {
       <Tabs value={tab} onChange={(_e, value) => setTab(value)}>
         <Tab label="Faltantes" />
         <Tab label="Pedidos de surtido" />
-        <Tab label="Pedidos de franquicias" />
       </Tabs>
 
       {tab === 0 ? (
         <>
-          <div className="toolbar">
+          <FilterBar>
             <TextField
               select
+              size="small"
               label="Sucursal"
               value={branchId}
               onChange={(event) => setBranchId(event.target.value)}
-              sx={{ minWidth: 250 }}
+              InputLabelProps={{ shrink: true }}
+              sx={{ minWidth: 260 }}
             >
               {branches
                 .filter((branch) => branch.type === "branch")
@@ -214,24 +188,48 @@ export default function PosSurtidoPage() {
                   </MenuItem>
                 ))}
             </TextField>
-            <Button variant="outlined" startIcon={<RefreshCw size={16} />} onClick={() => void loadShortages()}>
+            <Button
+              variant="outlined"
+              startIcon={<RefreshCw size={16} />}
+              onClick={() => void loadShortages()}
+              sx={{ height: 40, whiteSpace: "nowrap" }}
+            >
               Calcular ahora
             </Button>
-            <Button variant="outlined" startIcon={<FileDown size={16} />} onClick={exportShortagesCsv} disabled={!shortages.length}>
+            <FilterDivider />
+            <Button
+              variant="outlined"
+              startIcon={<FileDown size={16} />}
+              onClick={exportShortagesCsv}
+              disabled={!shortages.length}
+              sx={{ height: 40 }}
+            >
               CSV
             </Button>
-            <Button variant="outlined" startIcon={<Printer size={16} />} onClick={() => window.print()} disabled={!shortages.length}>
+            <Button
+              variant="outlined"
+              startIcon={<Printer size={16} />}
+              onClick={() => window.print()}
+              disabled={!shortages.length}
+              sx={{ height: 40 }}
+            >
               Imprimir
             </Button>
             {canCreate ? (
-              <Button variant="contained" startIcon={<Truck size={16} />} onClick={() => void generateOrder()} disabled={!shortages.length}>
+              <Button
+                variant="contained"
+                startIcon={<Truck size={16} />}
+                onClick={() => void generateOrder()}
+                disabled={!shortages.length}
+                sx={{ height: 40, whiteSpace: "nowrap" }}
+              >
                 Confirmar pedido a fábrica
               </Button>
             ) : null}
-            <span className="page-kicker">
-              {totals.bidones} bidones · {totals.piezas} piezas
-            </span>
-          </div>
+            <FilterMeta>
+              <strong>{totals.bidones}</strong> bidones · <strong>{totals.piezas}</strong> piezas
+            </FilterMeta>
+          </FilterBar>
 
           <div className="table-container-premium print-only-block">
             <table className="table">
@@ -279,121 +277,21 @@ export default function PosSurtidoPage() {
         </>
       ) : null}
 
-      {tab > 0 ? (
+      {tab === 1 ? (
         <div className="page-stack">
           {orders.map((order) => (
-            <div key={order.id} className="panel p-5">
-              <div className="toolbar" style={{ marginBottom: 8 }}>
-                <div>
-                  <strong>
-                    {order.branch?.code} · {order.branch?.name}
-                  </strong>
-                  <Chip
-                    label={STATUS_LABELS[order.status] ?? order.status}
-                    size="small"
-                    color={STATUS_COLORS[order.status] ?? "default"}
-                    sx={{ ml: 1 }}
-                  />
-                  <Chip
-                    label={
-                      order.origin === RESTOCK_ORIGIN.FRANCHISE
-                        ? "franquicia"
-                        : order.origin === RESTOCK_ORIGIN.SHORTAGE_AUTO
-                          ? "corte automático"
-                          : "manual"
-                    }
-                    size="small"
-                    variant="outlined"
-                    sx={{ ml: 1 }}
-                  />
-                  <div className="page-kicker">
-                    {order.createdAt
-                      ? new Date(order.createdAt).toLocaleString("es-MX", {
-                          dateStyle: "medium",
-                          timeStyle: "short",
-                        })
-                      : ""}
-                    {order.sentAt
-                      ? ` · enviado ${new Date(order.sentAt).toLocaleDateString("es-MX")}`
-                      : ""}
-                  </div>
-                </div>
-                {canUpdate && order.status === RESTOCK_ORDER_STATUS.PENDING ? (
-                  <div style={{ display: "flex", gap: 8 }}>
-                    <Button size="small" variant="contained" startIcon={<Check size={14} />} onClick={() => void act(order, "approve")}>
-                      Aprobar
-                    </Button>
-                    <Button size="small" color="error" startIcon={<X size={14} />} onClick={() => void act(order, "cancel")}>
-                      Cancelar
-                    </Button>
-                  </div>
-                ) : null}
-              </div>
-
-              <table className="table">
-                <thead>
-                  <tr>
-                    <th>Producto</th>
-                    <th style={{ textAlign: "right" }}>Pedido</th>
-                    <th style={{ textAlign: "right" }}>Despachado</th>
-                    {order.origin === RESTOCK_ORIGIN.FRANCHISE ? (
-                      <th style={{ textAlign: "right" }}>Precio mayoreo</th>
-                    ) : null}
-                    <th>Preparado</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {(order.items ?? []).map((item) => (
-                    <tr key={item.id}>
-                      <td>
-                        {item.productName}
-                        {/* El motivo que escribió fábrica al mandar menos. */}
-                        {item.notes ? (
-                          <div className="page-kicker" style={{ margin: 0, color: "#92400e" }}>
-                            {item.notes}
-                          </div>
-                        ) : null}
-                      </td>
-                      <td style={{ textAlign: "right" }}>
-                        {formatQuantity(item.requestedQty)}{" "}
-                        {item.unit === "bidon"
-                          ? Number(item.requestedQty) === 1
-                            ? "bidón"
-                            : "bidones"
-                          : "pz"}
-                      </td>
-                      <td style={{ textAlign: "right" }}>
-                        {/*
-                          Sin captura de fábrica se despacha lo pedido: en un
-                          pedido ya enviado, "—" leía como "no se mandó nada".
-                        */}
-                        {item.dispatchedQty != null
-                          ? formatQuantity(item.dispatchedQty)
-                          : order.status === RESTOCK_ORDER_STATUS.SENT ||
-                              order.status === RESTOCK_ORDER_STATUS.RECEIVED
-                            ? formatQuantity(item.requestedQty)
-                            : "—"}
-                      </td>
-                      {order.origin === RESTOCK_ORIGIN.FRANCHISE ? (
-                        <td style={{ textAlign: "right" }}>
-                          {item.unitPrice ? formatMoney(item.unitPrice) : "—"}
-                        </td>
-                      ) : null}
-                      <td>{item.prepared ? "Sí" : "—"}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-              {order.dispatchNotes ? (
-                <p className="page-kicker" style={{ marginBottom: 0, color: "#92400e" }}>
-                  <strong>Nota de fábrica:</strong> {order.dispatchNotes}
-                </p>
-              ) : null}
-            </div>
+            <RestockOrderCard
+              key={order.id}
+              order={order}
+              canUpdate={canUpdate}
+              linkBranch
+              onApprove={(o) => void act(o, "approve")}
+              onCancel={(o) => void act(o, "cancel")}
+            />
           ))}
           {!orders.length && !loading ? (
             <div className="panel p-5" style={{ textAlign: "center", color: "var(--muted)" }}>
-              No hay pedidos con este filtro.
+              Ninguna sucursal tiene pedidos de surtido.
             </div>
           ) : null}
         </div>

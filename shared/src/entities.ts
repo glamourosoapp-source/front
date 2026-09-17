@@ -11,6 +11,7 @@ import type {
   RestockOrigin,
   Role,
 } from "./constants";
+import type { BranchHealth } from "./pos-health";
 import type { TicketSettings } from "./utils/pos-ticket-settings";
 import type { PermissionMap } from "./permissions";
 
@@ -560,6 +561,67 @@ export interface BranchShortage {
   /** Bidones o piezas a pedir, ya redondeados. */
   requestedQty: number;
   litersPerUnit?: number | null;
+}
+
+/** Ventas de un periodo en el resumen de sucursal. */
+export interface BranchSalesPeriod {
+  total: number;
+  tickets: number;
+  avgTicket: number;
+}
+
+/**
+ * Resumen de una sucursal o franquicia para el panel: ventas por periodo,
+ * inventario bajo mínimo, surtido y la salud derivada. `sales` llega en null
+ * sin `posReports:view` e `inventory` sin `posInventory:view`.
+ */
+export interface BranchStats {
+  branchId: string;
+  code: string;
+  name: string;
+  type: BranchType;
+  isActive: boolean;
+  city: string | null;
+  restockCutoffDow: number | null;
+  usersCount: number;
+  sales: {
+    today: BranchSalesPeriod;
+    week: BranchSalesPeriod;
+    month: BranchSalesPeriod;
+    last30: BranchSalesPeriod;
+    prev30: BranchSalesPeriod;
+    lifetimeTickets: number;
+    customersCount: number;
+    lastSaleAt: string | null;
+  } | null;
+  inventory: { belowMinCount: number; trackedCount: number } | null;
+  restock: {
+    openCount: number;
+    oldestOpenAt: string | null;
+    lastOrderAt: string | null;
+    monthCount: number;
+  };
+  health: BranchHealth;
+}
+
+export interface BranchOverview {
+  branch: Branch;
+  stats: BranchStats;
+}
+
+/** Cliente registrado en una sucursal: lo que compró AHÍ con su teléfono. */
+export interface BranchCustomerRow {
+  id: string;
+  name: string;
+  phone: string;
+  email: string | null;
+  birthday: string | null;
+  pricingTier: PricingTier | string;
+  source: string | null;
+  purchases: number;
+  spent: number;
+  lastPurchaseAt: string | null;
+  firstPurchaseAt: string | null;
 }
 
 /** Señal de refetch: hubo una venta (o anulación) en una sucursal. */
