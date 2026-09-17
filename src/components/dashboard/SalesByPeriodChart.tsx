@@ -79,25 +79,34 @@ export function weekBucketTitle(point: DashboardSalesPoint): string {
 /**
  * Gráfica grande de ventas: por mes del año seleccionado, o por semanas de negocio
  * completas (sábado a viernes) que tocan el mes al elegirlo o hacer clic en su barra.
- * Excluye pedidos cancelados.
+ * Se puede acotar a un vendedor (creador del pedido). Excluye pedidos cancelados.
  */
 export function SalesByPeriodChart() {
   const [year, setYear] = useState(() => new Date().getFullYear());
   const [month, setMonth] = useState<number | null>(null);
+  // "" = todos los vendedores. La lista de opciones viene en la misma respuesta,
+  // así el panel no depende del permiso de usuarios.
+  const [sellerId, setSellerId] = useState("");
   const [data, setData] = useState<DashboardSales | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     setLoading(true);
     httpClient
-      .get<DashboardSales>("/dashboard/sales", month ? { year, month } : { year })
+      .get<DashboardSales>("/dashboard/sales", {
+        year,
+        ...(month ? { month } : {}),
+        ...(sellerId ? { sellerId } : {}),
+      })
       .then(setData)
       .catch(() => setData(null))
       .finally(() => setLoading(false));
-  }, [year, month]);
+  }, [year, month, sellerId]);
 
   const isWeekly = data?.granularity === "week";
   const years = data?.availableYears?.length ? data.availableYears : [year];
+  const sellers = data?.sellers ?? [];
+  const sellerName = sellers.find((seller) => seller.id === sellerId)?.name ?? null;
   const chartData = (data?.points ?? []).map((point) => ({
     ...point,
     label: isWeekly ? weekBucketLabel(point) : MONTH_SHORT[point.key - 1],
@@ -116,11 +125,13 @@ export function SalesByPeriodChart() {
         <div>
           <h2 style={{ fontSize: "16px", fontWeight: 700, color: "var(--glam-navy)" }}>
             {month ? `Ventas por Semana — ${MONTH_LONG[month - 1]} ${year}` : `Ventas por Mes — ${year}`}
+            {sellerName ? ` · ${sellerName}` : ""}
           </h2>
           <p className="page-kicker">
             {month
               ? "Semanas completas de sábado a viernes que tocan el mes seleccionado; la primera y la última pueden cruzar de mes. Pedidos cancelados excluidos."
               : "Facturación mensual del año seleccionado. Haz clic en un mes para ver sus semanas."}
+            {sellerName ? ` Solo pedidos de ${sellerName}.` : ""}
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
@@ -129,6 +140,20 @@ export function SalesByPeriodChart() {
               {formatMoney(data.totalSales)} · {data.totalOrders} pedidos
             </span>
           )}
+          <select
+            className="input"
+            style={{ width: "auto", minHeight: "36px", padding: "6px 10px" }}
+            value={sellerId}
+            onChange={(e) => setSellerId(e.target.value)}
+            aria-label="Vendedor"
+          >
+            <option value="">Todos los vendedores</option>
+            {sellers.map((seller) => (
+              <option key={seller.id} value={seller.id}>
+                {seller.name}
+              </option>
+            ))}
+          </select>
           <select
             className="input"
             style={{ width: "auto", minHeight: "36px", padding: "6px 10px" }}
@@ -165,7 +190,7 @@ export function SalesByPeriodChart() {
           </div>
         ) : !hasSales ? (
           <div style={{ display: "grid", placeItems: "center", height: "100%", color: "var(--glam-muted)", fontSize: "13px" }}>
-            Sin ventas registradas en este periodo.
+            {sellerName ? `Sin ventas de ${sellerName} en este periodo.` : "Sin ventas registradas en este periodo."}
           </div>
         ) : (
           <ResponsiveContainer width="100%" height="100%">

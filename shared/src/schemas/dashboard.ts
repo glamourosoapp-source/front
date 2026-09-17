@@ -1,9 +1,14 @@
 import { z } from "zod";
 
-/** Query de GET /dashboard/sales: año obligatorio; con `month` la serie baja a semanas del mes. */
+/**
+ * Query de GET /dashboard/sales: año obligatorio; con `month` la serie baja a semanas
+ * del mes. `sellerId` (uuid del usuario creador del pedido) acota la serie a un solo
+ * vendedor; vacío o ausente es todos.
+ */
 export const queryDashboardSalesSchema = z.object({
   year: z.coerce.number().int().min(2000).max(2100),
   month: z.coerce.number().int().min(1).max(12).optional(),
+  sellerId: z.union([z.string().uuid(), z.literal("")]).optional(),
 });
 
 export type QueryDashboardSales = z.infer<typeof queryDashboardSalesSchema>;
@@ -25,12 +30,22 @@ export interface DashboardSalesPoint {
   weekEnd?: string;
 }
 
+/** Vendedor con pedidos en la organización (usuario creador de al menos un pedido no cancelado). */
+export interface DashboardSeller {
+  id: string;
+  name: string;
+}
+
 export interface DashboardSales {
   granularity: "month" | "week";
   year: number;
   month: number | null;
+  /** Vendedor al que se acotó la serie, o `null` si es de todos. */
+  sellerId: string | null;
   /** Años con pedidos registrados (incluye siempre el año en curso del negocio). */
   availableYears: number[];
+  /** Vendedores con pedidos en la organización (histórico, no solo del periodo), ordenados por nombre. */
+  sellers: DashboardSeller[];
   points: DashboardSalesPoint[];
   /** Suma de los puntos mostrados. En "week" es la suma de las semanas completas, que no tiene por qué cuadrar con el total del mes. */
   totalSales: number;
