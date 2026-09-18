@@ -2,7 +2,8 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { Button, Chip, Dialog, DialogActions, DialogContent, DialogTitle } from "@mui/material";
+import { Button, Chip, Dialog, DialogActions, DialogContent, DialogTitle, Tooltip } from "@mui/material";
+import { CloudOff, TriangleAlert } from "lucide-react";
 import { POS_SALE_STATUS } from "@glamouroso/shared/constants";
 import { DetailField } from "@/components/ui/DetailField";
 import { httpClient, getApiErrorMessage } from "@/services/http-client";
@@ -171,7 +172,27 @@ export function BranchSalesTab({ branchId }: { branchId: string }) {
                       <td style={{ fontWeight: 600, color: "var(--glam-navy)" }}>
                         {formatBusinessTime(sale.soldAt)}
                       </td>
-                      <td>{sale.ticketNumber}</td>
+                      <td>
+                        {sale.ticketNumber}
+                        {sale.recordedOffline ? (
+                          <Tooltip
+                            title={`Cobrado sin internet${
+                              sale.syncedAt ? `, subió el ${formatDateTime(sale.syncedAt)}` : ""
+                            }`}
+                          >
+                            <span style={{ marginLeft: 6, color: "#b45309", verticalAlign: "middle" }}>
+                              <CloudOff size={13} />
+                            </span>
+                          </Tooltip>
+                        ) : null}
+                        {sale.priceMismatch ? (
+                          <Tooltip title="Alguna partida se cobró a un precio distinto al del catálogo">
+                            <span style={{ marginLeft: 6, color: "#c62828", verticalAlign: "middle" }}>
+                              <TriangleAlert size={13} />
+                            </span>
+                          </Tooltip>
+                        ) : null}
+                      </td>
                       <td>{sale.cashier?.name ?? "—"}</td>
                       <td>
                         {sale.customer ? (
@@ -277,6 +298,24 @@ export function BranchSalesTab({ branchId }: { branchId: string }) {
                 <p className="page-kicker" style={{ color: "#c62828" }}>
                   Anulado {formatDateTime(selected.voidedAt)}
                   {selected.voidReason ? `: ${selected.voidReason}` : ""}
+                </p>
+              ) : null}
+              {selected.recordedOffline ? (
+                <p className="page-kicker" style={{ color: "#b45309" }}>
+                  Cobrado sin internet en la caja de la sucursal
+                  {selected.syncedAt ? `, subió el ${formatDateTime(selected.syncedAt)}` : ""}.
+                </p>
+              ) : null}
+              {selected.priceMismatch ? (
+                <p className="page-kicker" style={{ color: "#c62828" }}>
+                  El precio cobrado no coincide con el del catálogo actual. Manda lo que se cobró:
+                  el cliente ya pagó ese importe.
+                </p>
+              ) : null}
+              {selected.syncConflict ? (
+                <p className="page-kicker" style={{ color: "#c62828" }}>
+                  El folio que traía la caja ({String(selected.syncConflict.proposed)}) ya estaba
+                  usado, así que este ticket quedó con otro.
                 </p>
               ) : null}
               {selected.notes ? <DetailField label="Notas" value={selected.notes} /> : null}
