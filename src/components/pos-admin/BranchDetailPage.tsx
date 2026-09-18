@@ -21,8 +21,17 @@ import { BranchCutsTab } from "./tabs/BranchCutsTab";
 import { BranchInventoryTab } from "./tabs/BranchInventoryTab";
 import { BranchUsersTab } from "./tabs/BranchUsersTab";
 import { BranchCustomersTab } from "./tabs/BranchCustomersTab";
+import { BranchSyncTab } from "./tabs/BranchSyncTab";
 
-type TabKey = "resumen" | "ventas" | "pedidos" | "cortes" | "inventario" | "usuarios" | "clientes";
+type TabKey =
+  | "resumen"
+  | "ventas"
+  | "pedidos"
+  | "cortes"
+  | "inventario"
+  | "usuarios"
+  | "clientes"
+  | "caja";
 
 /**
  * Detalle de una sucursal o franquicia: resumen, ventas, pedidos a fábrica,
@@ -59,6 +68,8 @@ export function BranchDetailPage({ type }: { type: BranchType }) {
         { key: "inventario", label: "Inventario y mínimos" },
         { key: "usuarios", label: "Usuarios" },
         { key: "clientes", label: "Clientes" },
+        // Solo una sucursal tiene caja; una franquicia no cobra en el sistema.
+        { key: "caja", label: "Caja y sincronización" },
       ];
   const requested = searchParams.get("tab") as TabKey | null;
   const tab: TabKey = requested && tabs.some((t) => t.key === requested) ? requested : "resumen";
@@ -204,6 +215,7 @@ export function BranchDetailPage({ type }: { type: BranchType }) {
       {tab === "inventario" ? <BranchInventoryTab branchId={branch.id} /> : null}
       {tab === "usuarios" ? <BranchUsersTab branch={branch} /> : null}
       {tab === "clientes" ? <BranchCustomersTab branchId={branch.id} /> : null}
+      {tab === "caja" ? <BranchSyncTab branch={branch} /> : null}
 
       <BranchFormDialog
         open={editOpen}

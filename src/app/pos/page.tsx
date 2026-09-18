@@ -20,6 +20,9 @@ import {
   Wifi,
   WifiOff,
   MonitorDown,
+  CloudOff,
+  CloudUpload,
+  TriangleAlert,
 } from "lucide-react";
 import { httpClient, getApiErrorMessage } from "@/services/http-client";
 import { useAuthStore } from "@/stores/auth.store";
@@ -28,7 +31,12 @@ import { useRealtime } from "@/components/realtime/RealtimeProvider";
 import { usePosStore } from "@/stores/pos.store";
 import { usePosShortcuts } from "@/hooks/usePosShortcuts";
 import { usePwaInstall } from "@/hooks/usePwaInstall";
+import { usePosOffline } from "@/hooks/usePosOffline";
+import { posSync } from "@/lib/pos-offline/sync";
+import { buildLocalSale, buildSaleEvent } from "@/lib/pos-offline/sale-event";
+import { nextFolio, readMeta, findSaleByEvent } from "@/lib/pos-offline/store";
 import { formatMoney, formatQuantity } from "@/lib/format-money";
+import { businessStamp } from "@/lib/business-time";
 import {
   lineFromBulk,
   lineFromProduct,
@@ -51,6 +59,7 @@ import { PosChargeDialog } from "@/components/pos/PosChargeDialog";
 import { PosDaySalesDialog } from "@/components/pos/PosDaySalesDialog";
 import { PosTicketSheet } from "@/components/pos/PosTicketSheet";
 import { PRICING_TIERS } from "@glamouroso/shared/constants";
+import { POS_CLOCK_SKEW_WARN_MS } from "@glamouroso/shared/pos-sync";
 import { DEFAULT_TICKET_SETTINGS } from "@glamouroso/shared";
 import type { PosCatalog, PosCatalogLine, PosCatalogProduct, PosSale, PosSession } from "@/types";
 import type { Customer } from "@/types";
@@ -93,6 +102,8 @@ export default function PosPage() {
 
   const ticket = tickets.find((row) => row.id === activeTicketId) ?? tickets[0]!;
   const codeRef = useRef<HTMLInputElement>(null);
+  /** Versión del catálogo que ya tiene la caja: si no cambió, no se transfiere. */
+  const catalogVersionRef = useRef<string | null>(null);
   const [code, setCode] = useState("");
   /** Texto con el que abre el buscador, para no perder lo ya escrito. */
   const [searchTerm, setSearchTerm] = useState("");
@@ -113,6 +124,20 @@ export default function PosPage() {
   const [clock, setClock] = useState("");
 
   /**
+   * La caja escribe en la PC primero y sube después, con o sin internet.
+   *
+   * Arranca con lo que quedó guardado —catálogo, sesión, cola— así que abre y
+   * cobra aunque el servidor no conteste, y aunque la PC se haya reiniciado.
+   */
+  const offline = usePosOffline({
+    onCatalog: setCatalog,
+    onSession: (saved) => {
+      // Solo mientras no haya llegado la sesión fresca del servidor.
+      if (!session) setSession(saved);
+    },
+  });
+
+  /**
    * La caja cobra; no informa.
    *
    * Existencias y ventas del día son datos de la empresa, no del mostrador: el
@@ -122,6 +147,10 @@ export default function PosPage() {
    */
   const canSeeStock = can("posInventory", "view");
   const canSeeDaySales = can("posReports", "view");
+
+  useEffect(() => {
+    catalogVersionRef.current = catalog?.version ?? null;
+  }, [catalog?.version]);
 
   const ticketSettings = session?.ticketSettings ?? DEFAULT_TICKET_SETTINGS;
   const walkInName = session?.walkInCustomerName ?? "Mostrador";
@@ -136,26 +165,28 @@ export default function PosPage() {
   }, []);
 
   /** Sesión y catálogo de la sucursal del cajero. */
+  /**
+   * Sesión de la sucursal. Si el servidor no contesta no se avisa con un error
+   * rojo: la caja ya abrió con la sesión guardada y el cajero está atendiendo.
+   */
   const loadSession = useCallback(async () => {
     try {
       const data = await httpClient.get<PosSession>("/pos/session");
       setSession(data);
       setLastSale(data.lastSale ?? null);
-    } catch (error) {
-      toast.error(getApiErrorMessage(error, "No se pudo abrir la caja"));
+      await offline.persistSession(data);
+    } catch {
+      /* sin red la caja sigue con la sesión que guardó la última vez */
     }
-  }, [setSession, setLastSale]);
+  }, [setSession, setLastSale, offline]);
 
+  /**
+   * Catálogo: se pide solo si cambió, y lo que llega se guarda en la PC. Es lo
+   * que la caja usa para cobrar cuando no hay a quién preguntarle un precio.
+   */
   const loadCatalog = useCallback(async () => {
-    try {
-      const result = await httpClient.get<{ changed: boolean; catalog?: PosCatalog }>(
-        "/pos/catalog"
-      );
-      if (result.catalog) setCatalog(result.catalog);
-    } catch (error) {
-      toast.error(getApiErrorMessage(error, "No se pudo cargar el catálogo"));
-    }
-  }, [setCatalog]);
+    await posSync.refreshOfflineData(catalogVersionRef.current);
+  }, []);
 
   useEffect(() => {
     void loadSession();
@@ -320,7 +351,136 @@ export default function PosPage() {
     });
   }, [selectedLine]);
 
+  /**
+   * Baja la existencia del catálogo que la caja tiene en memoria.
+   *
+   * Sin red nadie va a refrescarlo: si no se descuenta aquí, el cajero cobra
+   * diez garrafas y `F3` le sigue diciendo que hay las mismas de la mañana.
+   * Es una proyección local hasta el siguiente catálogo del servidor, que es la
+   * versión buena.
+   */
+  const deductLocalStock = useCallback(
+    (lines: { lineId: string | null; productId: string | null; quantity: number; litersDeducted: number | null }[]) => {
+      const current = usePosStore.getState().catalog;
+      if (!current) return;
+
+      const byLine = new Map<string, number>();
+      const byProduct = new Map<string, number>();
+      for (const line of lines) {
+        if (line.lineId) {
+          const liters = line.litersDeducted ?? line.quantity;
+          byLine.set(line.lineId, (byLine.get(line.lineId) ?? 0) + liters);
+        } else if (line.productId) {
+          byProduct.set(line.productId, (byProduct.get(line.productId) ?? 0) + line.quantity);
+        }
+      }
+
+      setCatalog({
+        ...current,
+        products: current.products.map((product) => {
+          // Un envase de una línea descuenta litros de la línea, no piezas de sí
+          // mismo: su existencia se lee del saldo de la línea.
+          const fromLine = product.lineId ? byLine.get(product.lineId) : undefined;
+          const fromOwn = byProduct.get(product.id);
+          const drop = fromLine ?? fromOwn;
+          if (!drop || product.stock == null) return product;
+          return { ...product, stock: Number(product.stock) - drop };
+        }),
+        lines: current.lines.map((line) => {
+          const drop = byLine.get(line.id);
+          if (!drop || line.stockLiters == null) return line;
+          return { ...line, stockLiters: Number(line.stockLiters) - drop };
+        }),
+      });
+    },
+    [setCatalog]
+  );
+
+  /**
+   * Lo que la barra superior dice de la sincronización.
+   *
+   * El cajero no tiene por qué saber qué es una cola: le importa si sus ventas
+   * ya están a salvo y, si no, cuántas faltan y desde cuándo.
+   */
+  const syncLabel = useMemo(() => {
+    const { online, syncing, pendingCount, oldestPendingAt, lastSyncedAt } = offline.status;
+    if (syncing && pendingCount) return { tone: "warn" as const, text: `Subiendo ${pendingCount}…` };
+    if (pendingCount) {
+      const since = oldestPendingAt
+        ? new Date(oldestPendingAt).toLocaleTimeString("es-MX", {
+            hour: "2-digit",
+            minute: "2-digit",
+          })
+        : null;
+      return {
+        tone: online ? ("warn" as const) : ("off" as const),
+        text: `${pendingCount} ${pendingCount === 1 ? "venta" : "ventas"} por subir${since ? ` desde ${since}` : ""}`,
+      };
+    }
+    if (!online) return { tone: "off" as const, text: "Sin conexión" };
+    const at = lastSyncedAt
+      ? new Date(lastSyncedAt).toLocaleTimeString("es-MX", { hour: "2-digit", minute: "2-digit" })
+      : null;
+    return { tone: "ok" as const, text: at ? `Al día · ${at}` : "En línea" };
+  }, [offline.status]);
+
+  /** El reloj corrido no bloquea nada, pero se avisa: mueve el día del ticket. */
+  const clockWarning = useMemo(() => {
+    const skew = Math.abs(offline.status.clockOffsetMs);
+    if (skew < POS_CLOCK_SKEW_WARN_MS) return null;
+    const hours = Math.round(skew / 3_600_000);
+    return hours >= 1
+      ? `El reloj de esta computadora está ${hours} ${hours === 1 ? "hora" : "horas"} fuera de hora`
+      : `El reloj de esta computadora está ${Math.round(skew / 60_000)} minutos fuera de hora`;
+  }, [offline.status.clockOffsetMs]);
+
+  /**
+   * Cerrar la caja con ventas sin subir es perder dinero si alguien limpia el
+   * navegador antes de que vuelva la red. Se avisa, aunque Chrome muestre su
+   * propio texto.
+   */
+  useEffect(() => {
+    if (!offline.status.pendingCount) return;
+    const warn = (event: BeforeUnloadEvent) => {
+      event.preventDefault();
+      event.returnValue = "";
+    };
+    window.addEventListener("beforeunload", warn);
+    return () => window.removeEventListener("beforeunload", warn);
+  }, [offline.status.pendingCount]);
+
+  /** Este navegador no puede guardar ventas: hay que decirlo antes del primer cobro. */
+  useEffect(() => {
+    if (offline.storageReady === false) {
+      toast.error(
+        "Esta ventana no puede guardar las ventas de la caja. Ábrela en Chrome, fuera del modo privado.",
+        { duration: Infinity }
+      );
+    }
+  }, [offline.storageReady]);
+
+  useEffect(() => {
+    if (offline.restored) {
+      toast.warning(
+        "Se recuperaron ventas pendientes del agente de impresión. Revisa que el total del día cuadre."
+      );
+    }
+  }, [offline.restored]);
+
   // ---- Impresión ----
+
+  /**
+   * "Por dónde salió el ticket" solo tiene sentido para un ticket que el
+   * servidor conoce. Un ticket recién cobrado sin red todavía no existe allá,
+   * así que marcar su impresión sería un 404 por cada venta.
+   */
+  const markPrinted = useCallback(async (sale: PosSale, target: string) => {
+    const local = await findSaleByEvent(sale.id);
+    if (local && !local.serverId) return;
+    await httpClient
+      .post(`/pos/sales/${local?.serverId ?? sale.id}/printed`, { target })
+      .catch(() => null);
+  }, []);
 
   const printSale = useCallback(
     async (sale: PosSale, reprint = false) => {
@@ -335,7 +495,7 @@ export default function PosPage() {
             printConfig,
             buildTicketEscPos(sale, ticketSettings, { reprint, logo, walkInCustomerName: walkInName })
           );
-          await httpClient.post(`/pos/sales/${sale.id}/printed`, { target: "agent" }).catch(() => null);
+          void markPrinted(sale, "agent");
           return;
         } catch (error) {
           toast.error(
@@ -348,10 +508,10 @@ export default function PosPage() {
       setSheetSale(sale);
       window.setTimeout(() => {
         window.print();
-        void httpClient.post(`/pos/sales/${sale.id}/printed`, { target: "browser" }).catch(() => null);
+        void markPrinted(sale, "browser");
       }, 150);
     },
-    [printConfig, printerOnline, ticketSettings, walkInName]
+    [printConfig, printerOnline, ticketSettings, walkInName, markPrinted]
   );
 
   // ---- Cobro ----
@@ -371,6 +531,14 @@ export default function PosPage() {
     setDialog("customer");
   }, [ticket.lines.length, ticket.customerId]);
 
+  /**
+   * Cobra: escribe el ticket en la PC, imprime y lo encola para subir.
+   *
+   * No espera al servidor. El folio lo pone la caja, los precios son los que
+   * están en pantalla y la hora es la del mostrador, así que el cobro tarda lo
+   * mismo con internet que sin él y el papel que se lleva el cliente siempre
+   * coincide con lo que acabará en el sistema.
+   */
   const charge = useCallback(
     async ({
       amountTendered,
@@ -382,38 +550,76 @@ export default function PosPage() {
       notes: string;
     }) => {
       if (!ticket.lines.length) return;
-      setCharging(true);
-      // La clave se fija por ticket: si la red falla y el cajero reintenta, el
-      // servidor devuelve el mismo ticket en vez de cobrar dos veces.
-      const idempotencyKey = ticket.idempotencyKey ?? crypto.randomUUID();
-      if (!ticket.idempotencyKey) updateTicket(ticket.id, { idempotencyKey });
+      if (offline.storageReady === false) {
+        toast.error(
+          "Este navegador no puede guardar las ventas. Abre la caja en Chrome, fuera de una ventana privada."
+        );
+        return;
+      }
+      if (!session?.branch.code) {
+        toast.error("La caja todavía no sabe de qué sucursal es. Espera a que abra.");
+        return;
+      }
 
+      setCharging(true);
       try {
-        const sale = await httpClient.post<PosSale>("/pos/sales", {
-          idempotencyKey,
-          customerId: ticket.customerId,
-          items: salePayload(ticket.lines),
+        const soldAt = new Date();
+        const meta = await readMeta();
+        const ticketNumber = await nextFolio(session.branch.code, businessStamp(soldAt));
+        const eventId = ticket.idempotencyKey ?? crypto.randomUUID();
+
+        const input = {
+          ticketNumber,
+          soldAt,
+          lines: totals.lines,
+          subtotal: totals.subtotal,
           discount: ticket.discount,
+          total,
           amountTendered,
+          itemsCount: totals.itemsCount,
           notes: notes || null,
-        });
+          customerId: ticket.customerId,
+          localCustomer: null,
+          customerName: ticket.customerName,
+          session,
+          catalogVersion: catalog?.version ?? null,
+          recordedOffline: !posSync.getStatus().online,
+          clockOffsetMs: meta.clockOffsetMs,
+        };
+
+        const localSale = buildLocalSale(input, eventId);
+        await posSync.push(buildSaleEvent(input, eventId), localSale);
+        void offline.backup();
 
         setDialog(null);
-        setLastSale(sale);
-        setSuccessChange(Number(sale.changeAmount));
+        setLastSale(localSale.sale);
+        setSuccessChange(localSale.changeAmount);
         window.setTimeout(() => setSuccessChange(null), 2600);
         clearActiveTicket();
-        void loadCatalog();
-        if (print) void printSale(sale);
-        else void httpClient.post(`/pos/sales/${sale.id}/printed`, { target: "none" }).catch(() => null);
+        if (print) void printSale(localSale.sale);
         focusCode();
+        // La existencia del catálogo local baja con la venta: el siguiente
+        // ticket ya tiene que ver el saldo correcto aunque no haya red.
+        deductLocalStock(totals.lines);
       } catch (error) {
-        toast.error(getApiErrorMessage(error, "No se pudo cobrar"));
+        toast.error(getApiErrorMessage(error, "No se pudo guardar la venta en esta computadora"));
       } finally {
         setCharging(false);
       }
     },
-    [ticket, updateTicket, setLastSale, clearActiveTicket, loadCatalog, printSale, focusCode]
+    [
+      ticket,
+      totals,
+      total,
+      session,
+      catalog?.version,
+      offline,
+      setLastSale,
+      clearActiveTicket,
+      printSale,
+      focusCode,
+      deductLocalStock,
+    ]
   );
 
   // ---- Flechas: mover la selección y ajustar cantidad ----
@@ -573,12 +779,32 @@ export default function PosPage() {
             Le atiende: <strong>{user?.name}</strong>
           </span>
           <span>{clock}</span>
-          <span className="pos-status" title={`Conexión ${connectionState}`}>
-            <span
-              className={`pos-status-dot ${connectionState === "open" ? "" : "off"}`}
-            />
-            {connectionState === "open" ? <Wifi size={13} /> : <WifiOff size={13} />}
+          <span
+            className="pos-status"
+            title={
+              offline.status.pendingCount
+                ? "Ventas cobradas que todavía están en esta computadora"
+                : `Conexión ${connectionState}`
+            }
+          >
+            <span className={`pos-status-dot ${syncLabel.tone === "ok" ? "" : syncLabel.tone}`} />
+            {syncLabel.tone === "ok" ? (
+              <Wifi size={13} />
+            ) : offline.status.syncing ? (
+              <CloudUpload size={13} />
+            ) : offline.status.online ? (
+              <CloudUpload size={13} />
+            ) : (
+              <CloudOff size={13} />
+            )}
+            <span className="pos-status-text">{syncLabel.text}</span>
           </span>
+          {clockWarning ? (
+            <span className="pos-status" title={clockWarning}>
+              <span className="pos-status-dot warn" />
+              <TriangleAlert size={13} />
+            </span>
+          ) : null}
           <span className="pos-status" title="Agente de impresión">
             <span className={`pos-status-dot ${printerOnline ? "" : "warn"}`} />
             <Printer size={13} />

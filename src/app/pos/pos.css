@@ -93,6 +93,22 @@
   background: #d97706;
 }
 
+/*
+  El estado de la caja se lee, no se adivina por el color de un punto: "3 ventas
+  por subir desde 09:15" es lo único que le dice al encargado que tiene que
+  revisar el internet antes de cerrar el día. Se esconde en pantallas angostas,
+  donde la barra ya no alcanza y el punto de color basta.
+*/
+.pos-status-text {
+  white-space: nowrap;
+}
+
+@media (max-width: 1100px) {
+  .pos-status-text {
+    display: none;
+  }
+}
+
 /* --- 2. Banda de captura --- */
 .pos-capture {
   background: var(--glam-blue);

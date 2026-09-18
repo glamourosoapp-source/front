@@ -470,6 +470,8 @@ export interface PosSyncRejection {
   branchId: string;
   branch?: Branch | null;
   deviceId: string | null;
+  cashierUserId?: string | null;
+  cashier?: { id: string; name: string } | null;
   clientEventId: string;
   eventType: string;
   payload: Record<string, unknown>;

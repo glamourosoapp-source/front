@@ -11,6 +11,10 @@ import {
   TextField,
 } from "@mui/material";
 import { httpClient, getApiErrorMessage } from "@/services/http-client";
+import { normalizePhone } from "@glamouroso/shared/utils/phone";
+import { findCustomerByPhone, saveCustomers } from "@/lib/pos-offline/store";
+import { posSync } from "@/lib/pos-offline/sync";
+import { buildCustomerEvent } from "@/lib/pos-offline/sale-event";
 import { formatMxPhone } from "@/utils/format-phone";
 import type { Customer } from "@/types";
 import { toast } from "sonner";
@@ -72,6 +76,20 @@ export function PosCustomerDialog({
     setNotFound(false);
     setFound(null);
     try {
+      // Primero la copia local: es instantánea y es la única que responde con
+      // el internet caído. Solo si ahí no está se pregunta al servidor, que
+      // además conoce a los clientes de las otras sucursales.
+      const local = await findCustomerByPhone(normalizePhone(clean));
+      if (local) {
+        const customer = { id: local.id, name: local.name, phone: local.phone } as Customer;
+        if (beforeCharge) {
+          onPick(customer);
+          return;
+        }
+        setFound(customer);
+        return;
+      }
+
       const result = await httpClient.get<{ found: boolean; customer: Customer | null }>(
         "/pos/customers/lookup",
         { phone: clean }
@@ -86,8 +104,10 @@ export function PosCustomerDialog({
       } else {
         setNotFound(true);
       }
-    } catch (error) {
-      toast.error(getApiErrorMessage(error, "No se pudo buscar el cliente"));
+    } catch {
+      // Sin red no es un error: simplemente no está en esta sucursal, y el
+      // cajero lo registra aquí mismo como haría con cualquier cliente nuevo.
+      setNotFound(true);
     } finally {
       setSearching(false);
     }
@@ -102,17 +122,50 @@ export function PosCustomerDialog({
       toast.error("La edad debe ser un número entre 1 y 120");
       return;
     }
+    const data = {
+      name: String(form.get("name") || "").trim(),
+      phone: phone.replace(/\D/g, ""),
+      birthday: age !== null ? birthdayFromAge(age) : null,
+      email: String(form.get("email") || "").trim() || null,
+    };
+
     setSaving(true);
     try {
-      const created = await httpClient.post<Customer>("/pos/customers", {
-        name: String(form.get("name") || "").trim(),
-        phone: phone.replace(/\D/g, ""),
-        birthday: age !== null ? birthdayFromAge(age) : null,
-        email: String(form.get("email") || "").trim() || null,
-      });
+      const created = await httpClient.post<Customer>("/pos/customers", data);
+      await saveCustomers([
+        {
+          id: created.id,
+          name: created.name,
+          phone: created.phone ?? data.phone,
+          phoneNormalized: normalizePhone(created.phone ?? data.phone),
+          pricingTier: created.pricingTier ?? null,
+          updatedAt: new Date().toISOString(),
+        },
+      ]);
       toast.success("Cliente registrado");
       onPick(created);
     } catch (error) {
+      // Sin red el cliente se registra igual: se guarda con un id local, sube
+      // como evento y el servidor lo empata por teléfono. La fila no se detiene
+      // porque el internet esté caído.
+      if (!navigator.onLine) {
+        const localId = crypto.randomUUID();
+        await saveCustomers([
+          {
+            id: localId,
+            name: data.name,
+            phone: data.phone,
+            phoneNormalized: normalizePhone(data.phone),
+            pricingTier: null,
+            updatedAt: new Date().toISOString(),
+            local: true,
+          },
+        ]);
+        await posSync.push(buildCustomerEvent(localId, data, new Date()));
+        toast.success("Cliente registrado en esta computadora. Subirá al volver el internet.");
+        onPick({ id: localId, name: data.name, phone: data.phone } as Customer);
+        return;
+      }
       toast.error(getApiErrorMessage(error, "No se pudo registrar el cliente"));
     } finally {
       setSaving(false);

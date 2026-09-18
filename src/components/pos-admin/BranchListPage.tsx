@@ -7,6 +7,7 @@ import { Plus, ShieldAlert, Store } from "lucide-react";
 import { DataTable } from "@/components/ui/DataTable";
 import { BranchFormDialog } from "@/components/pos-admin/BranchFormDialog";
 import { BranchHealthChip } from "@/components/pos-admin/BranchHealthChip";
+import { BranchSyncCell } from "@/components/pos-admin/BranchSyncCell";
 import { httpClient, getApiErrorMessage } from "@/services/http-client";
 import { formatMoney } from "@/lib/format-money";
 import { usePermissions } from "@/lib/permissions";
@@ -123,6 +124,13 @@ export function BranchListPage({ type }: { type: BranchType }) {
       ),
     },
     { key: "health", label: "Salud", render: (row: BranchStats) => <BranchHealthChip health={row.health} /> },
+    {
+      key: "sync",
+      label: "Caja",
+      // Ventas cobradas que todavía viven en la PC de la sucursal: es lo único
+      // de la operación del día que no se puede ver por ningún otro lado.
+      render: (row: BranchStats) => <BranchSyncCell stats={row} />,
+    },
     ...(!isFranchise && seesSales
       ? [
           {

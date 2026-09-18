@@ -18,6 +18,7 @@ export type {
   InventoryMovement,
   PosSale,
   PosSaleItem,
+  PosSyncRejection,
   PosSession,
   PosCatalog,
   PosCatalogProduct,
