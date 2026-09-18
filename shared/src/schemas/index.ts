@@ -20,6 +20,7 @@ export * from "./branch";
 export * from "./product-line";
 export * from "./inventory";
 export * from "./pos";
+export * from "./pos-sync";
 export * from "./pos-report";
 export * from "./restock";
 export * from "./franchise";

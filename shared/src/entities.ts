@@ -12,6 +12,7 @@ import type {
   Role,
 } from "./constants";
 import type { BranchHealth } from "./pos-health";
+import type { BranchSyncState } from "./pos-sync";
 import type { TicketSettings } from "./utils/pos-ticket-settings";
 import type { PermissionMap } from "./permissions";
 
@@ -350,6 +351,8 @@ export interface Branch {
   /** Día de la semana (0 domingo … 6 sábado) en que se calculan los faltantes. */
   restockCutoffDow?: number | null;
   ticketSettings?: Record<string, unknown> | null;
+  /** Lo que la caja de esta sucursal reportó en su último contacto. */
+  syncState?: BranchSyncState | null;
   notes?: string | null;
   usersCount?: number;
   createdAt?: string;
@@ -403,6 +406,12 @@ export interface PosSaleItem {
   litersDeducted?: string | number | null;
   unitPrice: string | number;
   priceTier: PricingTier;
+  /**
+   * Lo que el servidor habría cobrado con el catálogo actual, cuando difiere de
+   * `unitPrice`. Solo pasa si el precio cambió mientras la caja estaba sin red:
+   * manda lo que se cobró, y esto queda para que el administrador lo vea.
+   */
+  serverUnitPrice?: string | number | null;
   /** Desglose de bidones + litros sueltos cuando la partida se cobró por litro. */
   pricingBreakdown?: Record<string, unknown> | null;
   total: string | number;
@@ -433,7 +442,45 @@ export interface PosSale {
   voidedAt?: string | null;
   voidedBy?: string | null;
   voidReason?: string | null;
+  /** Se cobró sin conexión y subió después. */
+  recordedOffline?: boolean;
+  /** Cuándo llegó al servidor (null = nació en línea). */
+  syncedAt?: string | null;
+  /** Versión del catálogo con la que cobró la caja. */
+  catalogVersion?: string | null;
+  /** Alguna partida se cobró a un precio distinto al del catálogo actual. */
+  priceMismatch?: boolean;
+  /** El folio de la caja chocaba con uno ya existente; se guardó igual. */
+  syncConflict?: Record<string, unknown> | null;
+  /** Desfase del reloj de la PC al cobrar, en ms. */
+  clockSkewMs?: number | null;
+  deviceId?: string | null;
   items?: PosSaleItem[];
+}
+
+/**
+ * Evento que el servidor no pudo aplicar (producto borrado, sucursal inactiva…).
+ *
+ * No se descarta nunca: el dinero ya entró a la caja. Queda aquí hasta que un
+ * administrador lo reintente o lo descarte con motivo, desde el detalle de la
+ * sucursal.
+ */
+export interface PosSyncRejection {
+  id: string;
+  branchId: string;
+  branch?: Branch | null;
+  deviceId: string | null;
+  clientEventId: string;
+  eventType: string;
+  payload: Record<string, unknown>;
+  reason: string;
+  occurredAt: string;
+  resolvedAt?: string | null;
+  resolvedBy?: string | null;
+  resolvedByUser?: { id: string; name: string } | null;
+  resolution?: string | null;
+  notes?: string | null;
+  createdAt?: string;
 }
 
 /** Lo que la caja necesita al abrir: sucursal, ticket y cajero. */

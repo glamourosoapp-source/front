@@ -7,6 +7,7 @@ export * from "./product-pricing";
 export * from "./pos-pricing";
 export * from "./pos-restock";
 export * from "./pos-health";
+export * from "./pos-sync";
 export * from "./utils/customer-address";
 export * from "./utils/delivery-schedule";
 export * from "./utils/google-maps-url";
