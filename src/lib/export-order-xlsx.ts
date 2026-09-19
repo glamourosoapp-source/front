@@ -2,6 +2,7 @@ import * as XLSX from "xlsx";
 import { orderCreatorLabel, orderTeamLabel, paymentMethodLabel, paymentStatusLabel } from "@/constants/orders";
 import { businessTimeZone } from "@/lib/business-time";
 import { formatDateOnly } from "@/lib/format-date-only";
+import { orderNoteAddress } from "@glamouroso/shared";
 import type { Order } from "@/types";
 
 const statusLabels: Record<string, string> = {
@@ -33,6 +34,8 @@ function money(value: string | number | undefined) {
 export function exportOrderToXlsx(order: Order) {
   const customer = order.customer;
   const items = order.items || [];
+  // Mismo domicilio que imprime la nota: el elegido para el pedido.
+  const address = orderNoteAddress(order);
 
   const infoRows: (string | number)[][] = [
     ["Folio", order.orderNumber],
@@ -45,10 +48,10 @@ export function exportOrderToXlsx(order: Order) {
     ["Equipo", orderTeamLabel(order)],
     ["Cliente", customer?.name || "—"],
     ["WhatsApp", customer?.phone || "—"],
-    ["Calle y número", customer?.street || customer?.address || "—"],
-    ["Colonia", customer?.colony || "—"],
-    ["Municipio", customer?.city || "—"],
-    ["Código postal", customer?.postalCode || "—"],
+    ["Calle y número", address.street || "—"],
+    ["Colonia", address.colony || "—"],
+    ["Municipio", address.city || "—"],
+    ["Código postal", address.postalCode || "—"],
     ["Direccion de entrega", order.deliveryAddress || "—"],
     ["Zona de entrega", (order as { deliveryZone?: string }).deliveryZone || "—"],
     [

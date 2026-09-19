@@ -67,3 +67,45 @@ export function formatCustomerLocationAddress(location: CustomerLocationAddressP
   if (formatted) return formatted;
   return customerLocationMapsUrl(location);
 }
+
+/** Celdas del bloque de domicilio de la nota impresa y del export del pedido. */
+export interface OrderNoteAddress {
+  street: string;
+  colony: string;
+  city: string;
+  postalCode: string;
+}
+
+export interface OrderNoteAddressSource {
+  /** Domicilio guardado que se eligió al capturar el pedido, si lo hubo. */
+  deliveryLocation?: CustomerLocationAddressParts | null;
+  customer?: CustomerAddressParts | null;
+}
+
+/**
+ * Domicilio que va en el bloque "Calle y número / Colonia / Municipio / CP" de
+ * la nota. Si el pedido eligió un domicilio guardado, son las partes de ESE
+ * domicilio: el cliente puede tener varios y la nota tiene que corresponder al
+ * que se entrega, aunque el principal cacheado en el cliente sea otro. Un
+ * domicilio elegido solo por pin (sin calle) deja las celdas vacías a propósito;
+ * la fila "Dirección de entrega" ya trae el link. Sin domicilio elegido, cae al
+ * del cliente (con el `address` plano legado como calle, igual que siempre).
+ */
+export function orderNoteAddress(order: OrderNoteAddressSource): OrderNoteAddress {
+  const location = order.deliveryLocation;
+  if (location) {
+    return {
+      street: location.street?.trim() || "",
+      colony: location.colony?.trim() || "",
+      city: location.city?.trim() || "",
+      postalCode: location.postalCode?.trim() || "",
+    };
+  }
+  const customer = order.customer;
+  return {
+    street: customer?.street?.trim() || customer?.address?.trim() || "",
+    colony: customer?.colony?.trim() || "",
+    city: customer?.city?.trim() || "",
+    postalCode: customer?.postalCode?.trim() || "",
+  };
+}
