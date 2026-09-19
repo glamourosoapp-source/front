@@ -206,7 +206,15 @@ export const RESTOCK_ORDER_STATUS = {
 export const RESTOCK_ITEM_UNITS = {
   PIECE: "pieza",
   BIDON: "bidon",
+  /** Caja, bolsa o paquete de N piezas (`unitsPerPackage` de la partida). */
+  PACKAGE: "paquete",
 } as const;
+
+/**
+ * Regla del 30 %: se pide surtido cuando el faltante alcanza esta fracción del
+ * stock mínimo de la sucursal (ver `pos-restock.ts`).
+ */
+export const RESTOCK_SHORTAGE_THRESHOLD = 0.3;
 
 /** Anchos de papel soportados por las impresoras térmicas de sucursal. */
 export const TICKET_PAPER_WIDTHS = [58, 80] as const;

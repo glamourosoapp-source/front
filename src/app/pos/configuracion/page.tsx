@@ -2,9 +2,10 @@
 
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
-import { Alert, Button, FormControlLabel, MenuItem, Switch, TextField } from "@mui/material";
-import { ArrowLeft, Check, MonitorDown, Printer, RefreshCw } from "lucide-react";
+import { Alert, AlertTitle, Button, FormControlLabel, MenuItem, Switch, TextField } from "@mui/material";
+import { ArrowLeft, Download, Check, MonitorDown, Printer, RefreshCw } from "lucide-react";
 import { httpClient, getApiErrorMessage } from "@/services/http-client";
+import { config as appConfig } from "@/config";
 import {
   detectPrintAgent,
   listPrinters,
@@ -123,9 +124,38 @@ export default function PosPrintSettingsPage() {
         </Alert>
       ) : (
         <Alert severity="warning" sx={{ mb: 2 }}>
-          No se detectó el Conector de impresión en {config.baseUrl}. Sin él, cobrar con F1 abre el
-          diálogo de impresión del navegador y el ticket sale igual, con un toque extra.
-          {status.error ? <div style={{ marginTop: 6, fontSize: 12 }}>{status.error}</div> : null}
+          <AlertTitle>Falta el Conector de impresión en esta computadora</AlertTitle>
+          Sin él la caja sigue cobrando: al cobrar con F1 se abre el diálogo de impresión del
+          navegador y el ticket sale igual, solo con un toque extra. Para que salga solo, instálalo
+          una vez en esta computadora.
+          <ol style={{ margin: "10px 0 12px", paddingLeft: 20, lineHeight: 1.7 }}>
+            <li>Descarga el instalador con el botón de abajo.</li>
+            <li>
+              Ábrelo. <strong>Windows va a decir &quot;Windows protegió su PC&quot;</strong>: es
+              normal, el programa no está firmado. Da clic en <strong>Más información</strong> y
+              luego en <strong>Ejecutar de todos modos</strong>.
+            </li>
+            <li>
+              Sigue el asistente. Al terminar se abre una ventana negra con el{" "}
+              <strong>token</strong>: cópialo y pégalo aquí abajo.
+            </li>
+          </ol>
+          <Button
+            variant="contained"
+            size="small"
+            startIcon={<Download size={16} />}
+            href={appConfig.connectorInstallerUrl}
+            // El navegador descarga en vez de navegar porque GitHub sirve las
+            // publicaciones como adjunto; `download` solo ayuda en el mismo origen.
+            download
+          >
+            Descargar el instalador
+          </Button>
+          <div style={{ marginTop: 8, fontSize: 12 }}>
+            El instalador deja también el icono de la caja en el escritorio y hace que el conector
+            arranque solo con la computadora.
+          </div>
+          {status.error ? <div style={{ marginTop: 8, fontSize: 12 }}>{status.error}</div> : null}
         </Alert>
       )}
 

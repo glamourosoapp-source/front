@@ -567,6 +567,8 @@ export interface RestockOrderItem {
   dispatchedQty?: string | number | null;
   /** Litros por unidad despachada (20 para bidones); congela la conversión del surtido. */
   litersPerUnit?: string | number | null;
+  /** Piezas por empaque despachado (24 para una caja de latas); congela la conversión del surtido. */
+  unitsPerPackage?: string | number | null;
   prepared: boolean;
   unitPrice?: string | number | null;
   /** Por qué esta partida se despachó distinto de lo pedido. Lo escribe fábrica. */
@@ -607,9 +609,69 @@ export interface BranchShortage {
   minStock: number;
   /** Litros o piezas que faltan para el mínimo. */
   shortage: number;
-  /** Bidones o piezas a pedir, ya redondeados. */
+  /** Empaques (bidones, garrafas, cajas o piezas) a pedir, ya redondeados con la regla del 30 %. */
   requestedQty: number;
   litersPerUnit?: number | null;
+  /** Piezas por empaque para productos por pieza (1 = pieza suelta). */
+  unitsPerPackage?: number | null;
+  /** Cómo se llama el empaque en el formato de fábrica: bidón, garrafa, caja, bolsa, paquete, pieza. */
+  packLabel?: string | null;
+}
+
+/** Tipo de renglón del formato de pedido a fábrica. */
+export type FactoryFormRowKind = "product" | "section" | "blank";
+
+/**
+ * Un renglón del formato de pedido a fábrica (4 hojas, 4 bloques por hoja),
+ * ya resuelto para una sucursal o un pedido. `qty` en empaques; `null` cuando
+ * el renglón no lleva cantidad (se imprime en blanco para llenar a mano).
+ */
+export interface FactoryFormRow {
+  page: number;
+  block: number;
+  row: number;
+  kind: FactoryFormRowKind;
+  label: string;
+  packSize: number;
+  packLabel: string;
+  productId?: string | null;
+  lineId?: string | null;
+  qty: number | null;
+  /** Costo por pieza (`products.cost`). */
+  unitCost: number | null;
+  /** `qty × packSize × unitCost`. */
+  amount: number | null;
+}
+
+export interface FactoryFormPage {
+  page: number;
+  /** Cuatro bloques de columnas, cada uno con sus renglones en orden. */
+  blocks: FactoryFormRow[][];
+  /** Suma de `amount` de la hoja. */
+  total: number;
+}
+
+/** Conteo y costo de bidones vacíos del pedido (pie de la hoja 1). */
+export interface FactoryFormBidones {
+  transparent: { qty: number; amount: number };
+  color: { qty: number; amount: number };
+}
+
+/** Formato de pedido a fábrica completo, listo para dibujarse en PDF. */
+export interface FactoryForm {
+  /** Fuente: faltantes recién calculados o un pedido de surtido. */
+  source: { kind: "shortages" | "order"; branchId: string; orderId?: string | null };
+  /** Fecha del pedido o del cálculo (YYYY-MM-DD). */
+  date: string;
+  /** Sucursal o franquicia: nombre y código. */
+  name: string;
+  code?: string | null;
+  pages: FactoryFormPage[];
+  /** Faltantes o partidas que no están en el formato: sección OTROS al final. */
+  extras: FactoryFormRow[];
+  bidones: FactoryFormBidones;
+  /** Suma de las hojas + OTROS + bidones. */
+  grandTotal: number;
 }
 
 /** Ventas de un periodo en el resumen de sucursal. */
