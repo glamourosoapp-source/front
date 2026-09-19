@@ -32,7 +32,7 @@ const FONT_SIZE_LABELS: Record<TicketFontSize, string> = {
  * Configuración de impresión de ESTA caja.
  *
  * Se guarda en `localStorage` de la PC, no en el servidor: cada sucursal tiene
- * su propia impresora USB y el agente corre en la misma máquina.
+ * su propia impresora USB y el conector corre en la misma máquina.
  */
 export default function PosPrintSettingsPage() {
   const [config, setConfig] = useState<PrintAgentConfig>(loadPrintAgentConfig());
@@ -53,7 +53,7 @@ export default function PosPrintSettingsPage() {
         try {
           setPrinters(await listPrinters(next));
         } catch (error) {
-          toast.error(getApiErrorMessage(error, "El agente no devolvió la lista de impresoras"));
+          toast.error(getApiErrorMessage(error, "El conector no devolvió la lista de impresoras"));
         }
       } else {
         setPrinters([]);
@@ -119,11 +119,11 @@ export default function PosPrintSettingsPage() {
 
       {status.online ? (
         <Alert severity="success" sx={{ mb: 2 }}>
-          Agente detectado en {config.baseUrl} · versión {status.version} · equipo {status.hostname}
+          Conector detectado en {config.baseUrl} · versión {status.version} · equipo {status.hostname}
         </Alert>
       ) : (
         <Alert severity="warning" sx={{ mb: 2 }}>
-          No se detectó el agente de impresión en {config.baseUrl}. Sin él, cobrar con F1 abre el
+          No se detectó el Conector de impresión en {config.baseUrl}. Sin él, cobrar con F1 abre el
           diálogo de impresión del navegador y el ticket sale igual, con un toque extra.
           {status.error ? <div style={{ marginTop: 6, fontSize: 12 }}>{status.error}</div> : null}
         </Alert>
@@ -132,7 +132,7 @@ export default function PosPrintSettingsPage() {
       <div className="panel p-5">
         <div className="form-grid">
           <TextField
-            label="Dirección del agente"
+            label="Dirección del conector"
             value={config.baseUrl}
             onChange={(event) => update({ baseUrl: event.target.value })}
             fullWidth
@@ -143,7 +143,7 @@ export default function PosPrintSettingsPage() {
             value={config.token}
             onChange={(event) => update({ token: event.target.value })}
             fullWidth
-            helperText="Lo muestra la ventana del agente la primera vez que corre."
+            helperText="Lo muestra la ventana del conector la primera vez que corre."
           />
           <TextField
             select
@@ -155,7 +155,7 @@ export default function PosPrintSettingsPage() {
             helperText={
               printers.length
                 ? "Impresoras instaladas en esta computadora."
-                : "Se llena cuando el agente responde."
+                : "Se llena cuando el conector responde."
             }
           >
             <MenuItem value="">Sin elegir</MenuItem>
@@ -241,7 +241,7 @@ export default function PosPrintSettingsPage() {
 
         {pwa.target === "Dock" ? null : (
           <p className="page-kicker" style={{ marginBottom: 0 }}>
-            El instalador del agente de impresión también deja ese acceso directo, así que en una PC
+            El instalador del Conector de impresión también deja ese acceso directo, así que en una PC
             nueva no hace falta hacerlo a mano.
           </p>
         )}

@@ -8,7 +8,7 @@ import { TicketDocument } from "./TicketDocument";
 
 /**
  * Ticket imprimible por el diálogo del navegador (respaldo cuando la PC no
- * tiene el agente local instalado).
+ * tiene el Conector de impresión instalado).
  *
  * Se monta por portal como hijo directo de `<body>`: el `@media print` global
  * saca del flujo todo lo que no sea `.print-only`, y si esto se anidara dentro

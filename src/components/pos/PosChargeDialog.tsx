@@ -188,7 +188,7 @@ export function PosChargeDialog({
               </div>
               {!printerReady ? (
                 <div className="page-kicker" style={{ marginTop: 8, color: "#d97706" }}>
-                  Sin agente de impresión: F1 abrirá el diálogo del navegador.
+                  Sin conector de impresión: F1 abrirá el diálogo del navegador.
                 </div>
               ) : null}
             </div>

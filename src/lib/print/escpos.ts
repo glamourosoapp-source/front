@@ -5,7 +5,7 @@ import { ticketFooterLines, ticketHeaderBlock } from "@glamouroso/shared";
 /**
  * Ticket térmico en comandos ESC/POS.
  *
- * Se genera en el navegador y se manda al agente local, que lo escribe en RAW a
+ * Se genera en el navegador y se manda al Conector de impresión, que lo escribe en RAW a
  * la impresora USB de la sucursal. Así el ticket sale sin diálogo, como en
  * eleventa, en vez de pasar por la hoja de impresión del navegador.
  *

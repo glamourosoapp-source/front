@@ -204,7 +204,7 @@ export default function PosPage() {
     return () => window.clearInterval(timer);
   }, []);
 
-  /** Estado del agente de impresión: se refleja en la barra superior. */
+  /** Estado del Conector de impresión: se refleja en la barra superior. */
   useEffect(() => {
     let cancelled = false;
     const check = async () => {
@@ -465,7 +465,7 @@ export default function PosPage() {
   useEffect(() => {
     if (restored) {
       toast.warning(
-        "Se recuperaron ventas pendientes del agente de impresión. Revisa que el total del día cuadre."
+        "Se recuperaron ventas pendientes del Conector de impresión. Revisa que el total del día cuadre."
       );
     }
   }, [restored]);
@@ -809,7 +809,7 @@ export default function PosPage() {
               <TriangleAlert size={13} />
             </span>
           ) : null}
-          <span className="pos-status" title="Agente de impresión">
+          <span className="pos-status" title="Conector de impresión">
             <span className={`pos-status-dot ${printerOnline ? "" : "warn"}`} />
             <Printer size={13} />
           </span>

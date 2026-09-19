@@ -25,7 +25,7 @@ import type { PosCatalog, PosSession } from "@/types";
  *
  * Devuelve el estado que pinta la barra superior y las funciones que la caja
  * necesita para arrancar sin servidor: qué había guardado, si hay que restaurar
- * del agente de impresión, y el motor de sincronización corriendo.
+ * del Conector de impresión, y el motor de sincronización corriendo.
  */
 export function usePosOffline(options: {
   onCatalog: (catalog: PosCatalog) => void;
@@ -37,7 +37,7 @@ export function usePosOffline(options: {
    *
    * La caja los pasa como funciones inline, así que cambian de identidad en
    * cada render. Ponerlos en las dependencias hacía que el arranque —leer
-   * IndexedDB, consultar el respaldo del agente— se relanzara en cada render, y
+   * IndexedDB, consultar el respaldo del conector— se relanzara en cada render, y
    * como el arranque escribe estado, el render siguiente lo volvía a lanzar: un
    * bucle que dispara peticiones tan rápido como el navegador las acepte.
    */
@@ -83,7 +83,7 @@ export function usePosOffline(options: {
       if (session) onSessionRef.current(session);
       setMeta(current);
 
-      // Base local vacía con respaldo en el agente: alguien borró los datos del
+      // Base local vacía con respaldo en el conector: alguien borró los datos del
       // navegador y ahí adentro había ventas cobradas.
       const queue = await pending();
       if (!queue.length) {
@@ -113,7 +113,7 @@ export function usePosOffline(options: {
 
   useEffect(() => posSync.start(), []);
 
-  /** Deja copia en el agente de impresión tras cada cambio de la cola. */
+  /** Deja copia en el Conector de impresión tras cada cambio de la cola. */
   const backup = useCallback(async () => {
     const [queue, counter, current] = await Promise.all([pending(), readCounter(), readMeta()]);
     await pushBackup(loadPrintAgentConfig(), { outbox: queue, counter, meta: current });

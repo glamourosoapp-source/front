@@ -1,9 +1,14 @@
 "use client";
 
 /**
- * Cliente del agente de impresión local.
+ * Cliente del Conector de impresión.
  *
- * El agente es un ejecutable que corre en la PC de la sucursal y escucha solo en
+ * El archivo y los identificadores siguen diciendo "printAgent": la clave de
+ * `localStorage` y la carpeta de datos del conector no se renombran porque eso
+ * desemparejaría todas las cajas ya configuradas y dejaría huérfanos su token y
+ * su respaldo. El nombre del producto cambió; el de las claves no.
+ *
+ * El conector es un ejecutable que corre en la PC de la sucursal y escucha solo en
  * loopback (`127.0.0.1`). Chrome permite `fetch` a loopback desde una página
  * https sin marcarlo como contenido mixto, así que el POS puede listar las
  * impresoras del equipo e imprimir el ticket sin diálogo.
@@ -20,7 +25,7 @@ export interface PrintAgentConfig {
   baseUrl: string;
   token: string;
   printerName: string | null;
-  /** Si está apagado, el cobro no manda nada al agente (F1 imprime por diálogo). */
+  /** Si está apagado, el cobro no manda nada al conector (F1 imprime por diálogo). */
   autoPrint: boolean;
 }
 
@@ -77,7 +82,7 @@ async function request<T>(
     });
     if (!response.ok) {
       const body = await response.text().catch(() => "");
-      throw new Error(body || `El agente respondió ${response.status}`);
+      throw new Error(body || `El conector respondió ${response.status}`);
     }
     return (await response.json()) as T;
   } finally {
@@ -85,7 +90,7 @@ async function request<T>(
   }
 }
 
-/** ¿Hay agente escuchando? Se usa para pintar el estado en la barra de la caja. */
+/** ¿Hay conector escuchando? Se usa para pintar el estado en la barra de la caja. */
 export async function detectPrintAgent(
   config: PrintAgentConfig
 ): Promise<{ online: boolean; version?: string; hostname?: string; error?: string }> {

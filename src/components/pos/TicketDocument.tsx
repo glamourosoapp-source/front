@@ -11,7 +11,7 @@ import type { PosSale, PosSaleItem } from "@/types";
  * El ticket dibujado en HTML.
  *
  * Es el mismo documento para los dos usos: la hoja que imprime el diálogo del
- * navegador cuando la sucursal no tiene agente (`PosTicketSheet`) y la vista
+ * navegador cuando la sucursal no tiene conector (`PosTicketSheet`) y la vista
  * previa de la pantalla de configuración. Sigue la misma configuración que
  * `buildTicketEscPos`, así que lo que se ve aquí es lo que sale por la térmica.
  */
