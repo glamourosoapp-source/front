@@ -133,9 +133,10 @@ export default function PosPage() {
     onCatalog: setCatalog,
     onSession: (saved) => {
       // Solo mientras no haya llegado la sesión fresca del servidor.
-      if (!session) setSession(saved);
+      if (!usePosStore.getState().session) setSession(saved);
     },
   });
+  const { status: syncStatus, storageReady, restored, backup, persistSession } = offline;
 
   /**
    * La caja cobra; no informa.
@@ -174,11 +175,13 @@ export default function PosPage() {
       const data = await httpClient.get<PosSession>("/pos/session");
       setSession(data);
       setLastSale(data.lastSale ?? null);
-      await offline.persistSession(data);
+      await persistSession(data);
     } catch {
       /* sin red la caja sigue con la sesión que guardó la última vez */
     }
-  }, [setSession, setLastSale, offline]);
+    // `persistSession` es estable; depender del objeto `offline` entero volvía a
+    // crear esta función en cada render y relanzaba el efecto que la llama.
+  }, [setSession, setLastSale, persistSession]);
 
   /**
    * Catálogo: se pide solo si cambió, y lo que llega se guarda en la PC. Es lo
@@ -403,7 +406,7 @@ export default function PosPage() {
    * ya están a salvo y, si no, cuántas faltan y desde cuándo.
    */
   const syncLabel = useMemo(() => {
-    const { online, syncing, pendingCount, oldestPendingAt, lastSyncedAt } = offline.status;
+    const { online, syncing, pendingCount, oldestPendingAt, lastSyncedAt } = syncStatus;
     if (syncing && pendingCount) return { tone: "warn" as const, text: `Subiendo ${pendingCount}…` };
     if (pendingCount) {
       const since = oldestPendingAt
@@ -422,17 +425,17 @@ export default function PosPage() {
       ? new Date(lastSyncedAt).toLocaleTimeString("es-MX", { hour: "2-digit", minute: "2-digit" })
       : null;
     return { tone: "ok" as const, text: at ? `Al día · ${at}` : "En línea" };
-  }, [offline.status]);
+  }, [syncStatus]);
 
   /** El reloj corrido no bloquea nada, pero se avisa: mueve el día del ticket. */
   const clockWarning = useMemo(() => {
-    const skew = Math.abs(offline.status.clockOffsetMs);
+    const skew = Math.abs(syncStatus.clockOffsetMs);
     if (skew < POS_CLOCK_SKEW_WARN_MS) return null;
     const hours = Math.round(skew / 3_600_000);
     return hours >= 1
       ? `El reloj de esta computadora está ${hours} ${hours === 1 ? "hora" : "horas"} fuera de hora`
       : `El reloj de esta computadora está ${Math.round(skew / 60_000)} minutos fuera de hora`;
-  }, [offline.status.clockOffsetMs]);
+  }, [syncStatus.clockOffsetMs]);
 
   /**
    * Cerrar la caja con ventas sin subir es perder dinero si alguien limpia el
@@ -440,32 +443,32 @@ export default function PosPage() {
    * propio texto.
    */
   useEffect(() => {
-    if (!offline.status.pendingCount) return;
+    if (!syncStatus.pendingCount) return;
     const warn = (event: BeforeUnloadEvent) => {
       event.preventDefault();
       event.returnValue = "";
     };
     window.addEventListener("beforeunload", warn);
     return () => window.removeEventListener("beforeunload", warn);
-  }, [offline.status.pendingCount]);
+  }, [syncStatus.pendingCount]);
 
   /** Este navegador no puede guardar ventas: hay que decirlo antes del primer cobro. */
   useEffect(() => {
-    if (offline.storageReady === false) {
+    if (storageReady === false) {
       toast.error(
         "Esta ventana no puede guardar las ventas de la caja. Ábrela en Chrome, fuera del modo privado.",
         { duration: Infinity }
       );
     }
-  }, [offline.storageReady]);
+  }, [storageReady]);
 
   useEffect(() => {
-    if (offline.restored) {
+    if (restored) {
       toast.warning(
         "Se recuperaron ventas pendientes del agente de impresión. Revisa que el total del día cuadre."
       );
     }
-  }, [offline.restored]);
+  }, [restored]);
 
   // ---- Impresión ----
 
@@ -550,7 +553,7 @@ export default function PosPage() {
       notes: string;
     }) => {
       if (!ticket.lines.length) return;
-      if (offline.storageReady === false) {
+      if (storageReady === false) {
         toast.error(
           "Este navegador no puede guardar las ventas. Abre la caja en Chrome, fuera de una ventana privada."
         );
@@ -589,7 +592,7 @@ export default function PosPage() {
 
         const localSale = buildLocalSale(input, eventId);
         await posSync.push(buildSaleEvent(input, eventId), localSale);
-        void offline.backup();
+        void backup();
 
         setDialog(null);
         setLastSale(localSale.sale);
@@ -613,7 +616,8 @@ export default function PosPage() {
       total,
       session,
       catalog?.version,
-      offline,
+      storageReady,
+      backup,
       setLastSale,
       clearActiveTicket,
       printSale,
@@ -782,7 +786,7 @@ export default function PosPage() {
           <span
             className="pos-status"
             title={
-              offline.status.pendingCount
+              syncStatus.pendingCount
                 ? "Ventas cobradas que todavía están en esta computadora"
                 : `Conexión ${connectionState}`
             }
@@ -790,9 +794,9 @@ export default function PosPage() {
             <span className={`pos-status-dot ${syncLabel.tone === "ok" ? "" : syncLabel.tone}`} />
             {syncLabel.tone === "ok" ? (
               <Wifi size={13} />
-            ) : offline.status.syncing ? (
+            ) : syncStatus.syncing ? (
               <CloudUpload size={13} />
-            ) : offline.status.online ? (
+            ) : syncStatus.online ? (
               <CloudUpload size={13} />
             ) : (
               <CloudOff size={13} />

@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { posSync, type SyncStatus } from "@/lib/pos-offline/sync";
 import {
   isAvailable as localDbAvailable,
@@ -32,6 +32,20 @@ export function usePosOffline(options: {
   onSession: (session: PosSession) => void;
 }) {
   const { onCatalog, onSession } = options;
+  /**
+   * Los callbacks viven en refs, no en las dependencias de los efectos.
+   *
+   * La caja los pasa como funciones inline, así que cambian de identidad en
+   * cada render. Ponerlos en las dependencias hacía que el arranque —leer
+   * IndexedDB, consultar el respaldo del agente— se relanzara en cada render, y
+   * como el arranque escribe estado, el render siguiente lo volvía a lanzar: un
+   * bucle que dispara peticiones tan rápido como el navegador las acepte.
+   */
+  const onCatalogRef = useRef(onCatalog);
+  const onSessionRef = useRef(onSession);
+  onCatalogRef.current = onCatalog;
+  onSessionRef.current = onSession;
+
   const [status, setStatus] = useState<SyncStatus>(posSync.getStatus());
   const [meta, setMeta] = useState<OfflineMeta | null>(null);
   /** false = este navegador no puede guardar ventas; hay que decirlo fuerte. */
@@ -41,9 +55,9 @@ export function usePosOffline(options: {
   useEffect(() => posSync.subscribe(setStatus), []);
 
   useEffect(() => {
-    posSync.setCatalogHandler(onCatalog);
+    posSync.setCatalogHandler((catalog) => onCatalogRef.current(catalog));
     return () => posSync.setCatalogHandler(null);
-  }, [onCatalog]);
+  }, []);
 
   /**
    * Arranque: primero lo guardado (para pintar la caja sin esperar al servidor),
@@ -65,8 +79,8 @@ export function usePosOffline(options: {
       ]);
       if (cancelled) return;
 
-      if (catalog) onCatalog(catalog);
-      if (session) onSession(session);
+      if (catalog) onCatalogRef.current(catalog);
+      if (session) onSessionRef.current(session);
       setMeta(current);
 
       // Base local vacía con respaldo en el agente: alguien borró los datos del
@@ -93,7 +107,9 @@ export function usePosOffline(options: {
     return () => {
       cancelled = true;
     };
-  }, [onCatalog, onSession]);
+    // Sin dependencias a propósito: esto es el arranque de la caja y ocurre una
+    // sola vez por sesión de la pantalla.
+  }, []);
 
   useEffect(() => posSync.start(), []);
 
