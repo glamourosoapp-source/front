@@ -3,9 +3,11 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { Button, MenuItem, TextField } from "@mui/material";
-import { FileSpreadsheet, RefreshCw } from "lucide-react";
+import { FileSpreadsheet, Link2, RefreshCw } from "lucide-react";
 import { httpClient, getApiErrorMessage } from "@/services/http-client";
 import { formatQuantity } from "@/lib/format-money";
+import { usePermissions } from "@/lib/permissions";
+import { LinkToFormDialog } from "@/components/pos-admin/LinkToFormDialog";
 import { FilterBar, FilterDivider, FilterMeta, FilterSearch } from "@/components/pos-admin/FilterBar";
 import { Branch, UnlinkedRestockItem } from "@/types";
 import { toast } from "sonner";
@@ -16,6 +18,10 @@ import { toast } from "sonner";
  * formato, nunca se repone. Aquí se ven para ligarlos en Formato de pedido.
  */
 export function UnlinkedProductsTab({ branches }: { branches: Branch[] }) {
+  const { can } = usePermissions();
+  // Ligar escribe el formato y el inventario (mínimo y conteo): pide los dos.
+  const canLink = can("posRestock", "update") && can("posInventory", "update");
+  const [linking, setLinking] = useState<UnlinkedRestockItem[] | null>(null);
   const [branchId, setBranchId] = useState("");
   const [search, setSearch] = useState("");
   const [items, setItems] = useState<UnlinkedRestockItem[]>([]);
@@ -45,6 +51,21 @@ export function UnlinkedProductsTab({ branches }: { branches: Branch[] }) {
       (item) => item.name.toLowerCase().includes(term) || (item.sku ?? "").toLowerCase().includes(term)
     );
   }, [items, search]);
+
+  /**
+   * Abre el diálogo con TODAS las sucursales donde ese producto quedó sin
+   * formato, aunque la lista esté filtrada por una: al ligarlo sale de la lista
+   * en todas, y cada una necesita su mínimo y su conteo.
+   */
+  async function openLink(item: UnlinkedRestockItem) {
+    try {
+      const all = branchId ? await httpClient.get<UnlinkedRestockItem[]>("/pos/restock/unlinked") : items;
+      const same = all.filter((row) => (row.lineId ?? row.productId) === (item.lineId ?? item.productId));
+      setLinking(same.length ? same : [item]);
+    } catch (error) {
+      toast.error(getApiErrorMessage(error, "No se pudo abrir el producto"));
+    }
+  }
 
   const productCount = useMemo(
     () => new Set(visible.map((item) => item.lineId ?? item.productId)).size,
@@ -110,6 +131,7 @@ export function UnlinkedProductsTab({ branches }: { branches: Branch[] }) {
               <th style={{ textAlign: "right" }}>Vendido</th>
               <th style={{ textAlign: "right" }}>Existencia</th>
               <th>Última venta</th>
+              {canLink ? <th /> : null}
             </tr>
           </thead>
           <tbody>
@@ -146,12 +168,25 @@ export function UnlinkedProductsTab({ branches }: { branches: Branch[] }) {
                         })
                       : "—"}
                   </td>
+                  {canLink ? (
+                    <td style={{ textAlign: "right" }}>
+                      <Button
+                        size="small"
+                        variant="outlined"
+                        startIcon={<Link2 size={14} />}
+                        onClick={() => void openLink(item)}
+                        sx={{ whiteSpace: "nowrap" }}
+                      >
+                        Ligar
+                      </Button>
+                    </td>
+                  ) : null}
                 </tr>
               );
             })}
             {!visible.length && !loading ? (
               <tr>
-                <td colSpan={5} style={{ textAlign: "center", padding: 28, color: "var(--muted)" }}>
+                <td colSpan={canLink ? 6 : 5} style={{ textAlign: "center", padding: 28, color: "var(--muted)" }}>
                   {search.trim()
                     ? "Ningún producto sin formato coincide con la búsqueda."
                     : "Todo lo vendido está ligado al formato de pedido."}
@@ -161,6 +196,17 @@ export function UnlinkedProductsTab({ branches }: { branches: Branch[] }) {
           </tbody>
         </table>
       </div>
+
+      {linking ? (
+        <LinkToFormDialog
+          items={linking}
+          onClose={() => setLinking(null)}
+          onLinked={() => {
+            setLinking(null);
+            void load();
+          }}
+        />
+      ) : null}
     </>
   );
 }

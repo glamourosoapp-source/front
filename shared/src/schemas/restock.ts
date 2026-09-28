@@ -169,6 +169,50 @@ export const updateFactoryFormRowSchema = z
     if (value.lineId && value.productId) ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Indica lineId o productId, no ambos" });
   });
 
+/**
+ * Liga al formato un producto que se vendió sin renglón (pestaña "Productos no
+ * ligados" de Faltantes y surtido): en un renglón vacío o en uno nuevo, y en el
+ * mismo paso fija el mínimo y el conteo real de cada sucursal donde se vendió.
+ * `minStock` y `stock` van en litros (línea) o piezas (producto); `stock`
+ * vacío deja la existencia como está.
+ */
+export const linkUnlinkedToFormSchema = z
+  .object({
+    lineId: z.union([z.string().uuid(), z.null()]).optional(),
+    productId: z.union([z.string().uuid(), z.null()]).optional(),
+    placement: z.discriminatedUnion("mode", [
+      z.object({ mode: z.literal("row"), rowId: z.string().uuid() }),
+      z.object({
+        mode: z.literal("new"),
+        page: z.coerce.number().int().min(1).max(20),
+        block: z.coerce.number().int().min(0).max(5),
+        afterRow: z.coerce.number().int().min(-1),
+        label: z.string().trim().min(1).max(120),
+      }),
+    ]),
+    packSize: formRowFields.packSize,
+    packLabel: formRowFields.packLabel,
+    unitPrice: formRowFields.unitPrice,
+    branches: z
+      .array(
+        z.object({
+          branchId: z.string().uuid(),
+          minStock: z.coerce.number().min(0).max(1_000_000),
+          stock: z.union([z.null(), z.coerce.number().min(0).max(1_000_000)]).optional(),
+        })
+      )
+      .max(200),
+  })
+  .superRefine((value, ctx) => {
+    if (Boolean(value.lineId) === Boolean(value.productId)) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Indica lineId o productId, no ambos" });
+    }
+    const ids = value.branches.map((branch) => branch.branchId);
+    if (new Set(ids).size !== ids.length) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Una sucursal viene repetida" });
+    }
+  });
+
 export const queryFactoryFormTargetsSchema = z.object({
   search: z.union([z.string().max(120), z.literal("")]).optional(),
 });
@@ -189,3 +233,4 @@ export const restockItemUnitSchema = z.enum([
 ]);
 
 export type CreateRestockOrderInput = z.infer<typeof createRestockOrderSchema>;
+export type LinkUnlinkedToFormInput = z.infer<typeof linkUnlinkedToFormSchema>;
