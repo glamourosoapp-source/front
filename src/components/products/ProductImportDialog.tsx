@@ -4,6 +4,7 @@ import { useState } from "react";
 import {
   Alert,
   Button,
+  Checkbox,
   Chip,
   CircularProgress,
   Collapse,
@@ -11,6 +12,7 @@ import {
   DialogActions,
   DialogContent,
   DialogTitle,
+  FormControlLabel,
   Stack,
   Table,
   TableBody,
@@ -96,6 +98,12 @@ function WarningAlerts({ warnings, context }: { warnings: ProductImportWarnings;
       {warnings.costIgnored ? (
         <Alert severity="info">La columna de costo se ignoró porque no tienes permiso para editar costos.</Alert>
       ) : null}
+      {warnings.removeSkipped ? (
+        <Alert severity="warning">
+          No tienes permiso para eliminar productos: los que ya no vienen en el Excel{" "}
+          {context === "preview" ? "no se darán" : "no se dieron"} de baja.
+        </Alert>
+      ) : null}
       {warnings.createSkipped ? (
         <Alert severity="warning">
           No tienes permiso para crear productos: los productos nuevos del archivo{" "}
@@ -119,17 +127,25 @@ export function ProductImportDialog({ open, onClose, onImported }: ProductImport
   const [fileName, setFileName] = useState("");
   const [rows, setRows] = useState<ProductImportRow[]>([]);
   const [skippedRows, setSkippedRows] = useState(0);
+  const [removedPosIds, setRemovedPosIds] = useState<string[]>([]);
+  const [applyRemovals, setApplyRemovals] = useState(false);
   const [preview, setPreview] = useState<ProductImportPreview | null>(null);
   const [result, setResult] = useState<ProductImportResult | null>(null);
   const [error, setError] = useState("");
 
   const busy = phase === "processing" || phase === "applying";
+  const toRemove = preview?.toRemove ?? [];
+  const canRemove = toRemove.length > 0 && !preview?.warnings.removeSkipped;
+  // IDs sin nombre que no calzan con ningún producto activo siguen contando como descartados.
+  const discardedRows = skippedRows + removedPosIds.length - toRemove.length;
 
   function reset() {
     setPhase("select");
     setFileName("");
     setRows([]);
     setSkippedRows(0);
+    setRemovedPosIds([]);
+    setApplyRemovals(false);
     setPreview(null);
     setResult(null);
     setError("");
@@ -158,8 +174,11 @@ export function ProductImportDialog({ open, onClose, onImported }: ProductImport
       }
       setRows(parsed.rows);
       setSkippedRows(parsed.skippedRows);
+      setRemovedPosIds(parsed.removedPosIds);
+      setApplyRemovals(false);
       const previewResult = await httpClient.post<ProductImportPreview>("/products/import", {
         rows: parsed.rows,
+        removedPosIds: parsed.removedPosIds,
         dryRun: true,
       });
       setPreview(previewResult);
@@ -173,10 +192,18 @@ export function ProductImportDialog({ open, onClose, onImported }: ProductImport
   async function applyImport() {
     setPhase("applying");
     try {
-      const applied = await httpClient.post<ProductImportResult>("/products/import", { rows, dryRun: false });
+      const applied = await httpClient.post<ProductImportResult>("/products/import", {
+        rows,
+        removedPosIds,
+        applyRemovals: applyRemovals && canRemove,
+        dryRun: false,
+      });
       setResult(applied);
       setPhase("done");
-      toast.success(`Importación aplicada: ${applied.created.length} creados, ${applied.updated.length} actualizados`);
+      const removedSummary = applied.removed.length > 0 ? `, ${applied.removed.length} dados de baja` : "";
+      toast.success(
+        `Importación aplicada: ${applied.created.length} creados, ${applied.updated.length} actualizados${removedSummary}`
+      );
       onImported();
     } catch (err) {
       setError(getApiErrorMessage(err, "Error al aplicar la importación"));
@@ -235,8 +262,19 @@ export function ProductImportDialog({ open, onClose, onImported }: ProductImport
             <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
               <Chip color="success" label={`Se crearán ${preview.toCreate.length}`} />
               <Chip color="info" label={`Se actualizarán ${preview.toUpdate.length}`} />
+              {toRemove.length > 0 ? (
+                <Chip
+                  color="error"
+                  variant={applyRemovals && canRemove ? "filled" : "outlined"}
+                  label={
+                    applyRemovals && canRemove
+                      ? `Se darán de baja ${toRemove.length}`
+                      : `Eliminados en el Excel: ${toRemove.length}`
+                  }
+                />
+              ) : null}
               <Chip label={`Sin cambios: ${preview.unchanged}`} />
-              {skippedRows > 0 ? <Chip variant="outlined" label={`${skippedRows} filas descartadas`} /> : null}
+              {discardedRows > 0 ? <Chip variant="outlined" label={`${discardedRows} filas descartadas`} /> : null}
               {preview.categoriesToCreate.length > 0 ? (
                 <Chip color="secondary" label={`Categorías nuevas: ${preview.categoriesToCreate.join(", ")}`} />
               ) : null}
@@ -316,6 +354,49 @@ export function ProductImportDialog({ open, onClose, onImported }: ProductImport
                 ) : null}
               </div>
             ) : null}
+
+            {toRemove.length > 0 ? (
+              <div>
+                <p className="form-section-title">Eliminados en el punto de venta</p>
+                <p className="text-sm">
+                  El Excel trae estos IDs sin producto: se borraron en el punto de venta. Siguen activos en el catálogo
+                  hasta que confirmes la baja. Si alguno vuelve en un Excel posterior, se reactiva solo.
+                </p>
+                <FormControlLabel
+                  control={
+                    <Checkbox
+                      checked={applyRemovals && canRemove}
+                      disabled={!canRemove}
+                      onChange={(event) => setApplyRemovals(event.target.checked)}
+                    />
+                  }
+                  label={`Dar de baja estos ${toRemove.length} producto(s)`}
+                />
+                <div style={{ overflowX: "auto" }}>
+                  <Table size="small">
+                    <TableHead>
+                      <TableRow>
+                        <TableCell>ID</TableCell>
+                        <TableCell>Producto</TableCell>
+                        <TableCell align="right">Menudeo</TableCell>
+                      </TableRow>
+                    </TableHead>
+                    <TableBody>
+                      {toRemove.slice(0, MAX_RENDER).map((item) => (
+                        <TableRow key={item.productId}>
+                          <TableCell>{item.posId}</TableCell>
+                          <TableCell>{item.name}</TableCell>
+                          <TableCell align="right">{item.price == null ? "—" : `${item.price.toFixed(2)}`}</TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+                {toRemove.length > MAX_RENDER ? (
+                  <p className="text-sm">…y {toRemove.length - MAX_RENDER} más</p>
+                ) : null}
+              </div>
+            ) : null}
           </Stack>
         ) : null}
 
@@ -324,6 +405,7 @@ export function ProductImportDialog({ open, onClose, onImported }: ProductImport
             <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
               <Chip color="success" label={`Creados: ${result.created.length}`} />
               <Chip color="info" label={`Actualizados: ${result.updated.length}`} />
+              {result.removed.length > 0 ? <Chip color="error" label={`Dados de baja: ${result.removed.length}`} /> : null}
               <Chip label={`Sin cambios: ${result.unchanged}`} />
               {result.skipped.length > 0 ? <Chip color="warning" label={`Omitidos: ${result.skipped.length}`} /> : null}
               {result.errors.length > 0 ? <Chip color="error" label={`Errores: ${result.errors.length}`} /> : null}
@@ -342,6 +424,13 @@ export function ProductImportDialog({ open, onClose, onImported }: ProductImport
               <Alert severity="success">
                 Se agregaron {result.created.length} producto(s).
                 <NameList names={result.created.map((item) => item.name)} />
+              </Alert>
+            ) : null}
+
+            {result.removed.length > 0 ? (
+              <Alert severity="info">
+                Se dieron de baja {result.removed.length} producto(s) que ya no vienen en el Excel.
+                <NameList names={result.removed.map((item) => `${item.posId} · ${item.name}`)} />
               </Alert>
             ) : null}
 
