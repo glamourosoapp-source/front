@@ -38,6 +38,7 @@ import { toast } from "sonner";
 
 /** Valor del selector para capturar una dirección que no es un domicilio guardado. */
 const CUSTOM_LOCATION_VALUE = "custom";
+const ORDER_NOTE_MAX_LENGTH = 280;
 
 function locationTitle(location: CustomerLocation, index: number): string {
   return location.label?.trim() || `Domicilio ${index + 1}`;
@@ -102,6 +103,24 @@ export default function NewOrderPage() {
   const locationSeq = useRef(0);
   /** Dirección ya guardada en el borrador que se está editando, para preseleccionarla. */
   const prefillAddressRef = useRef<string | null>(null);
+  /** Último default aplicado a la nota del pedido (las notas del cliente elegido). */
+  const noteDefaultRef = useRef("");
+
+  // Las notas del cliente son el default de la nota del pedido: al elegir,
+  // crear o editar un cliente se precargan, pero siguen siendo editables. Solo
+  // se reemplazan si la nota está vacía o sigue siendo el default anterior
+  // y nunca al editar un borrador, que ya trae su propia nota guardada.
+  const selectedCustomerNotes = selectedCustomer?.notes ?? "";
+  useEffect(() => {
+    if (draftId) return;
+    const next = selectedCustomerNotes.trim().slice(0, ORDER_NOTE_MAX_LENGTH);
+    const prevDefault = noteDefaultRef.current;
+    noteDefaultRef.current = next;
+    setOrderNote((current) => {
+      const untouched = current.trim() === "" || current.trim() === prevDefault;
+      return untouched ? next : current;
+    });
+  }, [draftId, selectedCustomerNotes]);
 
   useEffect(() => {
     if (!canCreate) {
@@ -670,8 +689,8 @@ export default function NewOrderPage() {
             multiline
             minRows={2}
             placeholder="Instrucciones de entrega, preferencias, etc."
-            helperText={`${orderNote.trim().length}/280`}
-            inputProps={{ maxLength: 280 }}
+            helperText={`${orderNote.trim().length}/${ORDER_NOTE_MAX_LENGTH}`}
+            inputProps={{ maxLength: ORDER_NOTE_MAX_LENGTH }}
           />
         </div>
 
@@ -695,8 +714,11 @@ export default function NewOrderPage() {
       onSaved={(saved) => {
         if (!saved) return;
         if (editingCustomer) {
-          // Edición de domicilios: recargar la lista y quedarse con el que se
+          // Edición del cliente: refrescar sus datos (notas, lista de precios)
+          // en el formulario, recargar los domicilios y quedarse con el que se
           // acaba de agregar (o con el que ya estaba elegido).
+          setSelectedCustomer((prev) => (prev && prev.id === saved.id ? { ...prev, ...saved } : prev));
+          setCustomers((prev) => prev.map((c) => (c.id === saved.id ? { ...c, ...saved } : c)));
           void loadLocations(
             editingCustomer.id,
             locations.map((l) => l.id)

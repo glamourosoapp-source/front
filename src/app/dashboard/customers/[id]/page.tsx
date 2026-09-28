@@ -13,7 +13,12 @@ import { DetailField } from "@/components/ui/DetailField";
 import { httpClient } from "@/services/http-client";
 import { usePermissions } from "@/lib/permissions";
 import { Customer, ListResponse, Order, CustomerLocation } from "@/types";
-import { formatCustomerDeliveryAddress } from "@glamouroso/shared";
+import {
+  cfdiUseLabel,
+  formatCustomerDeliveryAddress,
+  hasBillingInfo,
+  taxRegimeLabel,
+} from "@glamouroso/shared";
 import { toast } from "sonner";
 
 const orderStatuses = ["new", "processing", "delivered", "cancelled"];
@@ -198,6 +203,26 @@ export default function CustomerDetailPage() {
             ))}
           </div>
         ) : null}
+        <div className="mt-4 grid gap-3">
+          <Typography variant="subtitle2">Datos de facturación</Typography>
+          {hasBillingInfo(customer) ? (
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              <DetailField label="RFC" value={customer.taxId} />
+              <DetailField label="Razón social" value={customer.legalName || "—"} />
+              <DetailField
+                label="Régimen fiscal"
+                value={taxRegimeLabel(customer.taxRegime) || customer.taxRegime || "—"}
+              />
+              <DetailField label="Uso de CFDI" value={cfdiUseLabel(customer.cfdiUse) || customer.cfdiUse || "—"} />
+              <DetailField label="Código postal fiscal" value={customer.taxPostalCode || "—"} />
+              <DetailField label="Correo de facturación" value={customer.billingEmail || "—"} />
+            </div>
+          ) : (
+            <Typography variant="body2" sx={{ color: "var(--muted)" }}>
+              Sin datos de facturación. Se capturan desde &quot;Editar información del cliente&quot;.
+            </Typography>
+          )}
+        </div>
         {customer.notes ? (
           <div className="mt-4">
             <DetailField label="Notas" value={customer.notes} />

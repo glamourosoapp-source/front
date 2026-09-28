@@ -347,6 +347,12 @@ export default function OrderDetailPage() {
           <DetailField label="Cliente" value={order.customer?.name || "—"} />
           <DetailField label="WhatsApp" value={order.customer?.phone || "—"} />
           <DetailField label="Colonia" value={order.customer?.colony || "—"} />
+          {order.customer?.taxId ? (
+            <>
+              <DetailField label="RFC" value={order.customer.taxId} />
+              <DetailField label="Razón social" value={order.customer.legalName || "—"} />
+            </>
+          ) : null}
           {/* Domicilio elegido al capturar el pedido: la direccion es texto
               congelado; la ubicacion guardada aporta etiqueta y link de Maps. */}
           <DetailField

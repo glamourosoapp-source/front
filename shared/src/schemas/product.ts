@@ -67,6 +67,10 @@ export const productImportRowSchema = z.object({
 
 export const productImportRequestSchema = z.object({
   rows: z.array(productImportRowSchema).min(1).max(3000),
+  // IDs que el Excel trae sin nombre: el punto de venta borró el producto y dejó el renglón
+  removedPosIds: z.array(z.string().min(1).max(60)).max(5000).default([]),
+  // Dar de baja (soft delete) los productos activos de removedPosIds; opt-in explícito
+  applyRemovals: z.boolean().default(false),
   dryRun: z.boolean().default(false),
 });
 
@@ -83,6 +87,14 @@ export const productImportWarningsSchema = z.object({
   newWithoutDescription: z.array(z.string()),
   costIgnored: z.boolean(),
   createSkipped: z.boolean(),
+  removeSkipped: z.boolean(),
+});
+
+export const productImportRemovalSchema = z.object({
+  productId: z.string().uuid(),
+  posId: z.string(),
+  name: z.string(),
+  price: z.number().nullable(),
 });
 
 export const productImportPreviewSchema = z.object({
@@ -107,6 +119,7 @@ export const productImportPreviewSchema = z.object({
       changes: z.array(productImportChangeSchema),
     })
   ),
+  toRemove: z.array(productImportRemovalSchema),
   unchanged: z.number().int(),
   categoriesToCreate: z.array(z.string()),
   warnings: productImportWarningsSchema,
@@ -125,6 +138,7 @@ export const productImportResultSchema = z.object({
       changes: z.array(productImportChangeSchema),
     })
   ),
+  removed: z.array(z.object({ id: z.string().uuid(), posId: z.string(), name: z.string() })),
   unchanged: z.number().int(),
   skipped: z.array(z.object({ posId: z.string(), name: z.string(), reason: z.string() })),
   errors: z.array(z.object({ posId: z.string(), name: z.string(), message: z.string() })),
@@ -137,5 +151,6 @@ export type ProductImportRow = z.infer<typeof productImportRowSchema>;
 export type ProductImportRequest = z.infer<typeof productImportRequestSchema>;
 export type ProductImportChange = z.infer<typeof productImportChangeSchema>;
 export type ProductImportWarnings = z.infer<typeof productImportWarningsSchema>;
+export type ProductImportRemoval = z.infer<typeof productImportRemovalSchema>;
 export type ProductImportPreview = z.infer<typeof productImportPreviewSchema>;
 export type ProductImportResult = z.infer<typeof productImportResultSchema>;

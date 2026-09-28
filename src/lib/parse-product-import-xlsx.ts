@@ -2,8 +2,13 @@ import type { ProductImportRow } from "@glamouroso/shared/schemas/product";
 
 export interface ParsedProductImportFile {
   rows: ProductImportRow[];
-  /** Filas con datos parciales (sin ID o sin nombre) que se descartaron. */
+  /** Filas con datos parciales (sin ID, o con nombre de un solo carácter) que se descartaron. */
   skippedRows: number;
+  /**
+   * IDs que vienen sin nombre: el punto de venta borró el producto y dejó el renglón.
+   * El Back decide cuáles calzan con un producto activo (candidatos a baja).
+   */
+  removedPosIds: string[];
   /** Headers requeridos que no se encontraron; si trae algo, no llamar al Back. */
   missingColumns: string[];
 }
@@ -34,10 +39,10 @@ export async function parseProductImportFile(file: File): Promise<ParsedProductI
   const XLSX = await import("xlsx");
   const workbook = XLSX.read(await file.arrayBuffer(), { type: "array" });
   const sheetName = workbook.SheetNames[0];
-  if (!sheetName) return { rows: [], skippedRows: 0, missingColumns: REQUIRED_COLUMNS };
+  if (!sheetName) return { rows: [], skippedRows: 0, removedPosIds: [], missingColumns: REQUIRED_COLUMNS };
 
   const grid = XLSX.utils.sheet_to_json<unknown[]>(workbook.Sheets[sheetName], { header: 1, defval: "" });
-  if (!grid.length) return { rows: [], skippedRows: 0, missingColumns: REQUIRED_COLUMNS };
+  if (!grid.length) return { rows: [], skippedRows: 0, removedPosIds: [], missingColumns: REQUIRED_COLUMNS };
 
   const headers = (grid[0] ?? []).map(normalizeHeader);
   const col = (...names: string[]) => {
@@ -63,14 +68,19 @@ export async function parseProductImportFile(file: File): Promise<ParsedProductI
   const missingColumns: string[] = [];
   if (columns.name === -1) missingColumns.push("Descripcion");
   if (columns.price === -1) missingColumns.push("Precio Venta");
-  if (missingColumns.length) return { rows: [], skippedRows: 0, missingColumns };
+  if (missingColumns.length) return { rows: [], skippedRows: 0, removedPosIds: [], missingColumns };
 
   const rows: ProductImportRow[] = [];
   let skippedRows = 0;
+  const removedPosIds: string[] = [];
   for (const cells of grid.slice(1)) {
     const posId = String(cells[columns.posId] ?? "").trim();
     const name = String(cells[columns.name] ?? "").trim();
     if (!posId && !name) continue; // fila totalmente vacía
+    if (posId && !name) {
+      removedPosIds.push(posId.slice(0, 60));
+      continue;
+    }
     if (!posId || name.length < 2) {
       skippedRows += 1;
       continue;
@@ -88,5 +98,5 @@ export async function parseProductImportFile(file: File): Promise<ParsedProductI
     });
   }
 
-  return { rows, skippedRows, missingColumns: [] };
+  return { rows, skippedRows, removedPosIds, missingColumns: [] };
 }

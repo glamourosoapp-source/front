@@ -10,6 +10,7 @@ export * from "./pos-containers";
 export * from "./pos-health";
 export * from "./pos-sync";
 export * from "./utils/customer-address";
+export * from "./utils/customer-billing";
 export * from "./utils/delivery-schedule";
 export * from "./utils/google-maps-url";
 export * from "./utils/outreach-settings";

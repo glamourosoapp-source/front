@@ -11,6 +11,7 @@ import {
 } from "@/constants/orders";
 import { businessTimeZone } from "@/lib/business-time";
 import { formatDateOnly } from "@/lib/format-date-only";
+import { orderNoteAddress, taxRegimeLabel } from "@glamouroso/shared";
 import type { Order } from "@/types";
 
 function money(value: string | number | undefined) {
@@ -116,6 +117,8 @@ const wholesaleTag: CSSProperties = {
 export function OrderNote({ order }: { order: PrintableOrder }) {
   const items = order.items || [];
   const customer = order.customer;
+  // Bloque de domicilio: el elegido para el pedido, no el principal del cliente.
+  const address = orderNoteAddress(order);
   const deliveryDate = order.scheduledDeliveryDate
     ? formatDateOnly(order.scheduledDeliveryDate, {
         weekday: "long",
@@ -133,15 +136,25 @@ export function OrderNote({ order }: { order: PrintableOrder }) {
       ["Número de pedido", order.orderNumber],
     ],
     [
-      ["Calle y número", customer?.street || customer?.address || "—"],
-      ["Colonia", customer?.colony || "—"],
+      ["Calle y número", address.street || "—"],
+      ["Colonia", address.colony || "—"],
       ["Fecha", formatCreatedAt(order.createdAt)],
     ],
     [
-      ["Municipio", customer?.city || "—"],
-      ["Código postal", customer?.postalCode || "—"],
+      ["Municipio", address.city || "—"],
+      ["Código postal", address.postalCode || "—"],
       ["Estatus", `${orderStatusLabel(order.status)} · ${paymentStatusLabel(order.paymentStatus)}`],
     ],
+    // Solo cuando el cliente factura: la nota de los demás no cambia de alto.
+    ...(customer?.taxId
+      ? [
+          [
+            ["RFC", customer.taxId],
+            ["Razón social", customer.legalName || "—"],
+            ["Régimen fiscal", taxRegimeLabel(customer.taxRegime) || customer.taxRegime || "—"],
+          ] as Array<[string, string]>,
+        ]
+      : []),
     [
       ["Zona de entrega", order.deliveryZone || "—"],
       ["Fecha de entrega", deliveryDate],
