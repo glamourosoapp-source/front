@@ -653,6 +653,28 @@ export interface BranchShortage {
   packLabel?: string | null;
 }
 
+/**
+ * Producto o línea que la sucursal vendió (o dejó en negativo) sin estar ligado
+ * a ningún renglón activo del formato de pedido a fábrica: nunca va a entrar al
+ * surtido hasta que alguien lo ligue.
+ */
+export interface UnlinkedRestockItem {
+  branchId: string;
+  branchCode: string;
+  branchName: string;
+  lineId: string | null;
+  productId: string | null;
+  name: string;
+  sku: string | null;
+  /** Litros para una línea de líquidos, piezas para un producto. */
+  unit: "liters" | "pieces";
+  /** Existencia actual (normalmente negativa: se vendió sin surtido). */
+  stock: number;
+  /** Vendido neto (ventas menos anulaciones) desde el primer movimiento. */
+  sold: number;
+  lastSoldAt: string | null;
+}
+
 /** Tipo de renglón del formato de pedido a fábrica. */
 export type FactoryFormRowKind = "product" | "section" | "blank";
 

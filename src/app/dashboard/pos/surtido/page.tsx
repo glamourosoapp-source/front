@@ -8,6 +8,7 @@ import { formatQuantity } from "@/lib/format-money";
 import { usePermissions } from "@/lib/permissions";
 import { FilterBar, FilterDivider, FilterMeta } from "@/components/pos-admin/FilterBar";
 import { RestockOrderCard } from "@/components/pos-admin/RestockOrderCard";
+import { UnlinkedProductsTab } from "@/components/pos-admin/UnlinkedProductsTab";
 import { packQtyLabel, packTotals, unitLabel } from "@/components/pos-admin/pos-labels";
 import { useFactoryFormDownload } from "@/components/pos-admin/useFactoryFormDownload";
 import { RESTOCK_ORDER_STATUS, RESTOCK_ORIGIN } from "@glamouroso/shared/constants";
@@ -80,7 +81,7 @@ export default function PosSurtidoPage() {
   useEffect(() => {
     if (!canView) return;
     if (tab === 0) void loadShortages();
-    else void loadOrders();
+    else if (tab === 1) void loadOrders();
   }, [canView, tab, loadShortages, loadOrders]);
 
   const totals = useMemo(() => packTotals(shortages), [shortages]);
@@ -171,6 +172,7 @@ export default function PosSurtidoPage() {
       <Tabs value={tab} onChange={(_e, value) => setTab(value)}>
         <Tab label="Faltantes" />
         <Tab label="Pedidos de surtido" />
+        <Tab label="Productos no ligados al formato" />
       </Tabs>
 
       {tab === 0 ? (
@@ -318,7 +320,9 @@ export default function PosSurtidoPage() {
         </div>
       ) : null}
 
-      {loading ? <p className="page-kicker">Cargando...</p> : null}
+      {tab === 2 ? <UnlinkedProductsTab branches={branches} /> : null}
+
+      {loading && tab !== 2 ? <p className="page-kicker">Cargando...</p> : null}
     </div>
   );
 }
