@@ -167,6 +167,11 @@ export default function PosPage() {
   const [sheetReprint, setSheetReprint] = useState(false);
   const [sheetReturn, setSheetReturn] = useState<FactoryReturn | null>(null);
   const [clock, setClock] = useState("");
+  /**
+   * El servidor contestó que este usuario no tiene sucursal: la caja no puede
+   * cobrar ni subir nada. Es configuración del usuario, no falta de internet.
+   */
+  const [noBranch, setNoBranch] = useState(false);
 
   /**
    * La caja escribe en la PC primero y sube después, con o sin internet.
@@ -235,9 +240,13 @@ export default function PosPage() {
       const data = await httpClient.get<PosSession>("/pos/session");
       setSession(data);
       setLastSale(data.lastSale ?? null);
+      setNoBranch(false);
       await persistSession(data);
-    } catch {
-      /* sin red la caja sigue con la sesión que guardó la última vez */
+    } catch (error) {
+      // 400 = usuario sin sucursal fija (típicamente un admin): hay que decirlo.
+      // Sin red la caja sigue con la sesión que guardó la última vez.
+      const status = (error as { response?: { status?: number } } | null)?.response?.status;
+      if (status === 400) setNoBranch(true);
     }
     // `persistSession` es estable; depender del objeto `offline` entero volvía a
     // crear esta función en cada render y relanzaba el efecto que la llama.
@@ -563,6 +572,9 @@ export default function PosPage() {
       };
     }
     if (!online) return { tone: "off" as const, text: "Sin conexión" };
+    // Hay conexión pero el servidor rechaza la caja: se dice por qué.
+    if (noBranch) return { tone: "warn" as const, text: "Usuario sin sucursal" };
+    if (syncStatus.lastError) return { tone: "warn" as const, text: syncStatus.lastError };
     const at = lastSyncedAt
       ? new Date(lastSyncedAt).toLocaleTimeString("es-MX", {
           hour: "2-digit",
@@ -570,7 +582,7 @@ export default function PosPage() {
         })
       : null;
     return { tone: "ok" as const, text: at ? `Al día · ${at}` : "En línea" };
-  }, [syncStatus]);
+  }, [syncStatus, noBranch]);
 
   /** El reloj corrido no bloquea nada, pero se avisa: mueve el día del ticket. */
   const clockWarning = useMemo(() => {
@@ -975,7 +987,7 @@ export default function PosPage() {
   const canVoid = can("pos", "update");
 
   return (
-    <main className={`pos ${isReturn ? "pos-return-mode" : ""}`}>
+    <main className={`pos ${isReturn ? "pos-return-mode" : ""} ${noBranch ? "pos-has-banner" : ""}`}>
       {/* 1. Barra superior */}
       <header className="pos-topbar">
         <span className="pos-brand">
@@ -1067,6 +1079,14 @@ export default function PosPage() {
           </button>
         </div>
       </header>
+
+      {noBranch ? (
+        <div className="pos-no-branch" role="alert">
+          Tu usuario (<strong>{user?.name}</strong>) no tiene sucursal asignada, así que esta caja no
+          puede cobrar ni registrar devoluciones. Entra con el usuario de caja de la sucursal, o
+          asígnale una sucursal en Usuarios.
+        </div>
+      ) : null}
 
       {/* 2. Captura */}
       <section className="pos-capture">

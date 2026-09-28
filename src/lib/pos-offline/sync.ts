@@ -194,9 +194,14 @@ class PosSyncEngine {
       }
     } catch (error) {
       // Sin red no es un error que reportar al cajero: es el estado normal de
-      // una sucursal con el internet caído, y la caja sigue cobrando.
+      // una sucursal con el internet caído, y la caja sigue cobrando. Pero si
+      // el servidor SÍ contestó con un 4xx (usuario sin sucursal, sin permiso)
+      // hay conexión: decir "Sin conexión" mandaba a revisar el internet por
+      // un problema de configuración del usuario.
+      const status = (error as { response?: { status?: number } } | null)?.response?.status;
+      const reachable = typeof status === "number" && status < 500;
       this.emit({
-        online: false,
+        online: reachable,
         lastError: getApiErrorMessage(error, "Sin conexión con el servidor"),
       });
     } finally {

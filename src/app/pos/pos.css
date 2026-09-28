@@ -828,3 +828,17 @@
 .pos-return-mode .pos-total-value {
   color: #b91c1c;
 }
+
+/* Usuario sin sucursal fija (un admin abriendo /pos): no es falta de internet. */
+.pos-no-branch {
+  padding: 10px 18px;
+  background: #fef3c7;
+  border-bottom: 1px solid #f59e0b;
+  color: #92400e;
+  font-size: 14px;
+}
+
+/* Con el aviso arriba hay una fila más: el grid del ticket sigue siendo la flexible. */
+.pos.pos-has-banner {
+  grid-template-rows: auto auto auto auto minmax(0, 1fr) auto;
+}
