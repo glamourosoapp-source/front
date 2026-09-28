@@ -31,6 +31,7 @@ import {
   CloudOff,
   CloudUpload,
   TriangleAlert,
+  Undo2,
 } from "lucide-react";
 import { httpClient, getApiErrorMessage } from "@/services/http-client";
 import { useAuthStore } from "@/stores/auth.store";
@@ -58,7 +59,7 @@ import {
   printRaw,
   type PrintAgentConfig,
 } from "@/lib/print/print-agent-client";
-import { buildTicketEscPos } from "@/lib/print/escpos";
+import { buildFactoryReturnEscPos, buildTicketEscPos } from "@/lib/print/escpos";
 import { rasterizeLogo } from "@/lib/print/logo-raster";
 import { PosQuantityDialog } from "@/components/pos/PosQuantityDialog";
 import { PosSearchDialog } from "@/components/pos/PosSearchDialog";
@@ -74,6 +75,8 @@ import {
 } from "@/components/pos/PosChargeDialog";
 import { PosDaySalesDialog } from "@/components/pos/PosDaySalesDialog";
 import { PosTicketSheet } from "@/components/pos/PosTicketSheet";
+import { PosFactoryReturnDialog } from "@/components/pos/PosFactoryReturnDialog";
+import { FactoryReturnSheet } from "@/components/pos/FactoryReturnSheet";
 import {
   PRICING_TIERS,
   POS_PAYMENT_METHODS,
@@ -88,11 +91,11 @@ import type {
   PosSale,
   PosSession,
 } from "@/types";
-import type { Customer } from "@/types";
+import type { Customer, FactoryReturn } from "@/types";
 import { toast } from "sonner";
 
 type DialogName =
-  "search" | "stock" | "customer" | "charge" | "daySales" | null;
+  "search" | "stock" | "customer" | "charge" | "daySales" | "return" | null;
 type QuantityIntent =
   | { mode: "multi" }
   | { mode: "editLine"; key: string; allowDecimals: boolean; current: number }
@@ -116,6 +119,7 @@ export default function PosPage() {
     setCatalog,
     setLastSale,
     newTicket,
+    openReturnTicket,
     closeTicket,
     selectTicket,
     updateTicket,
@@ -129,6 +133,7 @@ export default function PosPage() {
 
   const ticket =
     tickets.find((row) => row.id === activeTicketId) ?? tickets[0]!;
+  const isReturn = ticket.kind === "return";
   const codeRef = useRef<HTMLInputElement>(null);
   /** Versión del catálogo que ya tiene la caja: si no cambió, no se transfiere. */
   const catalogVersionRef = useRef<string | null>(null);
@@ -160,6 +165,7 @@ export default function PosPage() {
   const [sheetSale, setSheetSale] = useState<PosSale | null>(null);
   /** La hoja de respaldo también tiene que decir que es reimpresión. */
   const [sheetReprint, setSheetReprint] = useState(false);
+  const [sheetReturn, setSheetReturn] = useState<FactoryReturn | null>(null);
   const [clock, setClock] = useState("");
 
   /**
@@ -193,6 +199,11 @@ export default function PosPage() {
    */
   const canSeeStock = can("posInventory", "view");
   const canSeeDaySales = can("posReports", "view");
+  /**
+   * Devolución a fábrica (F9): una pestaña que se captura como una venta pero
+   * que F12 registra en vez de cobrar. Sin cliente, sin mayoreo, sin dinero.
+   */
+  const canReturn = can("posReturns", "create");
 
   useEffect(() => {
     catalogVersionRef.current = catalog?.version ?? null;
@@ -649,6 +660,7 @@ export default function PosPage() {
         }
       }
       // Respaldo: hoja térmica por el diálogo del navegador.
+      setSheetReturn(null);
       setSheetReprint(reprint);
       setSheetSale(sale);
       window.setTimeout(() => {
@@ -657,6 +669,40 @@ export default function PosPage() {
       }, 150);
     },
     [printConfig, printerOnline, ticketSettings, walkInName, markPrinted],
+  );
+
+  /** Ticket de devolución: dos ejemplares marcados, por el conector o el navegador. */
+  const printFactoryReturn = useCallback(
+    async (ret: FactoryReturn) => {
+      if (printConfig.printerName && printerOnline) {
+        try {
+          await printRaw(printConfig, buildFactoryReturnEscPos(ret, ticketSettings));
+          return;
+        } catch (error) {
+          toast.error(
+            `${getApiErrorMessage(error, "La impresora no respondió")}. Se abrirá el diálogo del navegador.`,
+          );
+        }
+      }
+      setSheetSale(null);
+      setSheetReturn(ret);
+      window.setTimeout(() => window.print(), 150);
+    },
+    [printConfig, printerOnline, ticketSettings],
+  );
+
+  /** La devolución quedó registrada: imprime, baja la existencia local y cierra la pestaña. */
+  const onReturnRegistered = useCallback(
+    (ret: FactoryReturn) => {
+      setDialog(null);
+      deductLocalStock(totals.lines);
+      closeTicket(ticket.id);
+      toast.success(`Devolución ${ret.folio} registrada`);
+      void printFactoryReturn(ret);
+      void loadCatalog();
+      focusCode();
+    },
+    [deductLocalStock, totals.lines, closeTicket, ticket.id, printFactoryReturn, loadCatalog, focusCode],
   );
 
   // ---- Cobro ----
@@ -852,16 +898,26 @@ export default function PosPage() {
         },
         F7: () => openBulkForSelected(),
         F8: () => {
+          if (isReturn) return;
           setCustomerIntent("assign");
           setDialog("customer");
+        },
+        F9: () => {
+          if (canReturn) openReturnTicket();
         },
         F10: () => {
           // Con algo escrito en el código, F10 arranca la búsqueda con ese texto.
           setSearchTerm(code.trim());
           setDialog("search");
         },
-        F11: () => toggleWholesale(),
-        F12: () => startCharge(),
+        F11: () => {
+          if (!isReturn) toggleWholesale();
+        },
+        F12: () => {
+          if (isReturn) {
+            if (ticket.lines.length) setDialog("return");
+          } else startCharge();
+        },
         Insert: () => setQuantityIntent({ mode: "multi" }),
         Delete: () => deleteSelected(),
         // Flechas sobre el ticket: arriba/abajo eligen la fila, derecha/izquierda
@@ -908,6 +964,9 @@ export default function PosPage() {
         arrowsControlGrid,
         moveSelection,
         bumpQuantity,
+        isReturn,
+        canReturn,
+        openReturnTicket,
       ],
     ),
     shortcutsEnabled,
@@ -916,7 +975,7 @@ export default function PosPage() {
   const canVoid = can("pos", "update");
 
   return (
-    <main className="pos">
+    <main className={`pos ${isReturn ? "pos-return-mode" : ""}`}>
       {/* 1. Barra superior */}
       <header className="pos-topbar">
         <span className="pos-brand">
@@ -1011,7 +1070,9 @@ export default function PosPage() {
 
       {/* 2. Captura */}
       <section className="pos-capture">
-        <div className="pos-capture-title">Venta · {ticket.label}</div>
+        <div className="pos-capture-title">
+          {isReturn ? "Devolución a fábrica · lo roto o echado a perder que se lleva el transportista" : `Venta · ${ticket.label}`}
+        </div>
         <form className="pos-capture-body" onSubmit={submitCode}>
           <label className="pos-code-label" htmlFor="pos-code">
             Código del producto:
@@ -1102,6 +1163,16 @@ export default function PosPage() {
               <span className="pos-action-key">F3</span> Existencias
             </button>
           ) : null}
+          {canReturn ? (
+            <button
+              className="pos-action pos-action-return"
+              onClick={() => openReturnTicket()}
+              title="Producto roto o echado a perder que se regresa a fábrica"
+            >
+              <span className="pos-action-key">F9</span>
+              <Undo2 size={14} /> Devolución
+            </button>
+          ) : null}
         </div>
       </section>
 
@@ -1110,10 +1181,10 @@ export default function PosPage() {
         {tickets.map((row) => (
           <button
             key={row.id}
-            className={`pos-tab ${row.id === activeTicketId ? "active" : ""}`}
+            className={`pos-tab ${row.id === activeTicketId ? "active" : ""} ${row.kind === "return" ? "pos-tab-return" : ""}`}
             onClick={() => selectTicket(row.id)}
           >
-            <Receipt size={13} />
+            {row.kind === "return" ? <Undo2 size={13} /> : <Receipt size={13} />}
             {row.label}
             {row.lines.length ? (
               <span className="pos-tab-count">{row.lines.length}</span>
@@ -1144,6 +1215,11 @@ export default function PosPage() {
 
       {/* 4. Grid del ticket */}
       <div className="pos-grid-wrap">
+        {isReturn ? (
+          <div className="pos-watermark" aria-hidden>
+            DEVOLUCIÓN
+          </div>
+        ) : null}
         <table className="pos-grid">
           <thead>
             <tr>
@@ -1203,8 +1279,9 @@ export default function PosPage() {
                   ) : null}
                 </td>
                 <td className="num">
-                  {formatMoney(line.unitPrice)}
-                  {line.kind === "liter" ? " / L" : ""}
+                  {/* La devolución se valúa a precio de tienda en el servidor: el de venta confundiría. */}
+                  {isReturn ? "—" : formatMoney(line.unitPrice)}
+                  {!isReturn && line.kind === "liter" ? " / L" : ""}
                 </td>
                 <td className="num">
                   <span className="pos-qty-cell">
@@ -1228,7 +1305,7 @@ export default function PosPage() {
                     ) : null}
                   </span>
                 </td>
-                <td className="num amount">{formatMoney(line.total)}</td>
+                <td className="num amount">{isReturn ? "—" : formatMoney(line.total)}</td>
                 {canSeeStock ? (
                   <td
                     className={`num ${line.stock !== null && line.stock < 0 ? "stock-negative" : ""}`}
@@ -1288,22 +1365,36 @@ export default function PosPage() {
             >
               <Ban size={14} /> Eliminar venta
             </button>
-            <span className="pos-count">
-              Cliente: <strong>{ticket.customerName ?? walkInName}</strong>
-            </span>
+            {isReturn ? null : (
+              <span className="pos-count">
+                Cliente: <strong>{ticket.customerName ?? walkInName}</strong>
+              </span>
+            )}
           </div>
 
-          <button
-            className="pos-charge"
-            onClick={() => startCharge()}
-            disabled={!ticket.lines.length}
-          >
-            <span className="pos-action-key">F12</span> Cobrar
-          </button>
+          {isReturn ? (
+            <button
+              className="pos-charge pos-charge-return"
+              onClick={() => setDialog("return")}
+              disabled={!ticket.lines.length}
+            >
+              <span className="pos-action-key">F12</span> Registrar devolución
+            </button>
+          ) : (
+            <button
+              className="pos-charge"
+              onClick={() => startCharge()}
+              disabled={!ticket.lines.length}
+            >
+              <span className="pos-action-key">F12</span> Cobrar
+            </button>
+          )}
 
           <div className="pos-total">
-            <div className="pos-total-label">Total</div>
-            <div className="pos-total-value">{formatMoney(total)}</div>
+            <div className="pos-total-label">{isReturn ? "A devolver (no se cobra)" : "Total"}</div>
+            <div className="pos-total-value">
+              {isReturn ? `${totals.linesCount} ${totals.linesCount === 1 ? "partida" : "partidas"}` : formatMoney(total)}
+            </div>
           </div>
         </div>
 
@@ -1489,6 +1580,18 @@ export default function PosPage() {
           </div>
         </div>
       ) : null}
+
+      <PosFactoryReturnDialog
+        open={dialog === "return" && isReturn}
+        lines={ticket.lines}
+        onClose={() => {
+          setDialog(null);
+          focusCode();
+        }}
+        onRegistered={onReturnRegistered}
+      />
+
+      <FactoryReturnSheet ret={sheetReturn} settings={ticketSettings} />
 
       <PosTicketSheet
         sale={sheetSale}

@@ -1,6 +1,7 @@
 import type { ContainerMaterial } from "./constants";
 import type {
   BranchType,
+  FactoryReturnReason,
   InventoryMovementType,
   NotificationType,
   PosPaymentMethod,
@@ -629,8 +630,55 @@ export interface RestockOrder {
   /** Nota de fábrica sobre el envío. Separada para no pisar la de quien pidió. */
   dispatchNotes?: string | null;
   items?: RestockOrderItem[];
+  /** Devoluciones a fábrica ligadas a este pedido: lo que el transportista se llevó de regreso. */
+  returns?: FactoryReturn[];
   createdAt?: string;
   updatedAt?: string;
+}
+
+/** Partida de una devolución a fábrica: se capturó como una venta y descontó lo mismo. */
+export interface FactoryReturnItem {
+  id: string;
+  factoryReturnId: string;
+  /** Partida del pedido de surtido con el mismo producto o línea, si el pedido lo traía. */
+  restockOrderItemId: string | null;
+  productId: string | null;
+  lineId: string | null;
+  productName: string;
+  sku: string | null;
+  saleUnit: PosSaleUnit;
+  quantity: number;
+  /** Sobre qué cayó el descuento: la línea (litros) o el producto (piezas; la pieza de una caja). */
+  inventoryLineId: string | null;
+  inventoryProductId: string | null;
+  /** Lo que salió del inventario de la sucursal: litros si hay `inventoryLineId`, si no piezas. */
+  inventoryQuantity: number;
+  reason: FactoryReturnReason;
+  /** Precio a tienda por unidad de la partida (del formato o el costo del catálogo); null si no hay. */
+  unitValue: number | null;
+  total: number | null;
+}
+
+/**
+ * Devolución a fábrica: producto roto o echado a perder que el transportista
+ * se lleva de regreso. Sale del inventario de la sucursal (kardex
+ * `factory_return`), no toca dinero de la caja y se liga al pedido de surtido.
+ */
+export interface FactoryReturn {
+  id: string;
+  organizationId?: string;
+  branchId: string;
+  branch?: { id: string; code: string; name: string } | null;
+  restockOrderId: string | null;
+  /** `DEV-SUC01-20260928-0001` */
+  folio: string;
+  notes: string | null;
+  userId: string | null;
+  user?: { id: string; name: string } | null;
+  /** Importe a precio de tienda; informativo: no cambia el total del pedido. */
+  total: number;
+  items: FactoryReturnItem[];
+  createdAt: string;
 }
 
 /** Faltante calculado de una sucursal, listo para convertirse en pedido de surtido. */

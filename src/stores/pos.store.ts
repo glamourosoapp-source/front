@@ -16,6 +16,11 @@ export interface PosTicket {
   notes: string;
   /** Se genera al abrir el cobro; reintentar con la misma clave no duplica. */
   idempotencyKey: string | null;
+  /**
+   * `return` = devolución a fábrica (F9): se captura igual que una venta, pero
+   * F12 la registra en vez de cobrarla. Ausente en los tickets guardados antes.
+   */
+  kind?: "sale" | "return";
 }
 
 interface PosState {
@@ -32,6 +37,8 @@ interface PosState {
 
   activeTicket: () => PosTicket;
   newTicket: () => void;
+  /** Abre (o vuelve a) la pestaña de devolución a fábrica: solo hay una a la vez. */
+  openReturnTicket: () => void;
   closeTicket: (id: string) => void;
   selectTicket: (id: string) => void;
   updateTicket: (id: string, patch: Partial<PosTicket>) => void;
@@ -123,6 +130,19 @@ export const usePosStore = create<PosState>((set, get) => ({
       let index = 1;
       while (used.has(`Ticket ${index}`)) index += 1;
       const ticket = emptyTicket(index);
+      const tickets = [...state.tickets, ticket];
+      persist(tickets, ticket.id);
+      return { tickets, activeTicketId: ticket.id, selectedLineKey: null };
+    }),
+
+  openReturnTicket: () =>
+    set((state) => {
+      const existing = state.tickets.find((ticket) => ticket.kind === "return");
+      if (existing) {
+        persist(state.tickets, existing.id);
+        return { activeTicketId: existing.id, selectedLineKey: null };
+      }
+      const ticket: PosTicket = { ...emptyTicket(0), label: "Devolución", kind: "return" };
       const tickets = [...state.tickets, ticket];
       persist(tickets, ticket.id);
       return { tickets, activeTicketId: ticket.id, selectedLineKey: null };

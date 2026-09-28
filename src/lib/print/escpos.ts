@@ -1,4 +1,5 @@
-import type { PosSale, PosSaleItem } from "@/types";
+import type { FactoryReturn, PosSale, PosSaleItem } from "@/types";
+import { FACTORY_RETURN_REASON_LABELS } from "@glamouroso/shared/constants";
 import type { TicketEmphasis, TicketSettings } from "@glamouroso/shared";
 import { ticketFooterLines, ticketHeaderBlock } from "@glamouroso/shared";
 import { POS_PAYMENT_METHODS, posPaymentMethodLabel } from "@glamouroso/shared/constants";
@@ -110,6 +111,11 @@ class EscPosBuilder {
 
   bold(on: boolean): this {
     return this.raw(ESC, 0x45, on ? 1 : 0);
+  }
+
+  /** Impresión en negativo (blanco sobre negro): la franja de DEVOLUCIÓN. */
+  invert(on: boolean): this {
+    return this.raw(GS, 0x42, on ? 1 : 0);
   }
 
   /** Tamaño de una línea destacada; "normal" vuelve al tamaño del cuerpo. */
@@ -301,4 +307,83 @@ export function ticketPreviewText(sale: PosSale, settings: TicketSettings): stri
 export function ticketColumns(settings: TicketSettings): number {
   const widths = COLUMNS[settings.paperWidthMm] ?? COLUMNS[80];
   return settings.fontSize === "small" ? widths.b : widths.a;
+}
+
+/**
+ * Franja en negativo que marca el papel como devolución: es lo más parecido a
+ * una marca de agua que una térmica puede imprimir. Va arriba y abajo para que
+ * ningún pedazo del rollo se confunda con un ticket de venta.
+ */
+function returnBanner(builder: EscPosBuilder): void {
+  builder.align("center").bold(true).invert(true).size("xlarge");
+  builder.line(" DEVOLUCION ");
+  builder.size("large");
+  builder.line(" A FABRICA ");
+  builder.invert(false).size("normal").bold(false);
+}
+
+function appendFactoryReturn(
+  builder: EscPosBuilder,
+  ret: FactoryReturn,
+  settings: TicketSettings,
+  options: BuildTicketOptions,
+  copyLabel: string
+): void {
+  const header = ticketHeaderBlock(settings, ret.branch ?? null);
+  builder.init();
+  returnBanner(builder);
+  builder.line();
+  builder.bold(true).line(header.title).bold(false);
+  builder.separator();
+
+  builder.align("left");
+  builder.line(`Folio: ${ret.folio}`);
+  builder.line(
+    `Fecha: ${new Date(ret.createdAt).toLocaleString("es-MX", { dateStyle: "short", timeStyle: "short" })}`
+  );
+  if (ret.branch) builder.line(`Sucursal: ${ret.branch.code} ${ret.branch.name}`);
+  if (ret.user?.name) builder.line(`Entrega: ${ret.user.name}`);
+  if (ret.restockOrderId) builder.line(`Pedido: ${ret.restockOrderId.slice(0, 8).toUpperCase()}`);
+  if (options.reprint) builder.line("** REIMPRESION **");
+  builder.bold(true).line(copyLabel).bold(false);
+  builder.separator();
+
+  for (const item of ret.items) {
+    const code = settings.showItemCodes && item.sku ? `${item.sku} ` : "";
+    builder.line(`${code}${item.productName}`);
+    const detail = `${quantity(item.quantity)}${item.saleUnit === "liter" ? " L" : " pz"} - ${FACTORY_RETURN_REASON_LABELS[item.reason] ?? item.reason}`;
+    builder.row(`  ${detail}`, item.total === null ? "" : money(item.total));
+  }
+  builder.separator();
+  builder.bold(true).row("VALOR A PRECIO TIENDA", money(ret.total)).bold(false);
+  builder.line("No es venta: no entra a la caja.");
+  if (ret.notes) builder.line(`Nota: ${ret.notes}`);
+  builder.line();
+  builder.line();
+  builder.line("______________________________");
+  builder.line("Entrega (sucursal)");
+  builder.line();
+  builder.line();
+  builder.line("______________________________");
+  builder.line("Recibe (transportista)");
+  builder.line();
+  returnBanner(builder);
+  if (settings.showFolioBarcode) builder.line().barcode(ret.folio);
+  builder.feedAndCut();
+}
+
+/**
+ * Ticket de devolución a fábrica: siempre dos ejemplares, uno se queda en la
+ * sucursal y el otro firmado se lo lleva el transportista, sin importar cuántas
+ * copias tenga configuradas la venta.
+ */
+export function buildFactoryReturnEscPos(
+  ret: FactoryReturn,
+  settings: TicketSettings,
+  options: BuildTicketOptions = {}
+): Uint8Array {
+  const builder = new EscPosBuilder(settings);
+  appendFactoryReturn(builder, ret, settings, options, "ORIGINAL - SUCURSAL");
+  appendFactoryReturn(builder, ret, settings, options, "COPIA - TRANSPORTISTA");
+  return builder.build();
 }

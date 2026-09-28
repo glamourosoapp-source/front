@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { paginationSchema } from "./common";
 import {
+  FACTORY_RETURN_REASONS,
   POS_PAYMENT_METHOD_VALUES,
   POS_SALE_STATUS,
   POS_SALE_UNITS,
@@ -25,48 +26,58 @@ function hasTooManyDecimals(value: number, decimals: number): boolean {
  * El precio NUNCA viaja en el body: lo resuelve el servidor con
  * `priceBulkLiters`/`pricePieces` contra el catálogo de la organización.
  */
-export const posSaleItemSchema = z
-  .object({
-    saleUnit: z.enum([POS_SALE_UNITS.PIECE, POS_SALE_UNITS.LITER]),
-    productId: z.union([z.string().uuid(), z.null()]).optional(),
-    lineId: z.union([z.string().uuid(), z.null()]).optional(),
-    quantity: z.coerce.number().positive().max(100_000),
-    priceTier: z.enum([PRICING_TIERS.RETAIL, PRICING_TIERS.WHOLESALE]).optional(),
-    notes: optionalString,
-  })
-  .superRefine((value, ctx) => {
-    if (value.saleUnit === POS_SALE_UNITS.PIECE) {
-      if (!value.productId) {
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          message: "Una partida por pieza necesita productId",
-          path: ["productId"],
-        });
-      }
-      if (!Number.isInteger(value.quantity)) {
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          message: "Las piezas se venden en cantidades enteras",
-          path: ["quantity"],
-        });
-      }
-      return;
-    }
-    if (!value.lineId) {
+const saleItemFields = {
+  saleUnit: z.enum([POS_SALE_UNITS.PIECE, POS_SALE_UNITS.LITER]),
+  productId: z.union([z.string().uuid(), z.null()]).optional(),
+  lineId: z.union([z.string().uuid(), z.null()]).optional(),
+  quantity: z.coerce.number().positive().max(100_000),
+};
+
+/** Pieza entera con producto, o litros (dos decimales) con línea: la venta y la devolución a fábrica. */
+function refineSaleItem(
+  value: { saleUnit: string; productId?: string | null; lineId?: string | null; quantity: number },
+  ctx: z.RefinementCtx
+) {
+  if (value.saleUnit === POS_SALE_UNITS.PIECE) {
+    if (!value.productId) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
-        message: "Una partida por litro necesita lineId",
-        path: ["lineId"],
+        message: "Una partida por pieza necesita productId",
+        path: ["productId"],
       });
     }
-    if (hasTooManyDecimals(value.quantity, LITER_DECIMALS)) {
+    if (!Number.isInteger(value.quantity)) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
-        message: "Los litros admiten hasta dos decimales",
+        message: "Las piezas se venden en cantidades enteras",
         path: ["quantity"],
       });
     }
-  });
+    return;
+  }
+  if (!value.lineId) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: "Una partida por litro necesita lineId",
+      path: ["lineId"],
+    });
+  }
+  if (hasTooManyDecimals(value.quantity, LITER_DECIMALS)) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: "Los litros admiten hasta dos decimales",
+      path: ["quantity"],
+    });
+  }
+}
+
+export const posSaleItemSchema = z
+  .object({
+    ...saleItemFields,
+    priceTier: z.enum([PRICING_TIERS.RETAIL, PRICING_TIERS.WHOLESALE]).optional(),
+    notes: optionalString,
+  })
+  .superRefine(refineSaleItem);
 
 export const createPosSaleSchema = z.object({
   /** Solo la manda un admin sin sucursal fija; el cajero la toma de su usuario. */
@@ -80,6 +91,37 @@ export const createPosSaleSchema = z.object({
   paymentMethod: z.enum(POS_PAYMENT_METHOD_VALUES).default(POS_PAYMENT_METHOD_VALUES[0]),
   amountTendered: z.coerce.number().min(0).max(1_000_000),
   notes: optionalString,
+});
+
+/**
+ * Devolución a fábrica desde la caja: el producto roto o echado a perder que
+ * se lleva el transportista. Las partidas se capturan como en una venta (así
+ * descuentan lo mismo: litros de la línea, envase y tapa) y cada una lleva su
+ * motivo. Se liga al pedido de surtido que llegó (el que trae el transportista).
+ */
+export const createFactoryReturnSchema = z.object({
+  /** Solo la manda un admin sin sucursal fija; el cajero la toma de su usuario. */
+  branchId: z.union([z.string().uuid(), z.null()]).optional(),
+  /** Reintentar no duplica la devolución. */
+  idempotencyKey: z.string().min(8).max(120),
+  restockOrderId: z.union([z.string().uuid(), z.null()]).optional(),
+  items: z
+    .array(
+      z
+        .object({
+          ...saleItemFields,
+          reason: z.enum([
+            FACTORY_RETURN_REASONS.BROKEN,
+            FACTORY_RETURN_REASONS.SPOILED,
+            FACTORY_RETURN_REASONS.EXPIRED,
+            FACTORY_RETURN_REASONS.OTHER,
+          ]),
+        })
+        .superRefine(refineSaleItem)
+    )
+    .min(1)
+    .max(200),
+  notes: z.union([z.string().max(500), z.literal(""), z.null()]).optional(),
 });
 
 export const voidPosSaleSchema = z.object({
@@ -139,4 +181,5 @@ export const lookupPosCustomerSchema = z.object({
 });
 
 export type CreatePosSaleInput = z.infer<typeof createPosSaleSchema>;
+export type CreateFactoryReturnInput = z.infer<typeof createFactoryReturnSchema>;
 export type PosSaleItemInput = z.infer<typeof posSaleItemSchema>;

@@ -3,9 +3,24 @@
 import { Button, Chip } from "@mui/material";
 import { Check, FileDown, PackagePlus, Truck, X } from "lucide-react";
 import Link from "next/link";
-import { RESTOCK_ORDER_STATUS, RESTOCK_ORIGIN } from "@glamouroso/shared/constants";
+import {
+  FACTORY_RETURN_REASON_LABELS,
+  RESTOCK_ORDER_STATUS,
+  RESTOCK_ORIGIN,
+} from "@glamouroso/shared/constants";
 import { formatMoney, formatQuantity } from "@/lib/format-money";
-import type { RestockOrder } from "@/types";
+import type { FactoryReturn, FactoryReturnItem, RestockOrder } from "@/types";
+
+const RETURN_RED = "#b91c1c";
+
+/** Partida devuelta con el folio de su devolución, para decir de dónde salió. */
+type ReturnedLine = FactoryReturnItem & { folio: string };
+
+function returnedLabel(line: ReturnedLine): string {
+  const unit = line.saleUnit === "liter" ? "L" : "pz";
+  const reason = FACTORY_RETURN_REASON_LABELS[line.reason] ?? line.reason;
+  return `Devuelto: ${formatQuantity(line.quantity)} ${unit} de ${line.productName} (${reason}) · ${line.folio}`;
+}
 import {
   BRANCH_TYPE_COPY,
   RESTOCK_ORIGIN_LABELS,
@@ -53,6 +68,19 @@ export function RestockOrderCard({
   const isSentOrReceived =
     order.status === RESTOCK_ORDER_STATUS.SENT || order.status === RESTOCK_ORDER_STATUS.RECEIVED;
   const items = order.items ?? [];
+  // Lo que el transportista se llevó de regreso: cada partida devuelta cae en la
+  // del pedido con su mismo producto o línea; lo que el pedido no traía va aparte.
+  const returns: FactoryReturn[] = order.returns ?? [];
+  const returnedLines: ReturnedLine[] = returns.flatMap((ret) =>
+    (ret.items ?? []).map((item) => ({ ...item, folio: ret.folio }))
+  );
+  const returnedByItem = new Map<string, ReturnedLine[]>();
+  for (const line of returnedLines) {
+    if (!line.restockOrderItemId) continue;
+    returnedByItem.set(line.restockOrderItemId, [...(returnedByItem.get(line.restockOrderItemId) ?? []), line]);
+  }
+  const returnedElsewhere = returnedLines.filter((line) => !line.restockOrderItemId);
+  const returnsTotal = returns.reduce((sum, ret) => sum + Number(ret.total ?? 0), 0);
   const totalFrozen = isFranchise
     ? items.reduce((sum, item) => sum + restockItemAmount(item, item.requestedQty), 0)
     : null;
@@ -180,15 +208,23 @@ export function RestockOrderCard({
                     ? requested
                     : null;
               const short = dispatched != null && dispatched < requested;
+              const returned = returnedByItem.get(item.id) ?? [];
               return (
-                <tr key={item.id}>
+                <tr key={item.id} style={returned.length ? { background: "#fef2f2" } : undefined}>
                   <td>
-                    {item.productName}
+                    <span style={returned.length ? { color: RETURN_RED, fontWeight: 700 } : undefined}>
+                      {item.productName}
+                    </span>
                     {item.notes ? (
                       <div className="page-kicker" style={{ margin: 0, color: "#92400e" }}>
                         {item.notes}
                       </div>
                     ) : null}
+                    {returned.map((line) => (
+                      <div key={line.id} style={{ margin: 0, color: RETURN_RED, fontSize: 12, fontWeight: 600 }}>
+                        {returnedLabel(line)}
+                      </div>
+                    ))}
                   </td>
                   <td style={{ textAlign: "right" }}>
                     {packQtyLabel(requested, item.unit, item.unitsPerPackage)}
@@ -205,6 +241,14 @@ export function RestockOrderCard({
                 </tr>
               );
             })}
+            {returnedElsewhere.map((line) => (
+              <tr key={line.id} style={{ background: "#fef2f2" }}>
+                <td colSpan={isFranchise ? 5 : 4} style={{ color: RETURN_RED, fontWeight: 600 }}>
+                  {returnedLabel(line)}
+                  <span style={{ fontWeight: 400 }}> — no venía en este pedido</span>
+                </td>
+              </tr>
+            ))}
           </tbody>
           {totalFrozen != null ? (
             <tfoot>
@@ -219,6 +263,23 @@ export function RestockOrderCard({
           ) : null}
         </table>
       </div>
+      {returns.length ? (
+        <div className="page-kicker" style={{ marginBottom: 0, color: RETURN_RED }}>
+          <strong>Devuelto a fábrica:</strong>{" "}
+          {returns
+            .map((ret) => `${ret.folio} (${formatDateTime(ret.createdAt)}${ret.user?.name ? `, ${ret.user.name}` : ""})`)
+            .join(" · ")}
+          {" · "}valor a precio de tienda <strong>{formatMoney(returnsTotal)}</strong> (informativo, no cambia el total)
+          {returns.some((ret) => ret.notes) ? (
+            <div>
+              {returns
+                .filter((ret) => ret.notes)
+                .map((ret) => `${ret.folio}: ${ret.notes}`)
+                .join(" · ")}
+            </div>
+          ) : null}
+        </div>
+      ) : null}
       {order.dispatchNotes ? (
         <p className="page-kicker" style={{ marginBottom: 0, color: "#92400e" }}>
           <strong>Nota de fábrica:</strong> {order.dispatchNotes}

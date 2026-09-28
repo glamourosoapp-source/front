@@ -29,6 +29,8 @@ export type {
   RestockOrderItem,
   BranchShortage,
   UnlinkedRestockItem,
+  FactoryReturn,
+  FactoryReturnItem,
   BranchStats,
   BranchSalesPeriod,
   BranchOverview,

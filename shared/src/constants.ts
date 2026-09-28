@@ -294,7 +294,27 @@ export const INVENTORY_MOVEMENT_TYPES = {
   RESTOCK_IN: "restock_in",
   ADJUSTMENT: "adjustment",
   INITIAL: "initial",
+  /** Producto roto o echado a perder que la sucursal le regresa a fábrica. */
+  FACTORY_RETURN: "factory_return",
 } as const;
+
+/**
+ * Motivo de cada partida de una devolución a fábrica. Se imprime en el ticket y
+ * se ve en rojo en el pedido de surtido.
+ */
+export const FACTORY_RETURN_REASONS = {
+  BROKEN: "broken",
+  SPOILED: "spoiled",
+  EXPIRED: "expired",
+  OTHER: "other",
+} as const;
+
+export const FACTORY_RETURN_REASON_LABELS: Record<FactoryReturnReason, string> = {
+  broken: "Roto",
+  spoiled: "Echado a perder",
+  expired: "Caducado",
+  other: "Otro",
+};
 
 /** Origen de un pedido de surtido a fábrica. */
 export const RESTOCK_ORIGIN = {
@@ -371,6 +391,7 @@ export const PERMISSION_MODULES = [
   { key: "posInventory", label: "POS: inventario por sucursal" },
   { key: "posReports", label: "POS: cortes y reportes" },
   { key: "posRestock", label: "POS: faltantes y surtido" },
+  { key: "posReturns", label: "POS: devoluciones a fábrica" },
   { key: "factory", label: "Fábrica: pedidos por enviar" },
   { key: "franchise", label: "Franquicia: pedidos a fábrica" },
 ] as const;
@@ -420,6 +441,7 @@ export type RestockOrderStatus =
   (typeof RESTOCK_ORDER_STATUS)[keyof typeof RESTOCK_ORDER_STATUS];
 export type RestockItemUnit = (typeof RESTOCK_ITEM_UNITS)[keyof typeof RESTOCK_ITEM_UNITS];
 export type TicketPaperWidth = (typeof TICKET_PAPER_WIDTHS)[number];
+export type FactoryReturnReason = (typeof FACTORY_RETURN_REASONS)[keyof typeof FACTORY_RETURN_REASONS];
 
 /** Material del envase en que se vende una línea de líquido. */
 export const CONTAINER_MATERIALS = {

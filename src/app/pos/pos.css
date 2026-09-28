@@ -763,3 +763,68 @@
   font-weight: 600;
   color: var(--muted);
 }
+
+/* --- Devolución a fábrica (F9) ---
+   La pestaña de devolución se captura igual que una venta, pero toda la caja
+   se tiñe de rojo y lleva la marca de agua: nadie la confunde con un cobro. */
+.pos-action-return {
+  border-color: #fecaca;
+  color: #b91c1c;
+}
+
+.pos-action-return:hover:not(:disabled) {
+  background: #fef2f2;
+}
+
+.pos-tab.pos-tab-return {
+  color: #b91c1c;
+}
+
+.pos-tab.pos-tab-return.active {
+  box-shadow: inset 0 2px 0 #dc2626;
+  color: #b91c1c;
+}
+
+.pos-return-mode .pos-capture {
+  background: #b91c1c;
+}
+
+.pos-return-mode .pos-grid-wrap {
+  position: relative;
+  background: #fffafa;
+}
+
+.pos-watermark {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+  font-size: clamp(64px, 11vw, 180px);
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  color: rgba(220, 38, 38, 0.08);
+  transform: rotate(-18deg);
+  user-select: none;
+  /* Encima de las filas (que son blancas) y sin atrapar clics: se ve aunque el ticket esté lleno. */
+  z-index: 2;
+}
+
+.pos-charge.pos-charge-return {
+  background: #dc2626;
+  box-shadow: 0 6px 18px rgba(220, 38, 38, 0.28);
+}
+
+.pos-charge.pos-charge-return:hover:not(:disabled) {
+  background: #b91c1c;
+}
+
+.pos-charge.pos-charge-return:disabled {
+  background: #cbd5e1;
+  box-shadow: none;
+}
+
+.pos-return-mode .pos-total-value {
+  color: #b91c1c;
+}
