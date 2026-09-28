@@ -11,7 +11,7 @@ import {
   FilterMeta,
   type DateRangeOption,
 } from "@/components/pos-admin/FilterBar";
-import { RESTOCK_STATUS_LABELS } from "@/components/pos-admin/pos-labels";
+import { RESTOCK_STATUS_LABELS, restockItemAmount } from "@/components/pos-admin/pos-labels";
 import { formatMoney } from "@/lib/format-money";
 import { httpClient, getApiErrorMessage } from "@/services/http-client";
 import { usePermissions } from "@/lib/permissions";
@@ -33,12 +33,9 @@ const OPEN = new Set<string>([
   RESTOCK_ORDER_STATUS.PREPARING,
 ]);
 
-/** Importe congelado del pedido: precio de mayoreo × lo pedido, partida por partida. */
+/** Importe congelado del pedido: precio de mayoreo por pieza × piezas pedidas (cajas × su contenido). */
 function orderTotal(order: RestockOrder): number {
-  return (order.items ?? []).reduce(
-    (sum, item) => sum + Number(item.unitPrice ?? 0) * Number(item.requestedQty ?? 0),
-    0
-  );
+  return (order.items ?? []).reduce((sum, item) => sum + restockItemAmount(item, item.requestedQty), 0);
 }
 
 /**

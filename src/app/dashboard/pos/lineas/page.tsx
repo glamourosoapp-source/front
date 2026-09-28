@@ -1,11 +1,13 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Button, Chip, MenuItem, TextField } from "@mui/material";
+import { Button, Chip, MenuItem, Tab, Tabs, TextField } from "@mui/material";
 import { Droplets, Plus, ShieldAlert } from "lucide-react";
+import { CONTAINER_MATERIALS } from "@glamouroso/shared/constants";
 import { DataTable } from "@/components/ui/DataTable";
 import { ListPagination } from "@/components/ui/ListPagination";
 import { ProductLineFormDialog } from "@/components/pos-admin/ProductLineFormDialog";
+import { ContainerRulesTab } from "@/components/pos-admin/ContainerRulesTab";
 import { httpClient, getApiErrorMessage } from "@/services/http-client";
 import { useDebounce } from "@/hooks/useDebounce";
 import { formatMoney } from "@/lib/format-money";
@@ -31,6 +33,7 @@ export default function ProductLinesPage() {
   const [loading, setLoading] = useState(true);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing] = useState<ProductLine | null>(null);
+  const [tab, setTab] = useState(0);
 
   const debouncedSearch = useDebounce(search, 300);
 
@@ -95,7 +98,7 @@ export default function ProductLinesPage() {
             de la venta a granel.
           </p>
         </div>
-        {canManage ? (
+        {canManage && tab === 0 ? (
           <Button
             variant="contained"
             startIcon={<Plus size={16} />}
@@ -109,6 +112,15 @@ export default function ProductLinesPage() {
         ) : null}
       </div>
 
+      <Tabs value={tab} onChange={(_e, value: number) => setTab(value)} sx={{ borderBottom: 1, borderColor: "divider" }}>
+        <Tab label="Líneas" />
+        <Tab label="Envases y tapas" />
+      </Tabs>
+
+      {tab === 1 ? <ContainerRulesTab canManage={canManage} /> : null}
+
+      {tab === 0 ? (
+      <>
       <FilterBar>
         <FilterSearch
           value={search}
@@ -151,6 +163,9 @@ export default function ProductLinesPage() {
               <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
                 <Droplets size={14} style={{ color: "var(--glam-blue)" }} />
                 <strong>{line.name}</strong>
+                {line.containerMaterial === CONTAINER_MATERIALS.POLYETHYLENE ? (
+                  <Chip label="Polietileno" size="small" variant="outlined" color="warning" />
+                ) : null}
               </span>
             ),
           },
@@ -235,6 +250,8 @@ export default function ProductLinesPage() {
       />
 
       {loading ? <p className="page-kicker">Cargando...</p> : null}
+      </>
+      ) : null}
 
       <ProductLineFormDialog
         open={dialogOpen}

@@ -6,7 +6,7 @@ import { DetailField } from "@/components/ui/DetailField";
 import { formatMoney } from "@/lib/format-money";
 import type { Branch, BranchStats } from "@/types";
 import { BranchHealthSignals } from "../BranchHealthChip";
-import { WEEKDAY_LABELS, formatDateTime, relativeDays } from "../pos-labels";
+import { WEEKDAY_LABELS, formatDateTime, relativeDays, salesPeriodLabels } from "../pos-labels";
 
 interface BranchOverviewTabProps {
   branch: Branch;
@@ -25,6 +25,13 @@ function Delta({ current, previous }: { current: number; previous: number }) {
   );
 }
 
+/** Fechas que abarca la tarjeta, en gris bajo la etiqueta. */
+function Period({ children }: { children: string }) {
+  return (
+    <div style={{ marginTop: 4, color: "var(--muted)", fontSize: 13, fontWeight: 400 }}>{children}</div>
+  );
+}
+
 /**
  * Resumen de la sucursal: lo que el administrador quiere saber en 10 segundos.
  * Ventas por periodo (con el permiso de reportes), salud con sus señales,
@@ -33,6 +40,7 @@ function Delta({ current, previous }: { current: number; previous: number }) {
 export function BranchOverviewTab({ branch, stats }: BranchOverviewTabProps) {
   const isFranchise = branch.type === BRANCH_TYPES.FRANCHISE;
   const sales = stats.sales;
+  const periods = salesPeriodLabels();
   const ticket = (branch.ticketSettings ?? {}) as Record<string, unknown>;
   const address = [branch.street, branch.colony, branch.city, branch.postalCode]
     .filter(Boolean)
@@ -44,7 +52,10 @@ export function BranchOverviewTab({ branch, stats }: BranchOverviewTabProps) {
         <section className="grid grid-4">
           <div className="card metric">
             <div className="metric-head">
-              <span>Hoy</span>
+              <div>
+                <span>Hoy</span>
+                <Period>{periods.today}</Period>
+              </div>
               <div className="metric-icon">
                 <Wallet size={22} />
               </div>
@@ -56,7 +67,10 @@ export function BranchOverviewTab({ branch, stats }: BranchOverviewTabProps) {
           </div>
           <div className="card metric">
             <div className="metric-head">
-              <span>Semana (sáb–vie)</span>
+              <div>
+                <span>Semana (vie–jue)</span>
+                <Period>{periods.week}</Period>
+              </div>
               <div className="metric-icon">
                 <Receipt size={22} />
               </div>
@@ -68,7 +82,10 @@ export function BranchOverviewTab({ branch, stats }: BranchOverviewTabProps) {
           </div>
           <div className="card metric">
             <div className="metric-head">
-              <span>Mes</span>
+              <div>
+                <span>Mes</span>
+                <Period>{periods.month}</Period>
+              </div>
               <div className="metric-icon">
                 <Calculator size={22} />
               </div>
@@ -80,7 +97,10 @@ export function BranchOverviewTab({ branch, stats }: BranchOverviewTabProps) {
           </div>
           <div className="card metric">
             <div className="metric-head">
-              <span>Últimos 30 días</span>
+              <div>
+                <span>Últimos 30 días</span>
+                <Period>{periods.last30}</Period>
+              </div>
               <div className="metric-icon">
                 <Users size={22} />
               </div>

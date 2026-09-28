@@ -158,10 +158,34 @@ export const POS_SALE_STATUS = {
   VOIDED: "voided",
 } as const;
 
-/** Métodos de cobro en caja. v1 solo efectivo; el enum queda abierto para tarjeta/transferencia. */
+/**
+ * Métodos de cobro en caja. Tarjeta y transferencia son declarativos: el
+ * cajero dice cómo pagó el cliente y el ticket lo registra; no hay terminal ni
+ * conciliación bancaria conectadas. Con tarjeta o transferencia se cobra el
+ * total exacto (sin "pagó con" ni cambio).
+ */
 export const POS_PAYMENT_METHODS = {
   CASH: "cash",
+  CARD: "card",
+  TRANSFER: "transfer",
 } as const;
+
+export const POS_PAYMENT_METHOD_VALUES = [
+  POS_PAYMENT_METHODS.CASH,
+  POS_PAYMENT_METHODS.CARD,
+  POS_PAYMENT_METHODS.TRANSFER,
+] as const;
+
+/** Etiqueta que ve el cajero, el administrador y el cliente en el ticket. */
+export const POS_PAYMENT_METHOD_LABELS: Record<string, string> = {
+  [POS_PAYMENT_METHODS.CASH]: "Efectivo",
+  [POS_PAYMENT_METHODS.CARD]: "Tarjeta",
+  [POS_PAYMENT_METHODS.TRANSFER]: "Transferencia",
+};
+
+export function posPaymentMethodLabel(value: string | null | undefined): string {
+  return POS_PAYMENT_METHOD_LABELS[value ?? ""] ?? POS_PAYMENT_METHOD_LABELS[POS_PAYMENT_METHODS.CASH]!;
+}
 
 /**
  * Cómo se cobra una partida del ticket:
@@ -191,6 +215,11 @@ export const RESTOCK_ORIGIN = {
   SHORTAGE_MANUAL: "shortage_manual",
   /** Lo levantó una franquicia desde su portal. */
   FRANCHISE: "franchise",
+  /**
+   * Entrada de surtido capturada en la sucursal con el formato de fábrica, sin
+   * pedido previo (con el módulo de fábrica apagado, así entra el producto).
+   */
+  MANUAL_ENTRY: "manual_entry",
 } as const;
 
 export const RESTOCK_ORDER_STATUS = {
@@ -302,3 +331,11 @@ export type RestockOrderStatus =
   (typeof RESTOCK_ORDER_STATUS)[keyof typeof RESTOCK_ORDER_STATUS];
 export type RestockItemUnit = (typeof RESTOCK_ITEM_UNITS)[keyof typeof RESTOCK_ITEM_UNITS];
 export type TicketPaperWidth = (typeof TICKET_PAPER_WIDTHS)[number];
+
+/** Material del envase en que se vende una línea de líquido. */
+export const CONTAINER_MATERIALS = {
+  PET: "pet",
+  /** Líneas agresivas (quita sarro, desengrasantes, cloro, sosa, hipoclorito). */
+  POLYETHYLENE: "polietileno",
+} as const;
+export type ContainerMaterial = (typeof CONTAINER_MATERIALS)[keyof typeof CONTAINER_MATERIALS];

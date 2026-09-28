@@ -2,7 +2,8 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { Button, MenuItem, TextField } from "@mui/material";
-import { RefreshCw, Truck } from "lucide-react";
+import { FileDown, PackagePlus, RefreshCw, Truck } from "lucide-react";
+import Link from "next/link";
 import { BRANCH_TYPES, RESTOCK_ORDER_STATUS } from "@glamouroso/shared/constants";
 import { httpClient, getApiErrorMessage } from "@/services/http-client";
 import { usePermissions } from "@/lib/permissions";
@@ -11,7 +12,8 @@ import type { Branch, BranchShortage, ListResponse, RestockOrder } from "@/types
 import { toast } from "sonner";
 import { RestockOrderCard } from "../RestockOrderCard";
 import { FilterBar, FilterDateRange, FilterMeta, type DateRangeOption } from "../FilterBar";
-import { RESTOCK_STATUS_LABELS } from "../pos-labels";
+import { RESTOCK_STATUS_LABELS, packQtyLabel, packTotals } from "../pos-labels";
+import { useFactoryFormDownload } from "../useFactoryFormDownload";
 
 /** Aquí sí hay "Todo": el historial completo de la sucursal es lo normal. */
 const RANGES: DateRangeOption[] = [
@@ -32,6 +34,9 @@ export function BranchRestockTab({ branch }: { branch: Branch }) {
   const canCreate = can("posRestock", "create");
   const canUpdate = can("posRestock", "update");
   const isFranchise = branch.type === BRANCH_TYPES.FRANCHISE;
+  // Registrar la entrada sube inventario: pide surtido e inventario.
+  const canRegisterEntry = !isFranchise && canUpdate && can("posInventory", "update");
+  const entryHref = `/dashboard/pos/sucursales/${branch.id}/entrada`;
 
   const [status, setStatus] = useState("");
   /** Rango por fecha del pedido; vacío = sin filtrar. */
@@ -39,6 +44,7 @@ export function BranchRestockTab({ branch }: { branch: Branch }) {
   const [orders, setOrders] = useState<RestockOrder[]>([]);
   const [shortages, setShortages] = useState<BranchShortage[] | null>(null);
   const [loading, setLoading] = useState(false);
+  const { download: downloadForm, downloading: downloadingForm } = useFactoryFormDownload();
 
   const load = useCallback(async () => {
     if (!canRestock) return;
@@ -122,28 +128,54 @@ export function BranchRestockTab({ branch }: { branch: Branch }) {
     }
   }
 
-  const bidones = (shortages ?? []).filter((r) => r.unit === "bidon").reduce((s, r) => s + r.requestedQty, 0);
-  const piezas = (shortages ?? []).filter((r) => r.unit === "pieza").reduce((s, r) => s + r.requestedQty, 0);
+  const totals = packTotals(shortages ?? []);
 
   return (
     <div className="page-stack">
+      {canRegisterEntry ? (
+        <section className="panel p-5">
+          <div className="toolbar" style={{ marginBottom: 0 }}>
+            <div>
+              <h2 style={{ margin: 0 }}>Entrada de surtido</h2>
+              <p className="page-kicker" style={{ margin: 0 }}>
+                Cuando llega producto de fábrica, captura lo que llegó en la hoja de fábrica. Viene
+                precargada con el último pedido de la sucursal y se puede corregir o llenar.
+              </p>
+            </div>
+            <Button variant="contained" color="success" startIcon={<PackagePlus size={16} />} component={Link} href={entryHref}>
+              Registrar entrada de surtido
+            </Button>
+          </div>
+        </section>
+      ) : null}
       {!isFranchise ? (
         <section className="panel p-5">
           <div className="toolbar" style={{ marginBottom: 8 }}>
             <div>
               <h2 style={{ margin: 0 }}>Faltante de hoy</h2>
               <p className="page-kicker" style={{ margin: 0 }}>
-                Contra el stock mínimo de esta sucursal. Líquidos en bidones completos, redondeando por
-                mitad.
+                Contra el stock mínimo de esta sucursal: se pide en empaques completos cuando el
+                faltante alcanza el 30 % del mínimo.
               </p>
             </div>
             <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
               <span className="page-kicker" style={{ margin: 0 }}>
-                <strong style={{ color: "var(--glam-navy)" }}>{bidones}</strong> bidones ·{" "}
-                <strong style={{ color: "var(--glam-navy)" }}>{piezas}</strong> piezas
+                <strong style={{ color: "var(--glam-navy)" }}>{totals.bidones}</strong> bidones ·{" "}
+                <strong style={{ color: "var(--glam-navy)" }}>{totals.cajas}</strong> cajas ·{" "}
+                <strong style={{ color: "var(--glam-navy)" }}>{totals.piezas}</strong> piezas
               </span>
               <Button size="small" variant="outlined" startIcon={<RefreshCw size={14} />} onClick={() => void loadShortages()}>
                 Recalcular
+              </Button>
+              <Button
+                size="small"
+                variant="outlined"
+                startIcon={<FileDown size={14} />}
+                disabled={shortages === null || downloadingForm}
+                onClick={() => void downloadForm(`/pos/restock/branches/${branch.id}/shortages/form`)}
+                title="El formato de pedido a fábrica en PDF, con los faltantes ya puestos"
+              >
+                {downloadingForm ? "Generando..." : "Descargar formato"}
               </Button>
               {canCreate ? (
                 <Button
@@ -176,7 +208,7 @@ export function BranchRestockTab({ branch }: { branch: Branch }) {
                         <strong>{row.name}</strong>
                       </td>
                       <td style={{ textAlign: "right", fontWeight: 700, color: "var(--glam-navy)" }}>
-                        {row.requestedQty} {row.unit === "bidon" ? "bidones" : "piezas"}
+                        {packQtyLabel(row.requestedQty, row.unit, row.unitsPerPackage, row.packLabel)}
                       </td>
                       <td style={{ textAlign: "right", color: row.stock < 0 ? "#ef4444" : undefined }}>
                         {row.stock} {row.unit === "bidon" ? "L" : "pz"}
@@ -236,6 +268,7 @@ export function BranchRestockTab({ branch }: { branch: Branch }) {
           order={order}
           canUpdate={canUpdate}
           showBranch={false}
+          entryHref={canRegisterEntry ? `${entryHref}?order=${order.id}` : null}
           onApprove={(o) => void act(o, "approve")}
           onCancel={(o) => void act(o, "cancel")}
         />

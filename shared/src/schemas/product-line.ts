@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { paginationSchema } from "./common";
-import { BIDON_LITERS } from "../constants";
+import { BIDON_LITERS, CONTAINER_MATERIALS } from "../constants";
 
 /**
  * Línea de líquido. Los dos SKU son explícitos —no se deducen del nombre—
@@ -14,6 +14,7 @@ const productLinePayload = {
   bidonProductId: z.union([z.string().uuid(), z.null()]).optional(),
   literProductId: z.union([z.string().uuid(), z.null()]).optional(),
   litersPerBidon: z.coerce.number().positive().max(1000).default(BIDON_LITERS),
+  containerMaterial: z.enum([CONTAINER_MATERIALS.PET, CONTAINER_MATERIALS.POLYETHYLENE]).optional(),
 };
 
 export const createProductLineSchema = z.object(productLinePayload);
@@ -24,7 +25,16 @@ export const updateProductLineSchema = z.object({
   bidonProductId: productLinePayload.bidonProductId,
   literProductId: productLinePayload.literProductId,
   litersPerBidon: productLinePayload.litersPerBidon.optional(),
+  containerMaterial: productLinePayload.containerMaterial,
   isActive: z.boolean().optional(),
+});
+
+/** Regla de envase y tapa (material × litros) que edita el administrador. */
+export const upsertContainerRuleSchema = z.object({
+  material: z.enum([CONTAINER_MATERIALS.PET, CONTAINER_MATERIALS.POLYETHYLENE]),
+  liters: z.coerce.number().positive().max(1000),
+  containerProductId: z.union([z.string().uuid(), z.null()]),
+  capProductId: z.union([z.string().uuid(), z.null()]),
 });
 
 export const queryProductLineSchema = paginationSchema.extend({

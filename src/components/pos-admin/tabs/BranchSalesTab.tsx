@@ -2,9 +2,19 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { Button, Chip, Dialog, DialogActions, DialogContent, DialogTitle, Tooltip } from "@mui/material";
-import { CloudOff, TriangleAlert } from "lucide-react";
-import { POS_SALE_STATUS } from "@glamouroso/shared/constants";
+import {
+  Button,
+  Chip,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogTitle,
+  FormControlLabel,
+  Switch,
+  Tooltip,
+} from "@mui/material";
+import { CloudOff, PackageX, TriangleAlert } from "lucide-react";
+import { POS_PAYMENT_METHODS, POS_SALE_STATUS, posPaymentMethodLabel } from "@glamouroso/shared/constants";
 import { DetailField } from "@/components/ui/DetailField";
 import { httpClient, getApiErrorMessage } from "@/services/http-client";
 import { formatMoney, formatQuantity } from "@/lib/format-money";
@@ -27,6 +37,11 @@ const RANGES: DateRangeOption[] = [
   { key: "7d", label: "7 días", days: 6 },
   { key: "30d", label: "30 días", days: 29 },
 ];
+
+/** Alguna partida vendida no descontó envase ni tapa. */
+function hasContainerWarning(sale: PosSale): boolean {
+  return (sale.items ?? []).some((item) => Boolean(item.containerWarning));
+}
 
 interface DayGroup {
   day: string;
@@ -51,6 +66,7 @@ export function BranchSalesTab({ branchId }: { branchId: string }) {
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(false);
   const [selected, setSelected] = useState<PosSale | null>(null);
+  const [onlyContainerWarning, setOnlyContainerWarning] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -60,6 +76,7 @@ export function BranchSalesTab({ branchId }: { branchId: string }) {
         from,
         to,
         limit: 200,
+        ...(onlyContainerWarning ? { withContainerWarning: "true" } : {}),
       });
       setSales(result.items);
       setTotal(result.total);
@@ -68,7 +85,7 @@ export function BranchSalesTab({ branchId }: { branchId: string }) {
     } finally {
       setLoading(false);
     }
-  }, [branchId, from, to]);
+  }, [branchId, from, to, onlyContainerWarning]);
 
   useEffect(() => {
     void load();
@@ -126,6 +143,16 @@ export function BranchSalesTab({ branchId }: { branchId: string }) {
             setTo(range.to);
           }}
         />
+        <FormControlLabel
+          control={
+            <Switch
+              size="small"
+              checked={onlyContainerWarning}
+              onChange={(e) => setOnlyContainerWarning(e.target.checked)}
+            />
+          }
+          label="Solo con aviso de envase"
+        />
         <FilterMeta>
           <strong>{formatMoney(rangeTotal)}</strong> en {rangeTickets}{" "}
           {rangeTickets === 1 ? "ticket" : "tickets"}
@@ -154,6 +181,7 @@ export function BranchSalesTab({ branchId }: { branchId: string }) {
                   <th>Folio</th>
                   <th>Cajero</th>
                   <th>Cliente</th>
+                  <th style={{ width: 120 }}>Pago</th>
                   <th style={{ textAlign: "right", width: 110 }}>Productos</th>
                   <th style={{ textAlign: "right", width: 130 }}>Total</th>
                   <th style={{ width: 110 }}>Estado</th>
@@ -192,6 +220,18 @@ export function BranchSalesTab({ branchId }: { branchId: string }) {
                             </span>
                           </Tooltip>
                         ) : null}
+                        {hasContainerWarning(sale) ? (
+                          <Tooltip title="Alguna partida no descontó envase ni tapa (no hay envase configurado para ese tamaño)">
+                            <Chip
+                              icon={<PackageX size={12} />}
+                              label="Sin envase"
+                              size="small"
+                              color="warning"
+                              variant="outlined"
+                              sx={{ ml: 0.75, height: 20, verticalAlign: "middle" }}
+                            />
+                          </Tooltip>
+                        ) : null}
                       </td>
                       <td>{sale.cashier?.name ?? "—"}</td>
                       <td>
@@ -206,6 +246,7 @@ export function BranchSalesTab({ branchId }: { branchId: string }) {
                           <span className="pill-muted">Mostrador</span>
                         )}
                       </td>
+                      <td>{posPaymentMethodLabel(sale.paymentMethod)}</td>
                       <td style={{ textAlign: "right" }}>{formatQuantity(sale.itemsCount)}</td>
                       <td
                         style={{
@@ -248,10 +289,13 @@ export function BranchSalesTab({ branchId }: { branchId: string }) {
                 <DetailField label="Fecha y hora" value={formatDateTime(selected.soldAt)} />
                 <DetailField label="Cajero" value={selected.cashier?.name ?? "—"} />
                 <DetailField label="Cliente" value={selected.customer?.name ?? "Mostrador"} />
-                <DetailField
-                  label="Pagó con / cambio"
-                  value={`${formatMoney(selected.amountTendered)} / ${formatMoney(selected.changeAmount)}`}
-                />
+                <DetailField label="Forma de pago" value={posPaymentMethodLabel(selected.paymentMethod)} />
+                {selected.paymentMethod === POS_PAYMENT_METHODS.CASH ? (
+                  <DetailField
+                    label="Pagó con / cambio"
+                    value={`${formatMoney(selected.amountTendered)} / ${formatMoney(selected.changeAmount)}`}
+                  />
+                ) : null}
               </div>
               <table className="table">
                 <thead>
@@ -271,6 +315,11 @@ export function BranchSalesTab({ branchId }: { branchId: string }) {
                           <span className="page-kicker" style={{ margin: "0 0 0 6px", color: "#c62828" }}>
                             mayoreo
                           </span>
+                        ) : null}
+                        {item.containerWarning ? (
+                          <p className="page-kicker" style={{ margin: "2px 0 0", color: "#b45309" }}>
+                            {item.containerWarning}
+                          </p>
                         ) : null}
                       </td>
                       <td style={{ textAlign: "right" }}>

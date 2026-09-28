@@ -312,7 +312,7 @@ export const TICKET_CONTENT_LABELS: Array<{ field: keyof TicketDraft; label: str
   { field: "showCustomer", label: "Cliente", hint: "Nombre del cliente o el de mostrador." },
   { field: "showItemCodes", label: "Código del producto", hint: "El SKU antes del nombre de cada partida." },
   { field: "showBreakdown", label: "Desglose del granel", hint: "\"1 bidón × $178 + 5 L × $16\"." },
-  { field: "showPaymentDetail", label: "Pagó con y cambio", hint: "Útil para que el cliente verifique el cambio." },
+  { field: "showPaymentDetail", label: "Pagó con y cambio", hint: "Útil para que el cliente verifique el cambio. Con tarjeta o transferencia imprime la forma de pago." },
   { field: "showFolioBarcode", label: "Código de barras del folio", hint: "Para escanear el ticket en devoluciones." },
 ];
 

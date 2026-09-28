@@ -1,7 +1,7 @@
 "use client";
 
 import { Button, Chip } from "@mui/material";
-import { Check, Truck, X } from "lucide-react";
+import { Check, FileDown, PackagePlus, Truck, X } from "lucide-react";
 import Link from "next/link";
 import { RESTOCK_ORDER_STATUS, RESTOCK_ORIGIN } from "@glamouroso/shared/constants";
 import { formatMoney, formatQuantity } from "@/lib/format-money";
@@ -12,8 +12,10 @@ import {
   RESTOCK_STATUS_COLORS,
   RESTOCK_STATUS_LABELS,
   formatDateTime,
-  unitLabel,
+  packQtyLabel,
+  restockItemAmount,
 } from "./pos-labels";
+import { useFactoryFormDownload } from "./useFactoryFormDownload";
 
 interface RestockOrderCardProps {
   order: RestockOrder;
@@ -25,6 +27,11 @@ interface RestockOrderCardProps {
   showBranch?: boolean;
   /** Abre el detalle de la sucursal desde el módulo de fábrica. */
   linkBranch?: boolean;
+  /**
+   * Hoja de entrada de surtido precargada con este pedido. Solo se pinta en
+   * pedidos abiertos; quien la pasa ya revisó el permiso y que no sea franquicia.
+   */
+  entryHref?: string | null;
 }
 
 /**
@@ -39,16 +46,15 @@ export function RestockOrderCard({
   onCancel,
   showBranch = true,
   linkBranch = false,
+  entryHref = null,
 }: RestockOrderCardProps) {
+  const { download: downloadForm, downloading: downloadingForm } = useFactoryFormDownload();
   const isFranchise = order.origin === RESTOCK_ORIGIN.FRANCHISE;
   const isSentOrReceived =
     order.status === RESTOCK_ORDER_STATUS.SENT || order.status === RESTOCK_ORDER_STATUS.RECEIVED;
   const items = order.items ?? [];
   const totalFrozen = isFranchise
-    ? items.reduce(
-        (sum, item) => sum + Number(item.unitPrice ?? 0) * Number(item.requestedQty ?? 0),
-        0
-      )
+    ? items.reduce((sum, item) => sum + restockItemAmount(item, item.requestedQty), 0)
     : null;
   const branchHref = order.branch
     ? `${
@@ -102,21 +108,49 @@ export function RestockOrderCard({
             </span>
           ) : null}
         </div>
-        {canUpdate && order.status === RESTOCK_ORDER_STATUS.PENDING ? (
-          <div style={{ display: "flex", gap: 8 }}>
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+          <Button
+            size="small"
+            variant="outlined"
+            startIcon={<FileDown size={14} />}
+            disabled={downloadingForm}
+            onClick={() => void downloadForm(`/pos/restock/orders/${order.id}/form`)}
+            title="El formato de pedido a fábrica en PDF, con las partidas de este pedido"
+          >
+            {downloadingForm ? "Generando..." : "Descargar formato"}
+          </Button>
+          {entryHref &&
+          (order.status === RESTOCK_ORDER_STATUS.PENDING ||
+            order.status === RESTOCK_ORDER_STATUS.APPROVED ||
+            order.status === RESTOCK_ORDER_STATUS.PREPARING) ? (
             <Button
               size="small"
               variant="contained"
-              startIcon={<Check size={14} />}
-              onClick={() => onApprove?.(order)}
+              color="success"
+              startIcon={<PackagePlus size={14} />}
+              component={Link}
+              href={entryHref}
+              title="Captura lo que llegó con la hoja de fábrica precargada con este pedido"
             >
-              Aprobar
+              Registrar entrada
             </Button>
-            <Button size="small" color="error" startIcon={<X size={14} />} onClick={() => onCancel?.(order)}>
-              Cancelar
-            </Button>
-          </div>
-        ) : null}
+          ) : null}
+          {canUpdate && order.status === RESTOCK_ORDER_STATUS.PENDING ? (
+            <>
+              <Button
+                size="small"
+                variant="contained"
+                startIcon={<Check size={14} />}
+                onClick={() => onApprove?.(order)}
+              >
+                Aprobar
+              </Button>
+              <Button size="small" color="error" startIcon={<X size={14} />} onClick={() => onCancel?.(order)}>
+                Cancelar
+              </Button>
+            </>
+          ) : null}
+        </div>
       </div>
 
       {order.notes ? (
@@ -157,7 +191,7 @@ export function RestockOrderCard({
                     ) : null}
                   </td>
                   <td style={{ textAlign: "right" }}>
-                    {formatQuantity(requested)} {unitLabel(requested, item.unit)}
+                    {packQtyLabel(requested, item.unit, item.unitsPerPackage)}
                   </td>
                   <td style={{ textAlign: "right", color: short ? "#92400e" : undefined, fontWeight: short ? 700 : 400 }}>
                     {dispatched == null ? "—" : formatQuantity(dispatched)}

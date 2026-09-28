@@ -620,6 +620,33 @@
   cursor: not-allowed;
 }
 
+.pos-method-key {
+  font-size: 11px;
+  font-weight: 600;
+  opacity: 0.7;
+}
+
+/* Tarjeta o transferencia: no hay "pagó con" ni cambio, solo el total exacto. */
+.pos-method-hint {
+  margin-top: 8px;
+  padding: 14px 16px;
+  border: 2px dashed var(--glam-blue);
+  border-radius: 12px;
+  background: var(--soft-blue);
+}
+
+.pos-method-hint .value {
+  font-size: 34px;
+  font-weight: 800;
+  color: var(--glam-navy);
+}
+
+.pos-method-hint p {
+  margin: 6px 0 0;
+  font-size: 13px;
+  color: var(--muted);
+}
+
 /* Overlay de éxito: el cambio a entregar, grande y por un momento. */
 .pos-success {
   position: fixed;
@@ -646,4 +673,93 @@
   .pos-total-value {
     font-size: 34px;
   }
+}
+
+/* Sugerencias bajo el campo de código (a partir de 3 letras) */
+.pos-code-wrap {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+  display: flex;
+}
+
+.pos-suggestions {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  right: 0;
+  z-index: 40;
+  margin: 0;
+  padding: 6px;
+  list-style: none;
+  background: #fff;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  box-shadow: 0 12px 32px rgba(15, 23, 42, 0.16);
+  max-height: 380px;
+  overflow-y: auto;
+}
+
+.pos-suggestion {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 9px 12px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 15px;
+}
+
+.pos-suggestion:hover,
+.pos-suggestion.is-active {
+  background: #e0f2fe;
+}
+
+.pos-suggestion-code {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  flex: 0 0 110px;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: var(--glam-blue);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.pos-suggestion-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text);
+}
+
+.pos-suggestion-name small {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.pos-suggestion-price {
+  flex: 0 0 auto;
+  font-weight: 700;
+  color: var(--glam-navy);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Cantidad + unidad ("18 L") siempre en un solo renglón */
+.pos-qty-cell {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 6px;
+  white-space: nowrap;
+}
+
+.pos-qty-unit {
+  font-weight: 600;
+  color: var(--muted);
 }

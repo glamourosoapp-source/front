@@ -8,6 +8,7 @@ import type {
 } from "@glamouroso/shared/pos-sync";
 import { POS_SYNC_STATUSES } from "@glamouroso/shared/pos-sync";
 import type { PosCatalog } from "@/types";
+import { toast } from "sonner";
 import {
   dequeue,
   localSales,
@@ -235,6 +236,14 @@ class PosSyncEngine {
         // taparía las ventas que vienen detrás.
         done.push(entry.id);
         continue;
+      }
+      // La venta se aplicó pero alguna partida no descontó envase (no hay
+      // envase configurado para ese tamaño): que el cajero lo sepa.
+      if (result.containerWarnings?.length) {
+        toast.warning(
+          `Ticket ${sale?.ticketNumber ?? ""}: ${result.containerWarnings.join(" ")}`.trim(),
+          { duration: 8000 }
+        );
       }
       done.push(entry.id);
     }

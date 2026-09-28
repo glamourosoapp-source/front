@@ -1,6 +1,11 @@
 "use client";
 
-import { POS_SALE_UNITS, POS_SALE_STATUS } from "@glamouroso/shared/constants";
+import {
+  POS_PAYMENT_METHODS,
+  POS_SALE_UNITS,
+  POS_SALE_STATUS,
+  type PosPaymentMethod,
+} from "@glamouroso/shared/constants";
 import type { PosSyncEvent, PosSaleEventPayload } from "@glamouroso/shared/pos-sync";
 import { POS_SYNC_EVENT_TYPES } from "@glamouroso/shared/pos-sync";
 import type { PosSale, PosSession } from "@/types";
@@ -23,6 +28,8 @@ export interface BuildSaleInput {
   subtotal: number;
   discount: number;
   total: number;
+  paymentMethod: PosPaymentMethod;
+  /** Lo que entregó el cliente; con tarjeta o transferencia se ignora (es el total). */
   amountTendered: number;
   itemsCount: number;
   notes: string | null;
@@ -41,6 +48,22 @@ function round2(value: number): number {
 }
 
 /**
+ * Lo pagado y el cambio según el método: solo el efectivo puede sobrar. Con
+ * tarjeta o transferencia el ticket dice el total exacto y cambio cero, igual
+ * que lo normaliza el servidor.
+ */
+export function settlePayment(input: Pick<BuildSaleInput, "paymentMethod" | "amountTendered" | "total">): {
+  amountTendered: number;
+  changeAmount: number;
+} {
+  if (input.paymentMethod !== POS_PAYMENT_METHODS.CASH) {
+    return { amountTendered: round2(input.total), changeAmount: 0 };
+  }
+  const amountTendered = round2(input.amountTendered);
+  return { amountTendered, changeAmount: round2(amountTendered - input.total) };
+}
+
+/**
  * El ticket tal como se imprime y se guarda en la PC.
  *
  * Tiene la forma de un `PosSale` del servidor a propósito: la hoja térmica, el
@@ -48,7 +71,7 @@ function round2(value: number): number {
  * ella. Un ticket offline no es un ticket de segunda.
  */
 export function buildLocalSale(input: BuildSaleInput, eventId: string): LocalSale {
-  const change = round2(input.amountTendered - input.total);
+  const { amountTendered, changeAmount: change } = settlePayment(input);
   const sale: PosSale = {
     id: eventId,
     branchId: input.session?.branch.id ?? "",
@@ -64,8 +87,8 @@ export function buildLocalSale(input: BuildSaleInput, eventId: string): LocalSal
     subtotal: input.subtotal,
     discount: input.discount,
     total: input.total,
-    paymentMethod: "cash",
-    amountTendered: input.amountTendered,
+    paymentMethod: input.paymentMethod,
+    amountTendered,
     changeAmount: change,
     itemsCount: input.itemsCount,
     notes: input.notes,
@@ -101,7 +124,8 @@ export function buildLocalSale(input: BuildSaleInput, eventId: string): LocalSal
     ticketNumber: input.ticketNumber,
     soldAt: sale.soldAt,
     total: input.total,
-    amountTendered: input.amountTendered,
+    paymentMethod: input.paymentMethod,
+    amountTendered,
     changeAmount: change,
     itemsCount: input.itemsCount,
     customerName: input.customerName,
@@ -116,6 +140,7 @@ export function buildLocalSale(input: BuildSaleInput, eventId: string): LocalSal
 
 /** El evento que sube: lleva los precios con los que se cobró, no los de hoy. */
 export function buildSaleEvent(input: BuildSaleInput, eventId: string): PosSyncEvent {
+  const settled = settlePayment(input);
   const payload: PosSaleEventPayload = {
     ticketNumber: input.ticketNumber,
     soldAt: input.soldAt.toISOString(),
@@ -149,9 +174,9 @@ export function buildSaleEvent(input: BuildSaleInput, eventId: string): PosSyncE
     subtotal: input.subtotal,
     discount: input.discount,
     total: input.total,
-    paymentMethod: "cash",
-    amountTendered: input.amountTendered,
-    changeAmount: round2(input.amountTendered - input.total),
+    paymentMethod: input.paymentMethod,
+    amountTendered: settled.amountTendered,
+    changeAmount: settled.changeAmount,
     notes: input.notes,
     catalogVersion: input.catalogVersion,
     recordedOffline: input.recordedOffline,

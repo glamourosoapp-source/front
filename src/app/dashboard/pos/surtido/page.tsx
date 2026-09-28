@@ -8,6 +8,8 @@ import { formatQuantity } from "@/lib/format-money";
 import { usePermissions } from "@/lib/permissions";
 import { FilterBar, FilterDivider, FilterMeta } from "@/components/pos-admin/FilterBar";
 import { RestockOrderCard } from "@/components/pos-admin/RestockOrderCard";
+import { packQtyLabel, packTotals, unitLabel } from "@/components/pos-admin/pos-labels";
+import { useFactoryFormDownload } from "@/components/pos-admin/useFactoryFormDownload";
 import { RESTOCK_ORDER_STATUS, RESTOCK_ORIGIN } from "@glamouroso/shared/constants";
 import { Branch, BranchShortage, ListResponse, RestockOrder } from "@/types";
 import { toast } from "sonner";
@@ -24,6 +26,9 @@ export default function PosSurtidoPage() {
   const [shortages, setShortages] = useState<BranchShortage[]>([]);
   const [orders, setOrders] = useState<RestockOrder[]>([]);
   const [loading, setLoading] = useState(false);
+  /** Sucursal cuyo faltante ya se calculó: hasta entonces no hay formato que bajar. */
+  const [calculatedFor, setCalculatedFor] = useState<string | null>(null);
+  const { download: downloadForm, downloading: downloadingForm } = useFactoryFormDownload();
 
   useEffect(() => {
     if (!canView) return;
@@ -46,6 +51,7 @@ export default function PosSurtidoPage() {
       setShortages(
         await httpClient.get<BranchShortage[]>(`/pos/restock/branches/${branchId}/shortages`)
       );
+      setCalculatedFor(branchId);
     } catch (error) {
       toast.error(getApiErrorMessage(error, "Error al calcular los faltantes"));
     } finally {
@@ -77,13 +83,7 @@ export default function PosSurtidoPage() {
     else void loadOrders();
   }, [canView, tab, loadShortages, loadOrders]);
 
-  const totals = useMemo(
-    () => ({
-      bidones: shortages.filter((row) => row.unit === "bidon").reduce((sum, row) => sum + row.requestedQty, 0),
-      piezas: shortages.filter((row) => row.unit === "pieza").reduce((sum, row) => sum + row.requestedQty, 0),
-    }),
-    [shortages]
-  );
+  const totals = useMemo(() => packTotals(shortages), [shortages]);
 
   if (!canView) {
     return (
@@ -137,8 +137,13 @@ export default function PosSurtidoPage() {
   function exportShortagesCsv() {
     const branch = branches.find((b) => b.id === branchId);
     const rows = [
-      ["Producto", "Faltante", "Unidad"],
-      ...shortages.map((row) => [row.name, String(row.requestedQty), row.unit === "bidon" ? "bidones" : "piezas"]),
+      ["Producto", "Faltante", "Unidad", "Piezas por empaque"],
+      ...shortages.map((row) => [
+        row.name,
+        String(row.requestedQty),
+        unitLabel(row.requestedQty, row.unit, row.packLabel),
+        row.unit === "bidon" ? "" : String(Number(row.unitsPerPackage ?? 1) || 1),
+      ]),
     ];
     const csv = rows.map((row) => row.map((cell) => `"${cell.replace(/"/g, '""')}"`).join(",")).join("\n");
     const blob = new Blob([`﻿${csv}`], { type: "text/csv;charset=utf-8" });
@@ -156,9 +161,9 @@ export default function PosSurtidoPage() {
         <div>
           <h1 className="page-title">Faltantes y surtido</h1>
           <p className="page-kicker">
-            El faltante sale del stock mínimo de cada sucursal. Los líquidos se piden en bidones
-            completos, redondeando por mitad. Los pedidos de las franquicias tienen su propio
-            módulo.
+            El faltante sale del stock mínimo de cada sucursal y se pide en empaques completos
+            (bidones, garrafas, cajas) cuando alcanza el 30 % del mínimo. Los pedidos de las
+            franquicias tienen su propio módulo.
           </p>
         </div>
       </div>
@@ -215,6 +220,16 @@ export default function PosSurtidoPage() {
             >
               Imprimir
             </Button>
+            <Button
+              variant="outlined"
+              startIcon={<FileDown size={16} />}
+              onClick={() => void downloadForm(`/pos/restock/branches/${branchId}/shortages/form`)}
+              disabled={!branchId || calculatedFor !== branchId || downloadingForm}
+              sx={{ height: 40, whiteSpace: "nowrap" }}
+              title="El formato de pedido a fábrica en PDF, con los faltantes ya puestos"
+            >
+              {downloadingForm ? "Generando..." : "Descargar formato"}
+            </Button>
             {canCreate ? (
               <Button
                 variant="contained"
@@ -227,7 +242,8 @@ export default function PosSurtidoPage() {
               </Button>
             ) : null}
             <FilterMeta>
-              <strong>{totals.bidones}</strong> bidones · <strong>{totals.piezas}</strong> piezas
+              <strong>{totals.bidones}</strong> bidones · <strong>{totals.cajas}</strong> cajas ·{" "}
+              <strong>{totals.piezas}</strong> piezas
             </FilterMeta>
           </FilterBar>
 
@@ -248,7 +264,7 @@ export default function PosSurtidoPage() {
                       <strong>{row.name}</strong>
                     </td>
                     <td style={{ textAlign: "right", fontWeight: 700, color: "var(--glam-navy)" }}>
-                      {row.requestedQty} {row.unit === "bidon" ? "bidones" : "piezas"}
+                      {packQtyLabel(row.requestedQty, row.unit, row.unitsPerPackage, row.packLabel)}
                     </td>
                     <td
                       style={{
@@ -285,6 +301,11 @@ export default function PosSurtidoPage() {
               order={order}
               canUpdate={canUpdate}
               linkBranch
+              entryHref={
+                canUpdate && can("posInventory", "update") && order.branch && order.branch.type !== "franchise"
+                  ? `/dashboard/pos/sucursales/${order.branch.id}/entrada?order=${order.id}`
+                  : null
+              }
               onApprove={(o) => void act(o, "approve")}
               onCancel={(o) => void act(o, "cancel")}
             />

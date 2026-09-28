@@ -17,6 +17,7 @@ import {
 import {
   AlertTriangle,
   Droplets,
+  FileDown,
   LogOut,
   Minus,
   Package,
@@ -29,6 +30,8 @@ import {
 import { httpClient, getApiErrorMessage } from "@/services/http-client";
 import { useAuthStore } from "@/stores/auth.store";
 import { formatMoney, formatQuantity } from "@/lib/format-money";
+import { packUnitLabel, restockItemAmount } from "@/components/pos-admin/pos-labels";
+import { useFactoryFormDownload } from "@/components/pos-admin/useFactoryFormDownload";
 import { RESTOCK_ORDER_STATUS } from "@glamouroso/shared/constants";
 import { ListResponse, RestockOrder } from "@/types";
 import { toast } from "sonner";
@@ -177,6 +180,7 @@ export default function FranchisePortalPage() {
   const [confirming, setConfirming] = useState(false);
   /** Solo cuenta en la versión de una columna: ahí el carrito es una hoja. */
   const [cartOpen, setCartOpen] = useState(false);
+  const { download: downloadForm, isDownloading } = useFactoryFormDownload();
 
   // El carrito guardado se lee tras montar, no en el estado inicial: en el
   // primer render del cliente tiene que coincidir con el del servidor.
@@ -325,7 +329,9 @@ export default function FranchisePortalPage() {
     const missing: string[] = [];
 
     for (const item of order.items ?? []) {
-      const quantity = Math.max(1, Math.round(Number(item.requestedQty) || 0));
+      // El carrito va en piezas: una caja × 24 del historial vuelve como 24 piezas.
+      const perPack = item.unit === "paquete" ? Number(item.unitsPerPackage ?? 1) || 1 : 1;
+      const quantity = Math.max(1, Math.round((Number(item.requestedQty) || 0) * perPack));
       const line = item.lineId ? lineById.get(item.lineId) : undefined;
       const product = item.productId ? productById.get(item.productId) : undefined;
       if (line) next.push({ ...cartEntryForLine(line), quantity });
@@ -704,19 +710,29 @@ export default function FranchisePortalPage() {
                       {(order.items ?? []).length} partidas
                     </span>
                   </div>
-                  <Button
-                    size="small"
-                    startIcon={<RotateCcw size={15} />}
-                    onClick={() => repeatOrder(order)}
-                  >
-                    Repetir este pedido
-                  </Button>
+                  <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
+                    <Button
+                      size="small"
+                      startIcon={<FileDown size={15} />}
+                      disabled={isDownloading(order.id)}
+                      onClick={() => void downloadForm(`/franchise/orders/${order.id}/form`, order.id)}
+                    >
+                      {isDownloading(order.id) ? "Generando..." : "Descargar formato"}
+                    </Button>
+                    <Button
+                      size="small"
+                      startIcon={<RotateCcw size={15} />}
+                      onClick={() => repeatOrder(order)}
+                    >
+                      Repetir este pedido
+                    </Button>
+                  </div>
                 </div>
                 <div>
                   {(order.items ?? []).map((item) => {
                     const pedido = Number(item.requestedQty);
-                    const unidad = (qty: number) =>
-                      item.unit === "bidon" ? pluralize(qty, "bidón", "bidones") : "pz";
+                    // "2 cajas × 24": la franquicia pide empaques y ve cuántas piezas traen.
+                    const unidad = (qty: number) => packUnitLabel(qty, item.unit, item.unitsPerPackage);
                     /*
                      * `dispatchedQty` en null significa "fábrica no capturó
                      * nada": mientras el pedido no se envía no hay diferencia
@@ -741,7 +757,8 @@ export default function FranchisePortalPage() {
                             )}
                           </span>
                           <span className="fr-order-price">
-                            {item.unitPrice ? formatMoney(item.unitPrice) : "—"}
+                            {/* Importe de la partida: precio por pieza × piezas (cajas × su contenido). */}
+                            {item.unitPrice ? formatMoney(restockItemAmount(item, enviado ?? pedido)) : "—"}
                           </span>
                         </div>
                         {short ? (

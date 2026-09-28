@@ -1,8 +1,9 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import Link from "next/link";
 import { Button, Chip, Dialog, DialogActions, DialogContent, DialogTitle, Tab, Tabs, TextField } from "@mui/material";
-import { AlertTriangle, Check, Droplets, History, Package, Pencil, X } from "lucide-react";
+import { AlertTriangle, Check, ClipboardList, Droplets, History, Package, Pencil, X } from "lucide-react";
 import { httpClient, getApiErrorMessage } from "@/services/http-client";
 import { useDebounce } from "@/hooks/useDebounce";
 import { formatQuantity } from "@/lib/format-money";
@@ -179,10 +180,21 @@ export function BranchInventoryTab({ branchId }: { branchId: string }) {
 
   return (
     <div className="page-stack">
-      <p className="page-kicker" style={{ margin: 0 }}>
-        Los líquidos se llevan en litros por línea; el resto por pieza.{" "}
-        {canEdit ? "Da clic en el lápiz para cambiar el mínimo de esta sucursal." : ""}
-      </p>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+        <p className="page-kicker" style={{ margin: 0 }}>
+          Los líquidos se llevan en litros por línea; el resto por pieza.{" "}
+          {canEdit ? "Da clic en el lápiz para cambiar el mínimo de esta sucursal." : ""}
+        </p>
+        {/* Los mínimos se capturan de corrido en el orden de la hoja de pedido a fábrica. */}
+        <Button
+          variant="outlined"
+          startIcon={<ClipboardList size={16} />}
+          component={Link}
+          href={`/dashboard/pos/sucursales/${branchId}/minimos`}
+        >
+          Capturar mínimos en el formato
+        </Button>
+      </div>
 
       <FilterBar>
         <FilterSearch

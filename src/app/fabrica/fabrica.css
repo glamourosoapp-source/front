@@ -132,6 +132,28 @@
   cursor: not-allowed;
 }
 
+/* Descargar el formato de pedido: mismo tamaño que enviar, pero secundario. */
+.factory-download {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  height: 52px;
+  padding: 0 20px;
+  border: 2px solid var(--glam-navy);
+  border-radius: 10px;
+  background: #fff;
+  color: var(--glam-navy);
+  font-size: 17px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.factory-download:disabled {
+  border-color: #cbd5e1;
+  color: #94a3b8;
+  cursor: wait;
+}
+
 /*
  * Columna centrada y no `text-align` a secas: el icono es un `<svg>` que el
  * reset global pone en `display: block`, así que con solo alinear texto se iba

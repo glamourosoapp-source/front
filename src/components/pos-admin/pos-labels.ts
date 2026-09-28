@@ -1,5 +1,6 @@
 import { BRANCH_TYPES, RESTOCK_ORDER_STATUS, RESTOCK_ORIGIN } from "@glamouroso/shared/constants";
 import type { BranchHealthLevel } from "@glamouroso/shared";
+import { formatQuantity } from "@/lib/format-money";
 
 /** Etiquetas y colores compartidos por las pantallas del POS en el panel. */
 
@@ -30,6 +31,7 @@ export const RESTOCK_ORIGIN_LABELS: Record<string, string> = {
   [RESTOCK_ORIGIN.SHORTAGE_AUTO]: "Corte automático",
   [RESTOCK_ORIGIN.SHORTAGE_MANUAL]: "Manual",
   [RESTOCK_ORIGIN.FRANCHISE]: "Franquicia",
+  [RESTOCK_ORIGIN.MANUAL_ENTRY]: "Entrada en sucursal",
 };
 
 export const HEALTH_COLORS: Record<BranchHealthLevel, string> = {
@@ -138,15 +140,117 @@ export function shiftDateOnly(dateOnly: string, days: number): string {
   return date.toISOString().slice(0, 10);
 }
 
-/** Sábado de la semana de negocio que contiene la fecha (la semana va sáb→vie). */
-export function businessWeekStart(dateOnly: string): string {
+/**
+ * Viernes de la semana del punto de venta que contiene la fecha. En el POS la
+ * semana va de **viernes a jueves** (el pedido a fábrica sale el jueves); los
+ * pedidos del CRM usan otra, de sábado a viernes. Misma regla que
+ * `posWeekStart` en `Back/src/utils/business-week.util.ts`: las claves de
+ * semana que manda el Back deben coincidir con las que arma el cliente.
+ */
+export function posWeekStart(dateOnly: string): string {
   const date = new Date(`${dateOnly}T00:00:00Z`);
-  const diff = (date.getUTCDay() + 1) % 7;
+  const diff = (date.getUTCDay() + 2) % 7;
   date.setUTCDate(date.getUTCDate() - diff);
   return date.toISOString().slice(0, 10);
 }
 
-export function unitLabel(quantity: number, unit: string): string {
-  if (unit === "bidon") return quantity === 1 ? "bidón" : "bidones";
-  return quantity === 1 ? "pieza" : "piezas";
+const PACK_PLURALS: Record<string, string> = {
+  bidón: "bidones",
+  garrafa: "garrafas",
+  caja: "cajas",
+  bolsa: "bolsas",
+  paquete: "paquetes",
+  pieza: "piezas",
+};
+
+/**
+ * Nombre del empaque de una partida o faltante: "bidón"/"bidones",
+ * "caja"/"cajas", "pieza"/"piezas". Si el Back manda `packLabel` (bidón,
+ * garrafa, caja, bolsa…) se usa ese; si no, sale de `unit`.
+ */
+export function unitLabel(quantity: number, unit: string, packLabel?: string | null): string {
+  const singular =
+    packLabel?.trim().toLowerCase() || (unit === "bidon" ? "bidón" : unit === "paquete" ? "caja" : "pieza");
+  const plural =
+    PACK_PLURALS[singular] ?? (singular.endsWith("ón") ? `${singular.slice(0, -2)}ones` : `${singular}s`);
+  return quantity === 1 ? singular : plural;
+}
+
+/** "cajas × 24", "bidones", "pieza": el empaque y, si trae más de una pieza, cuántas. */
+export function packUnitLabel(
+  quantity: number,
+  unit: string,
+  unitsPerPackage?: string | number | null,
+  packLabel?: string | null
+): string {
+  const perPack = Number(unitsPerPackage ?? 0);
+  const label = unitLabel(quantity, unit, packLabel);
+  return unit !== "bidon" && perPack > 1 ? `${label} × ${formatQuantity(perPack)}` : label;
+}
+
+/** "2 cajas × 24", "3 bidones", "5 piezas": la cantidad con su empaque y las piezas que trae. */
+export function packQtyLabel(
+  quantity: number,
+  unit: string,
+  unitsPerPackage?: string | number | null,
+  packLabel?: string | null
+): string {
+  return `${formatQuantity(quantity)} ${packUnitLabel(quantity, unit, unitsPerPackage, packLabel)}`;
+}
+
+/**
+ * Importe de una partida de franquicia: el precio de mayoreo congelado es POR
+ * PIEZA (o por bidón), y la cantidad son empaques, así que una caja × 24 vale
+ * `qty × 24 × precio`. `quantity` permite valuar lo despachado en vez de lo pedido.
+ */
+export function restockItemAmount(
+  item: { unit: string; unitPrice?: string | number | null; unitsPerPackage?: string | number | null },
+  quantity: string | number | null | undefined
+): number {
+  const perPack = item.unit === "bidon" ? 1 : Number(item.unitsPerPackage ?? 1) || 1;
+  return Number(item.unitPrice ?? 0) * Number(quantity ?? 0) * perPack;
+}
+
+/** Totales de una lista de faltantes por tipo de empaque, para la barra "X bidones · Y cajas · Z piezas". */
+export function packTotals(rows: Array<{ unit: string; requestedQty: number }>): {
+  bidones: number;
+  cajas: number;
+  piezas: number;
+} {
+  const totals = { bidones: 0, cajas: 0, piezas: 0 };
+  for (const row of rows) {
+    if (row.unit === "bidon") totals.bidones += row.requestedQty;
+    else if (row.unit === "paquete") totals.cajas += row.requestedQty;
+    else totals.piezas += row.requestedQty;
+  }
+  return totals;
+}
+
+const MONTHS_SHORT = ["ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "oct", "nov", "dic"];
+const MONTHS_LONG = [
+  "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio",
+  "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre",
+];
+
+/** "18 sep – 24 sep" (o "28 ago – 3 sep"); el año solo si cambia entre extremos. */
+export function formatDateOnlyRange(from: string, to: string): string {
+  const part = (d: string, withYear: boolean) =>
+    `${Number(d.slice(8, 10))} ${MONTHS_SHORT[Number(d.slice(5, 7)) - 1]}${withYear ? ` ${d.slice(0, 4)}` : ""}`;
+  const crossYear = from.slice(0, 4) !== to.slice(0, 4);
+  return `${part(from, crossYear)} – ${part(to, crossYear)}`;
+}
+
+/**
+ * Qué fechas abarca cada tarjeta del resumen de ventas. Mismos periodos que
+ * `branch-overview.service.ts` en el Back: semana vie–jue, mes calendario y
+ * últimos 30 días contando hoy.
+ */
+export function salesPeriodLabels(today: string = todayInMexico()) {
+  const weekStart = posWeekStart(today);
+  return {
+    today: formatBusinessDayLong(today).replace(/ de \d{4}$/, ""),
+    week: formatDateOnlyRange(weekStart, shiftDateOnly(weekStart, 6)),
+    month: `${MONTHS_LONG[Number(today.slice(5, 7)) - 1]} ${today.slice(0, 4)}`,
+    last30: formatDateOnlyRange(shiftDateOnly(today, -29), today),
+  };
 }

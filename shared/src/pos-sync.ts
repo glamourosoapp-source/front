@@ -1,4 +1,4 @@
-import type { PosSaleUnit, PricingTier } from "./constants";
+import type { PosPaymentMethod, PosSaleUnit, PricingTier } from "./constants";
 
 /**
  * Contrato de la caja *local-first*: todo lo que ocurre en el mostrador es un
@@ -73,7 +73,8 @@ export interface PosSaleEventPayload {
   subtotal: number;
   discount: number;
   total: number;
-  paymentMethod: string;
+  /** Con tarjeta o transferencia, `amountTendered` = total y `changeAmount` = 0. */
+  paymentMethod: PosPaymentMethod;
   amountTendered: number;
   changeAmount: number;
   notes?: string | null;
@@ -141,6 +142,8 @@ export interface PosSyncEventResult {
   message?: string | null;
   /** El servidor cotizó distinto a lo que se cobró (se guarda lo cobrado). */
   priceMismatch?: boolean;
+  /** Partidas que NO descontaron envase (p. ej. polietileno de 2 L sin regla); la caja lo avisa. */
+  containerWarnings?: string[];
 }
 
 export interface PosSyncRequest {

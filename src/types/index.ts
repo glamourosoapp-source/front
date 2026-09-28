@@ -14,6 +14,7 @@ export type {
   // Punto de venta
   Branch,
   ProductLine,
+  PosContainerRule,
   BranchInventoryRow,
   InventoryMovement,
   PosSale,

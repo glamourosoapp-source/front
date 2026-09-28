@@ -1,3 +1,4 @@
+import { config } from "@/config";
 import {
   Megaphone,
   MessageCircle,
@@ -38,8 +39,8 @@ export function hrefForNotification(n: Notification): string {
   }
   if (n.entityType === NOTIFICATION_ENTITY_TYPES.RESTOCK_ORDER) {
     // Fábrica lista todos los pedidos de surtido (sucursales y franquicias)
-    // y es donde se aprueban.
-    return "/dashboard/fabrica";
+    // y es donde se aprueban; con el módulo apagado, Faltantes y surtido.
+    return config.factoryModuleEnabled ? "/dashboard/fabrica" : "/dashboard/pos/surtido";
   }
   if (n.entityType === NOTIFICATION_ENTITY_TYPES.CONVERSATION) {
     // entityId ES el conversationId: abrir esa conversación, no el inbox genérico.

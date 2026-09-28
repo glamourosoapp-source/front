@@ -3,68 +3,109 @@
 import { useEffect, useMemo, useState } from "react";
 import { Button, Dialog, DialogContent, DialogTitle, TextField } from "@mui/material";
 import { Printer, Receipt, StickyNote, X } from "lucide-react";
+import { POS_PAYMENT_METHODS, type PosPaymentMethod } from "@glamouroso/shared/constants";
 import { formatMoney } from "@/lib/format-money";
 import { usePosShortcuts } from "@/hooks/usePosShortcuts";
+
+export interface PosChargeParams {
+  paymentMethod: PosPaymentMethod;
+  /** Con tarjeta o transferencia es el total exacto. */
+  amountTendered: number;
+  print: boolean;
+  notes: string;
+}
 
 interface PosChargeDialogProps {
   open: boolean;
   total: number;
-  itemsCount: number;
+  /** Partidas del ticket (no unidades): 3 productos aunque uno sean 18 litros. */
+  linesCount: number;
   customerName: string;
   /** Billetes sugeridos, como los de eleventa. */
   onClose: () => void;
-  onCharge: (params: { amountTendered: number; print: boolean; notes: string }) => void;
+  onCharge: (params: PosChargeParams) => void;
   charging: boolean;
   printerReady: boolean;
 }
 
 const BILLS = [50, 100, 200, 500, 1000];
 
+/** Método, tecla y qué le decimos al cajero cuando lo elige. */
+const METHODS: Array<{
+  value: PosPaymentMethod;
+  label: string;
+  key: "F5" | "F6" | "F7";
+  hint: string | null;
+}> = [
+  { value: POS_PAYMENT_METHODS.CASH, label: "Efectivo", key: "F5", hint: null },
+  {
+    value: POS_PAYMENT_METHODS.CARD,
+    label: "Tarjeta",
+    key: "F6",
+    hint: "Cobra el total exacto en la terminal y, cuando el voucher salga aprobado, confirma aquí.",
+  },
+  {
+    value: POS_PAYMENT_METHODS.TRANSFER,
+    label: "Transferencia",
+    key: "F7",
+    hint: "Confirma aquí cuando veas la transferencia recibida por el total exacto.",
+  },
+];
+
 /**
  * Cobro (F12), con el mismo acomodo que eleventa: total gigante, "Pagó con",
  * "Su cambio" y las acciones a la derecha con su tecla.
  *
- * v1 cobra solo efectivo; tarjeta y transferencia quedan visibles pero
- * deshabilitadas para que el cajero sepa que llegarán.
+ * Tarjeta y transferencia son declarativos: la terminal y el banco no están
+ * conectados, así que el cajero dice cómo pagó el cliente y el ticket lo
+ * registra con el total exacto, sin "pagó con" ni cambio.
  */
 export function PosChargeDialog({
   open,
   total,
-  itemsCount,
+  linesCount,
   customerName,
   onClose,
   onCharge,
   charging,
   printerReady,
 }: PosChargeDialogProps) {
+  const [method, setMethod] = useState<PosPaymentMethod>(POS_PAYMENT_METHODS.CASH);
   const [tendered, setTendered] = useState(String(total.toFixed(2)));
   const [notes, setNotes] = useState("");
   const [showNotes, setShowNotes] = useState(false);
 
   useEffect(() => {
     if (open) {
+      setMethod(POS_PAYMENT_METHODS.CASH);
       setTendered(total.toFixed(2));
       setNotes("");
       setShowNotes(false);
     }
   }, [open, total]);
 
-  const amount = Number(tendered.replace(",", ".")) || 0;
+  const isCash = method === POS_PAYMENT_METHODS.CASH;
+  const amount = isCash ? Number(tendered.replace(",", ".")) || 0 : total;
   const change = useMemo(() => Math.round((amount - total) * 100) / 100, [amount, total]);
-  const insufficient = change < 0;
+  const insufficient = isCash && change < 0;
+  const selected = METHODS.find((item) => item.value === method) ?? METHODS[0]!;
 
   const charge = (print: boolean) => {
     if (insufficient || charging) return;
-    onCharge({ amountTendered: amount, print, notes });
+    onCharge({ paymentMethod: method, amountTendered: amount, print, notes });
   };
 
-  // Dentro del cobro manda este diálogo: F1 imprime, F2 no, F4 notas, ESC sale.
+  // Dentro del cobro manda este diálogo: F1 imprime, F2 no, F4 notas,
+  // F5/F6/F7 eligen el método, ESC sale.
   usePosShortcuts(
     useMemo(
       () => ({
         F1: () => charge(true),
         F2: () => charge(false),
         F4: () => setShowNotes((value) => !value),
+        F5: () => setMethod(POS_PAYMENT_METHODS.CASH),
+        F6: () => setMethod(POS_PAYMENT_METHODS.CARD),
+        F7: () => setMethod(POS_PAYMENT_METHODS.TRANSFER),
         Escape: () => onClose(),
       }),
       [charge, onClose]
@@ -83,58 +124,69 @@ export function PosChargeDialog({
               <div className="value">{formatMoney(total)}</div>
             </div>
 
-            <div className="pos-methods">
-              <button type="button" className="pos-method active">
-                Efectivo
-              </button>
-              <button type="button" className="pos-method" disabled>
-                Tarjeta
-                <br />
-                próximamente
-              </button>
-              <button type="button" className="pos-method" disabled>
-                Transferencia
-                <br />
-                próximamente
-              </button>
-            </div>
-
-            <label className="pos-total-label" htmlFor="pos-tendered">
-              Pagó con
-            </label>
-            <input
-              id="pos-tendered"
-              className="pos-tender-input"
-              value={tendered}
-              onChange={(event) => setTendered(event.target.value)}
-              inputMode="decimal"
-              autoFocus
-              onFocus={(event) => event.currentTarget.select()}
-            />
-            <div className="pos-bills">
-              {BILLS.map((bill) => (
+            <div className="pos-methods" role="radiogroup" aria-label="Forma de pago">
+              {METHODS.map((item) => (
                 <button
-                  key={bill}
+                  key={item.value}
                   type="button"
-                  className="pos-bill"
-                  onClick={() => setTendered(bill.toFixed(2))}
+                  role="radio"
+                  aria-checked={method === item.value}
+                  className={`pos-method ${method === item.value ? "active" : ""}`}
+                  onClick={() => setMethod(item.value)}
                 >
-                  ${bill}
+                  {item.label}
+                  <br />
+                  <span className="pos-method-key">{item.key}</span>
                 </button>
               ))}
-              <button
-                type="button"
-                className="pos-bill"
-                onClick={() => setTendered(total.toFixed(2))}
-              >
-                Exacto
-              </button>
             </div>
 
-            <div className={`pos-change ${insufficient ? "insufficient" : ""}`}>
-              <div className="pos-total-label">{insufficient ? "Falta" : "Su cambio"}</div>
-              <div className="value">{formatMoney(Math.abs(change))}</div>
-            </div>
+            {isCash ? (
+              <>
+                <label className="pos-total-label" htmlFor="pos-tendered">
+                  Pagó con
+                </label>
+                <input
+                  id="pos-tendered"
+                  className="pos-tender-input"
+                  value={tendered}
+                  onChange={(event) => setTendered(event.target.value)}
+                  inputMode="decimal"
+                  autoFocus
+                  onFocus={(event) => event.currentTarget.select()}
+                />
+                <div className="pos-bills">
+                  {BILLS.map((bill) => (
+                    <button
+                      key={bill}
+                      type="button"
+                      className="pos-bill"
+                      onClick={() => setTendered(bill.toFixed(2))}
+                    >
+                      ${bill}
+                    </button>
+                  ))}
+                  <button
+                    type="button"
+                    className="pos-bill"
+                    onClick={() => setTendered(total.toFixed(2))}
+                  >
+                    Exacto
+                  </button>
+                </div>
+
+                <div className={`pos-change ${insufficient ? "insufficient" : ""}`}>
+                  <div className="pos-total-label">{insufficient ? "Falta" : "Su cambio"}</div>
+                  <div className="value">{formatMoney(Math.abs(change))}</div>
+                </div>
+              </>
+            ) : (
+              <div className="pos-method-hint" data-testid="pos-method-hint">
+                <div className="pos-total-label">Se cobra con {selected.label.toLowerCase()}</div>
+                <div className="value">{formatMoney(total)}</div>
+                <p>{selected.hint}</p>
+              </div>
+            )}
 
             {showNotes ? (
               <TextField
@@ -181,7 +233,7 @@ export function PosChargeDialog({
             <div style={{ marginTop: "auto", textAlign: "center" }}>
               <div className="pos-total-label">Total de artículos</div>
               <div style={{ fontSize: 30, fontWeight: 700, color: "var(--glam-navy)" }}>
-                {itemsCount}
+                {linesCount}
               </div>
               <div className="page-kicker" style={{ marginTop: 8 }}>
                 Cliente: <strong>{customerName}</strong>

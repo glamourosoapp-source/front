@@ -68,6 +68,7 @@ export const queryRestockOrdersSchema = paginationSchema.extend({
         RESTOCK_ORIGIN.SHORTAGE_AUTO,
         RESTOCK_ORIGIN.SHORTAGE_MANUAL,
         RESTOCK_ORIGIN.FRANCHISE,
+        RESTOCK_ORIGIN.MANUAL_ENTRY,
       ]),
       z.literal(""),
       z.null(),
@@ -90,6 +91,86 @@ export const prepareRestockItemSchema = z.object({
   dispatchedQty: z.union([z.null(), z.coerce.number().min(0).max(100_000)]).optional(),
   /** Por qué se manda distinto de lo pedido; lo ve quien hizo el pedido. */
   notes: z.union([z.null(), z.string().max(500)]).optional(),
+});
+
+/**
+ * Con qué se precarga la entrada de surtido: `latest` (default) toma el pedido
+ * abierto más reciente de la sucursal y, si no hay, el faltante de hoy.
+ */
+export const queryRestockEntryFormSchema = z.object({
+  basis: z.enum(["latest", "order", "shortages", "blank"]).default("latest"),
+  orderId: z.union([z.string().uuid(), z.literal(""), z.null()]).optional(),
+});
+
+/**
+ * Entrada de surtido capturada en el formato: cantidades en **empaques** (2 =
+ * dos bidones), como en el papel. Con `orderId` cierra ese pedido abierto
+ * (lo capturado es lo despachado); sin él crea un pedido `manual_entry`.
+ */
+export const registerRestockEntrySchema = z
+  .object({
+    orderId: z.union([z.string().uuid(), z.null()]).optional(),
+    items: z
+      .array(
+        z
+          .object({
+            lineId: z.union([z.string().uuid(), z.null()]).optional(),
+            productId: z.union([z.string().uuid(), z.null()]).optional(),
+            qty: z.coerce.number().min(0).max(100_000),
+          })
+          .superRefine((value, ctx) => {
+            if (Boolean(value.lineId) === Boolean(value.productId)) {
+              ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Indica lineId o productId, no ambos" });
+            }
+          })
+      )
+      .max(2000),
+    notes: z.union([z.string().max(500), z.literal(""), z.null()]).optional(),
+    /** Publicidad que viene con la entrada (pie del formato). */
+    publicityQty: z.coerce.number().int().min(0).max(1000).optional(),
+  })
+  .superRefine((value, ctx) => {
+    if (!value.items.some((item) => item.qty > 0)) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Captura al menos un renglón con cantidad" });
+    }
+  });
+
+const formRowFields = {
+  label: z.string().trim().min(1).max(120),
+  lineId: z.union([z.string().uuid(), z.null()]).optional(),
+  productId: z.union([z.string().uuid(), z.null()]).optional(),
+  packSize: z.coerce.number().int().min(1).max(100_000).optional(),
+  packLabel: z.string().trim().max(20).optional(),
+  unitPrice: z.union([z.null(), z.coerce.number().min(0).max(1_000_000)]).optional(),
+  bidon: z.union([z.enum(["transparent", "color"]), z.null()]).optional(),
+  blueBox: z.boolean().optional(),
+};
+
+/** Renglón nuevo del formato: se inserta debajo de `afterRow` (-1 = arriba del bloque). */
+export const createFactoryFormRowSchema = z
+  .object({
+    page: z.coerce.number().int().min(1).max(20),
+    block: z.coerce.number().int().min(0).max(5),
+    afterRow: z.coerce.number().int().min(-1),
+    kind: z.enum(["product", "section", "blank"]).default("product"),
+    ...formRowFields,
+    label: z.string().trim().max(120).default(""),
+  })
+  .superRefine((value, ctx) => {
+    if (value.lineId && value.productId) ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Indica lineId o productId, no ambos" });
+    if (value.kind === "section" && !value.label) ctx.addIssue({ code: z.ZodIssueCode.custom, message: "La sección necesita un título" });
+    if (value.kind === "product" && !value.label) ctx.addIssue({ code: z.ZodIssueCode.custom, message: "El renglón necesita un nombre" });
+  });
+
+/** Cambios a un renglón del formato (nombre, producto ligado, empaque, precio, bidón, caja azul). */
+export const updateFactoryFormRowSchema = z
+  .object({ ...formRowFields, label: formRowFields.label.optional() })
+  .superRefine((value, ctx) => {
+    if (value.lineId && value.productId) ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Indica lineId o productId, no ambos" });
+  });
+
+export const queryFactoryFormTargetsSchema = z.object({
+  search: z.union([z.string().max(120), z.literal("")]).optional(),
 });
 
 export const sendRestockOrderSchema = z.object({

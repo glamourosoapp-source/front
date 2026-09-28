@@ -1,12 +1,11 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState, type CSSProperties, type ReactNode } from "react";
 import { Button, Chip, MenuItem, Tab, Tabs, TextField } from "@mui/material";
 import {
   Bar,
   BarChart,
   CartesianGrid,
-  Legend,
   ResponsiveContainer,
   Tooltip as ChartTooltip,
   XAxis,
@@ -29,9 +28,11 @@ import { FilterBar, FilterDivider, FilterMeta } from "@/components/pos-admin/Fil
 import {
   exportPosReportToPdf,
   exportPosReportToXlsx,
+  paymentBreakdownLabel,
   type BranchRow,
   type ReportSummary,
 } from "@/lib/export-pos-reports";
+import { posWeekStart } from "@/components/pos-admin/pos-labels";
 import { Branch, CashCut, ListResponse } from "@/types";
 import { toast } from "sonner";
 
@@ -54,18 +55,10 @@ function todayInMexico(): string {
   return new Date().toLocaleDateString("en-CA", { timeZone: "America/Mexico_City" });
 }
 
-/** Sábado de la semana de negocio que contiene la fecha (la semana va sáb→vie). */
-function businessWeekStart(dateOnly: string): string {
-  const date = new Date(`${dateOnly}T00:00:00Z`);
-  const diff = (date.getUTCDay() + 1) % 7;
-  date.setUTCDate(date.getUTCDate() - diff);
-  return date.toISOString().slice(0, 10);
-}
-
 function rangeFor(granularity: Granularity, anchor: string): { from: string; to: string } {
   if (granularity === "day") return { from: anchor, to: anchor };
   if (granularity === "week") {
-    const from = businessWeekStart(anchor);
+    const from = posWeekStart(anchor);
     const end = new Date(`${from}T00:00:00Z`);
     end.setUTCDate(end.getUTCDate() + 6);
     return { from, to: end.toISOString().slice(0, 10) };
@@ -87,6 +80,75 @@ const GRANULARITY_LABELS: Record<string, string> = {
   month: "Mes",
   range: "Periodo",
 };
+
+/* Estilo de las gráficas: el mismo del Overview (`/dashboard`), para que las
+   dos pantallas se lean como una sola. Si cambia allá, cambia aquí. */
+const TOOLTIP_STYLE = {
+  background: "rgba(23, 32, 51, 0.95)",
+  border: "0",
+  borderRadius: "8px",
+  color: "white",
+  boxShadow: "0 10px 25px rgba(0,0,0,0.15)",
+};
+const TOOLTIP_LABEL_STYLE = { color: "#9aa3b5", fontWeight: 700 };
+const AXIS_STYLE = { fontSize: "11px", fill: "var(--glam-muted)" };
+const GRID_STROKE = "#f1f5f9";
+/** Alto fijo del panel de gráfica, como los del Overview. */
+const CHART_PANEL: CSSProperties = {
+  height: "340px",
+  display: "flex",
+  flexDirection: "column",
+};
+
+const MONTH_SHORT = ["ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "oct", "nov", "dic"];
+
+/**
+ * Etiqueta del eje de la evolución. La serie viene con la clave del Back
+ * (`YYYY-MM-DD` del día o del viernes de la semana, `YYYY-MM` del mes) y no
+ * debe pasar por `new Date("YYYY-MM-DD")`, que corre el día por timezone.
+ */
+function seriesLabel(granularity: Granularity, key: string): string {
+  const parts = key.split("-").map(Number);
+  const [year, month, day] = parts as [number, number, number?];
+  if (!year || !month) return key;
+  if (granularity === "month") return `${MONTH_SHORT[month - 1]} ${String(year).slice(2)}`;
+  if (!day) return key;
+  if (granularity === "week") return `vie ${day} ${MONTH_SHORT[month - 1]}`;
+  return new Date(Date.UTC(year, month - 1, day)).toLocaleDateString("es-MX", {
+    weekday: "short",
+    day: "numeric",
+    timeZone: "UTC",
+  });
+}
+
+/** Mensaje centrado cuando una gráfica se queda sin datos que pintar. */
+function ChartEmpty({ children }: { children: ReactNode }) {
+  return (
+    <div
+      style={{
+        display: "grid",
+        placeItems: "center",
+        height: "100%",
+        color: "var(--glam-muted)",
+        fontSize: "13px",
+      }}
+    >
+      {children}
+    </div>
+  );
+}
+
+/** Cabecera de panel de gráfica: título y bajada, igual que en el Overview. */
+function ChartHeader({ title, kicker }: { title: string; kicker: string }) {
+  return (
+    <div style={{ marginBottom: "16px" }}>
+      <h2 style={{ fontSize: "16px", fontWeight: 700, color: "var(--glam-navy)", margin: 0 }}>{title}</h2>
+      <p className="page-kicker" style={{ margin: 0 }}>
+        {kicker}
+      </p>
+    </div>
+  );
+}
 
 export default function PosCortesPage() {
   const { can } = usePermissions();
@@ -190,7 +252,26 @@ export default function PosCortesPage() {
     }
   }
 
-  const topProducts = (summary?.products ?? []).slice(0, 10);
+  /* Datos listos para recharts: la serie trae la clave cruda del periodo y el
+     eje necesita la etiqueta corta; los productos se ordenan por importe. */
+  const seriesData = series.map((point) => ({
+    label: seriesLabel(granularity === "range" ? "day" : granularity, point.day),
+    key: point.day,
+    total: Number(point.total || 0),
+    tickets: Number(point.tickets || 0),
+  }));
+  const hoursData = hours.map((point) => ({
+    label: `${point.hour}h`,
+    total: Number(point.total || 0),
+    tickets: Number(point.tickets || 0),
+  }));
+  const topProducts = [...(summary?.products ?? [])]
+    .sort((a, b) => b.revenue - a.revenue)
+    .slice(0, 8)
+    .map((row) => ({
+      ...row,
+      label: row.name.length > 26 ? `${row.name.slice(0, 25)}…` : row.name,
+    }));
 
   return (
     <div className="page-stack">
@@ -198,8 +279,8 @@ export default function PosCortesPage() {
         <div>
           <h1 className="page-title">Cortes de caja y reportes</h1>
           <p className="page-kicker">
-            Ventas del punto de venta por sucursal y periodo. La semana va de sábado a viernes, como
-            el resto del CRM.
+            Ventas del punto de venta por sucursal y periodo. La semana va de viernes a jueves (en
+            pedidos del CRM va de sábado a viernes).
           </p>
         </div>
         {canFreeze ? (
@@ -237,7 +318,7 @@ export default function PosCortesPage() {
           sx={{ minWidth: 185 }}
         >
           <MenuItem value="day">Día</MenuItem>
-          <MenuItem value="week">Semana (sáb–vie)</MenuItem>
+          <MenuItem value="week">Semana (vie–jue)</MenuItem>
           <MenuItem value="month">Mes</MenuItem>
           <MenuItem value="range">Rango</MenuItem>
         </TextField>
@@ -305,7 +386,7 @@ export default function PosCortesPage() {
             </div>
           </div>
           <strong>{formatMoney(summary?.total ?? 0)}</strong>
-          <small>{periodLabel}</small>
+          <small>{summary && paymentBreakdownLabel(summary) ? paymentBreakdownLabel(summary) : periodLabel}</small>
         </div>
         <div className="card metric">
           <div className="metric-head">
@@ -381,63 +462,164 @@ export default function PosCortesPage() {
 
       {tab === 1 ? (
         <div className="page-stack">
-          <div className="panel p-5">
-            <h3 style={{ marginTop: 0 }}>Ventas por sucursal</h3>
-            <ResponsiveContainer width="100%" height={260}>
-              <BarChart data={byBranch}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#e6ebf3" />
-                <XAxis dataKey="code" />
-                <YAxis tickFormatter={(value) => formatMoneyShort(value as number)} />
-                <ChartTooltip formatter={(value) => formatMoney(value as number)} />
-                <Bar dataKey="total" name="Vendido" fill="#06a6e0" radius={[6, 6, 0, 0]} />
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
-
-          <div className="panel p-5">
-            <h3 style={{ marginTop: 0 }}>Evolución</h3>
-            <ResponsiveContainer width="100%" height={260}>
-              <BarChart data={series}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#e6ebf3" />
-                <XAxis dataKey="day" />
-                <YAxis tickFormatter={(value) => formatMoneyShort(value as number)} />
-                <ChartTooltip formatter={(value) => formatMoney(value as number)} />
-                <Legend />
-                <Bar dataKey="total" name="Vendido" fill="#262d60" radius={[6, 6, 0, 0]} />
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
-
-          <div className="grid-2">
-            <div className="panel p-5">
-              <h3 style={{ marginTop: 0 }}>Horarios de mayor actividad</h3>
-              <ResponsiveContainer width="100%" height={240}>
-                <BarChart data={hours}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#e6ebf3" />
-                  <XAxis dataKey="hour" tickFormatter={(value) => `${value}h`} />
-                  <YAxis />
-                  <ChartTooltip
-                    formatter={(value, name) =>
-                      name === "total" ? formatMoney(value as number) : String(value)
-                    }
-                  />
-                  <Bar dataKey="tickets" name="Tickets" fill="#ffe443" radius={[6, 6, 0, 0]} />
-                </BarChart>
-              </ResponsiveContainer>
+          <section className="grid grid-2-even" style={{ gap: "20px" }}>
+            <div className="panel p-5" style={CHART_PANEL}>
+              <ChartHeader
+                title="Ventas por sucursal"
+                kicker="Lo cobrado en caja por cada sucursal en el periodo elegido, anulados excluidos."
+              />
+              <div style={{ flex: 1, minHeight: 0 }}>
+                {!byBranch.length ? (
+                  <ChartEmpty>{loading ? "Cargando..." : "Sin ventas en este periodo."}</ChartEmpty>
+                ) : (
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={byBranch} margin={{ top: 10, right: 10, left: -10, bottom: 0 }}>
+                      <CartesianGrid strokeDasharray="3 3" stroke={GRID_STROKE} vertical={false} />
+                      <XAxis dataKey="code" tickLine={false} axisLine={false} style={AXIS_STYLE} />
+                      <YAxis
+                        tickLine={false}
+                        axisLine={false}
+                        style={AXIS_STYLE}
+                        tickFormatter={(value) => formatMoneyShort(value as number)}
+                      />
+                      <ChartTooltip
+                        cursor={{ fill: "rgba(6, 166, 224, 0.06)" }}
+                        contentStyle={TOOLTIP_STYLE}
+                        itemStyle={{ color: "var(--glam-blue)" }}
+                        labelStyle={TOOLTIP_LABEL_STYLE}
+                        formatter={(value) => [formatMoney(Number(value)), "Vendido"]}
+                        labelFormatter={(label, payload) =>
+                          `${payload?.[0]?.payload?.name || label} · ${payload?.[0]?.payload?.ticketsCount ?? 0} tickets`
+                        }
+                      />
+                      <Bar dataKey="total" name="Vendido" fill="var(--glam-blue)" radius={[4, 4, 0, 0]} maxBarSize={45} />
+                    </BarChart>
+                  </ResponsiveContainer>
+                )}
+              </div>
             </div>
-            <div className="panel p-5">
-              <h3 style={{ marginTop: 0 }}>Más vendidos</h3>
-              <ResponsiveContainer width="100%" height={240}>
-                <BarChart data={topProducts} layout="vertical">
-                  <CartesianGrid strokeDasharray="3 3" stroke="#e6ebf3" />
-                  <XAxis type="number" tickFormatter={(value) => formatMoneyShort(value as number)} />
-                  <YAxis type="category" dataKey="name" width={130} tick={{ fontSize: 11 }} />
-                  <ChartTooltip formatter={(value) => formatMoney(value as number)} />
-                  <Bar dataKey="revenue" name="Importe" fill="#06a6e0" radius={[0, 6, 6, 0]} />
-                </BarChart>
-              </ResponsiveContainer>
+
+            <div className="panel p-5" style={CHART_PANEL}>
+              <ChartHeader
+                title="Evolución"
+                kicker={
+                  granularity === "month"
+                    ? "Lo vendido mes a mes dentro del periodo."
+                    : granularity === "week"
+                      ? "Lo vendido por semana del punto de venta (viernes a jueves)."
+                      : "Lo vendido por día de negocio dentro del periodo."
+                }
+              />
+              <div style={{ flex: 1, minHeight: 0 }}>
+                {!seriesData.length ? (
+                  <ChartEmpty>{loading ? "Cargando..." : "Sin ventas en este periodo."}</ChartEmpty>
+                ) : (
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={seriesData} margin={{ top: 10, right: 10, left: -10, bottom: 0 }}>
+                      <CartesianGrid strokeDasharray="3 3" stroke={GRID_STROKE} vertical={false} />
+                      <XAxis dataKey="label" tickLine={false} axisLine={false} style={AXIS_STYLE} />
+                      <YAxis
+                        tickLine={false}
+                        axisLine={false}
+                        style={AXIS_STYLE}
+                        tickFormatter={(value) => formatMoneyShort(value as number)}
+                      />
+                      <ChartTooltip
+                        cursor={{ fill: "rgba(38, 45, 96, 0.06)" }}
+                        contentStyle={TOOLTIP_STYLE}
+                        itemStyle={{ color: "var(--glam-blue)" }}
+                        labelStyle={TOOLTIP_LABEL_STYLE}
+                        formatter={(value) => [formatMoney(Number(value)), "Vendido"]}
+                        labelFormatter={(label, payload) =>
+                          `${label} · ${payload?.[0]?.payload?.tickets ?? 0} tickets`
+                        }
+                      />
+                      <Bar dataKey="total" name="Vendido" fill="var(--glam-navy)" radius={[4, 4, 0, 0]} maxBarSize={64} />
+                    </BarChart>
+                  </ResponsiveContainer>
+                )}
+              </div>
             </div>
-          </div>
+          </section>
+
+          {/* `grid-2-even` solo reparte las columnas: el `display: grid` lo pone
+              `grid`. Sin esa clase las dos gráficas salían apiladas a lo ancho. */}
+          <section className="grid grid-2-even" style={{ gap: "20px" }}>
+            <div className="panel p-5" style={CHART_PANEL}>
+              <ChartHeader
+                title="Horarios de mayor actividad"
+                kicker="Tickets cobrados por hora del día, sumando todo el periodo."
+              />
+              <div style={{ flex: 1, minHeight: 0 }}>
+                {!hoursData.length ? (
+                  <ChartEmpty>{loading ? "Cargando..." : "Sin ventas en este periodo."}</ChartEmpty>
+                ) : (
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={hoursData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                      <CartesianGrid strokeDasharray="3 3" stroke={GRID_STROKE} vertical={false} />
+                      <XAxis dataKey="label" tickLine={false} axisLine={false} style={AXIS_STYLE} interval={0} />
+                      <YAxis tickLine={false} axisLine={false} style={AXIS_STYLE} allowDecimals={false} />
+                      <ChartTooltip
+                        cursor={{ fill: "rgba(6, 166, 224, 0.06)" }}
+                        contentStyle={TOOLTIP_STYLE}
+                        itemStyle={{ color: "var(--glam-blue)" }}
+                        labelStyle={TOOLTIP_LABEL_STYLE}
+                        formatter={(value) => [String(value), "Tickets"]}
+                        labelFormatter={(label, payload) =>
+                          `${label} · ${formatMoney(Number(payload?.[0]?.payload?.total ?? 0))}`
+                        }
+                      />
+                      <Bar dataKey="tickets" name="Tickets" fill="var(--glam-blue)" radius={[4, 4, 0, 0]} maxBarSize={28} />
+                    </BarChart>
+                  </ResponsiveContainer>
+                )}
+              </div>
+            </div>
+
+            <div className="panel p-5" style={CHART_PANEL}>
+              <ChartHeader title="Más vendidos" kicker="Los ocho productos de mayor importe en el periodo." />
+              <div style={{ flex: 1, minHeight: 0 }}>
+                {!topProducts.length ? (
+                  <ChartEmpty>{loading ? "Cargando..." : "Sin ventas en este periodo."}</ChartEmpty>
+                ) : (
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={topProducts} layout="vertical" margin={{ top: 4, right: 24, left: 10, bottom: 0 }}>
+                      <CartesianGrid strokeDasharray="3 3" stroke={GRID_STROKE} horizontal={false} />
+                      <XAxis
+                        type="number"
+                        tickLine={false}
+                        axisLine={false}
+                        style={AXIS_STYLE}
+                        tickFormatter={(value) => formatMoneyShort(value as number)}
+                      />
+                      <YAxis
+                        type="category"
+                        dataKey="label"
+                        tickLine={false}
+                        axisLine={false}
+                        width={150}
+                        style={{ fontSize: "11px", fill: "var(--glam-muted)" }}
+                      />
+                      <ChartTooltip
+                        cursor={{ fill: "rgba(38, 45, 96, 0.06)" }}
+                        contentStyle={TOOLTIP_STYLE}
+                        itemStyle={{ color: "var(--glam-blue)" }}
+                        labelStyle={TOOLTIP_LABEL_STYLE}
+                        formatter={(value) => [formatMoney(Number(value)), "Importe"]}
+                        labelFormatter={(_label, payload) => {
+                          const row = payload?.[0]?.payload;
+                          if (!row) return "";
+                          const unit = row.saleUnit === "liter" ? "L" : "pz";
+                          return `${row.name} · ${formatQuantity(row.quantity)} ${unit}`;
+                        }}
+                      />
+                      <Bar dataKey="revenue" name="Importe" fill="var(--glam-navy)" radius={[0, 4, 4, 0]} maxBarSize={22} />
+                    </BarChart>
+                  </ResponsiveContainer>
+                )}
+              </div>
+            </div>
+          </section>
         </div>
       ) : null}
 

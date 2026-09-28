@@ -1,4 +1,5 @@
 import type ExcelJSTypes from "exceljs";
+import { POS_PAYMENT_METHOD_VALUES, posPaymentMethodLabel } from "@glamouroso/shared/constants";
 import { formatMoney } from "@/lib/format-money";
 
 /**
@@ -13,7 +14,19 @@ export interface ReportSummary {
   ticketsCount: number;
   itemsCount: number;
   avgTicket: number;
+  /** Cuánto entró por cada forma de pago (efectivo = lo que hay en el cajón). */
+  byPaymentMethod?: Array<{ paymentMethod: string; total: number; tickets: number }>;
   products: Array<{ name: string; saleUnit: string; quantity: number; revenue: number; tickets: number }>;
+}
+
+/** "Efectivo $1,200.00 · Tarjeta $300.00": una línea, en el orden fijo de los métodos. */
+export function paymentBreakdownLabel(summary: Pick<ReportSummary, "byPaymentMethod">): string {
+  const rows = summary.byPaymentMethod ?? [];
+  if (!rows.length) return "";
+  return POS_PAYMENT_METHOD_VALUES.map((method) => {
+    const row = rows.find((item) => item.paymentMethod === method);
+    return `${posPaymentMethodLabel(method)} ${formatMoney(row?.total ?? 0)}`;
+  }).join(" · ");
 }
 
 export interface BranchRow {
@@ -52,6 +65,9 @@ export async function exportPosReportToXlsx(params: {
   resumen.addRow(["Tickets", params.summary.ticketsCount]);
   resumen.addRow(["Ticket promedio", formatMoney(params.summary.avgTicket)]);
   resumen.addRow(["Artículos vendidos", params.summary.itemsCount]);
+  for (const row of params.summary.byPaymentMethod ?? []) {
+    resumen.addRow([`Cobrado con ${posPaymentMethodLabel(row.paymentMethod).toLowerCase()}`, formatMoney(row.total)]);
+  }
 
   const porSucursal = workbook.addWorksheet("Por sucursal");
   porSucursal.columns = [{ width: 12 }, { width: 28 }, { width: 16 }, { width: 12 }, { width: 16 }];
@@ -114,6 +130,10 @@ export async function exportPosReportToPdf(params: {
       ["Tickets", String(params.summary.ticketsCount)],
       ["Ticket promedio", formatMoney(params.summary.avgTicket)],
       ["Artículos vendidos", String(params.summary.itemsCount)],
+      ...(params.summary.byPaymentMethod ?? []).map((row) => [
+        `Cobrado con ${posPaymentMethodLabel(row.paymentMethod).toLowerCase()}`,
+        formatMoney(row.total),
+      ]),
     ],
     headStyles: { fillColor: [38, 45, 96] },
     theme: "grid",

@@ -1,5 +1,6 @@
 "use client";
 
+import { config } from "@/config";
 import { useMemo } from "react";
 import { can, isAdminRole, resolvePermissions } from "@glamouroso/shared";
 import type { PermissionAction, PermissionMap, PermissionModule } from "@glamouroso/shared";
@@ -23,7 +24,7 @@ export function landingRouteFor(permissions: PermissionMap | null | undefined): 
   const worksInDashboard = allows("dashboard") || allows("orders");
   if (!worksInDashboard) {
     if (allows("pos")) return "/pos";
-    if (allows("factory")) return "/fabrica";
+    if (allows("factory") && config.factoryModuleEnabled) return "/fabrica";
     if (allows("franchise")) return "/franquicia";
   }
   return "/dashboard";

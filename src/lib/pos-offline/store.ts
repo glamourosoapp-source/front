@@ -1,6 +1,7 @@
 "use client";
 
 import type { PosCatalog, PosSale } from "@/types";
+import type { PosPaymentMethod } from "@glamouroso/shared/constants";
 import type { PosSyncEvent, PosSaleEventPayload } from "@glamouroso/shared/pos-sync";
 import { posTicketNumber } from "@glamouroso/shared/pos-sync";
 import {
@@ -38,6 +39,8 @@ export interface LocalSale {
   ticketNumber: string;
   soldAt: string;
   total: number;
+  /** Ausente en tickets guardados antes de tarjeta/transferencia: eran efectivo. */
+  paymentMethod?: PosPaymentMethod;
   amountTendered: number;
   changeAmount: number;
   itemsCount: number;

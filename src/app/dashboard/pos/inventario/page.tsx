@@ -13,7 +13,8 @@ import {
   Tabs,
   TextField,
 } from "@mui/material";
-import { AlertTriangle, Droplets, History, Package, ShieldAlert } from "lucide-react";
+import Link from "next/link";
+import { AlertTriangle, ClipboardList, Droplets, History, Package, ShieldAlert } from "lucide-react";
 import { httpClient, getApiErrorMessage } from "@/services/http-client";
 import { useDebounce } from "@/hooks/useDebounce";
 import { formatQuantity } from "@/lib/format-money";
@@ -185,6 +186,16 @@ export default function BranchInventoryPage() {
             cada sucursal y es lo que dispara el faltante.
           </p>
         </div>
+        {branchId ? (
+          <Button
+            variant="outlined"
+            startIcon={<ClipboardList size={16} />}
+            component={Link}
+            href={`/dashboard/pos/sucursales/${branchId}/minimos`}
+          >
+            Capturar mínimos en el formato
+          </Button>
+        ) : null}
       </div>
 
       <FilterBar>

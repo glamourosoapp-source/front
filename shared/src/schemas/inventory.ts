@@ -61,6 +61,25 @@ export const bulkBranchInventorySchema = z.object({
   reason: z.string().min(3).max(200).default("Carga inicial de inventario"),
 });
 
+/**
+ * Stock mínimo de muchas líneas y productos a la vez: es lo que manda la
+ * captura en el orden del formato de pedido a fábrica. Solo mínimos, nunca
+ * existencias: no genera movimientos de kardex. Todo-o-nada.
+ */
+export const setMinStocksSchema = z.object({
+  rows: z
+    .array(
+      z
+        .object({
+          ...inventoryTarget,
+          minStock: z.coerce.number().min(0).max(1_000_000),
+        })
+        .superRefine(exactlyOneTarget)
+    )
+    .min(1)
+    .max(3000),
+});
+
 export const queryBranchInventorySchema = paginationSchema.extend({
   /**
    * El inventario de una sucursal lista TODAS sus líneas y productos, incluso

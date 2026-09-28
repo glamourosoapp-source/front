@@ -6,6 +6,8 @@ import { ShieldAlert } from "lucide-react";
 import { RealtimeProvider } from "@/components/realtime/RealtimeProvider";
 import { useAuthStore } from "@/stores/auth.store";
 import { usePermissions } from "@/lib/permissions";
+import { config } from "@/config";
+import { FactoryDisabledNotice } from "@/components/pos-admin/FactoryDisabledNotice";
 import "./fabrica.css";
 
 /**
@@ -39,6 +41,15 @@ export default function FactoryLayout({ children }: { children: ReactNode }) {
 
   if (!checked || !user) {
     return <main className="factory-center">Cargando pedidos...</main>;
+  }
+
+  // Módulo detrás de bandera: apagado, la tablet no opera pedidos.
+  if (!config.factoryModuleEnabled) {
+    return (
+      <main className="factory-center">
+        <FactoryDisabledNotice />
+      </main>
+    );
   }
 
   if (!can("factory", "view")) {

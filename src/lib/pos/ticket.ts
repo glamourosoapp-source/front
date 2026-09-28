@@ -43,7 +43,10 @@ export interface PricedLine extends PosLine {
 
 export interface TicketTotals {
   subtotal: number;
+  /** Unidades vendidas (piezas + litros): va al registro de la venta y a los reportes. */
   itemsCount: number;
+  /** Partidas distintas en el ticket: lo que el cajero cuenta como "artículos" en pantalla. */
+  linesCount: number;
   lines: PricedLine[];
 }
 
@@ -153,6 +156,7 @@ export function priceTicket(lines: PosLine[], catalog: PosCatalog | null): Ticke
   return {
     subtotal: round2(priced.reduce((sum, line) => sum + line.total, 0)),
     itemsCount: round2(priced.reduce((sum, line) => sum + line.quantity, 0)),
+    linesCount: priced.length,
     lines: priced,
   };
 }

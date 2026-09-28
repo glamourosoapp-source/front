@@ -1,6 +1,6 @@
 import { z } from "zod";
 import {
-  POS_PAYMENT_METHODS,
+  POS_PAYMENT_METHOD_VALUES,
   POS_SALE_UNITS,
   PRICING_TIERS,
 } from "../constants";
@@ -44,7 +44,7 @@ export const posSyncSalePayloadSchema = z.object({
   subtotal: z.coerce.number().min(0).max(10_000_000),
   discount: z.coerce.number().min(0).max(1_000_000).default(0),
   total: z.coerce.number().min(0).max(10_000_000),
-  paymentMethod: z.enum([POS_PAYMENT_METHODS.CASH]).default(POS_PAYMENT_METHODS.CASH),
+  paymentMethod: z.enum(POS_PAYMENT_METHOD_VALUES).default(POS_PAYMENT_METHOD_VALUES[0]),
   amountTendered: z.coerce.number().min(0).max(10_000_000),
   changeAmount: z.coerce.number().min(0).max(10_000_000),
   notes: optionalString,

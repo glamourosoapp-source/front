@@ -1138,3 +1138,231 @@ textarea.input {
   border-radius: 2px;
   box-shadow: 0 1px 6px rgba(0, 0, 0, 0.18);
 }
+
+/* Captura de stock mínimo en el orden del formato de pedido a fábrica: cuatro
+   bloques de columnas como la hoja impresa, un renglón por producto. */
+.msf-page {
+  padding-bottom: 0;
+}
+
+.msf-tab {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  text-transform: none;
+  line-height: 1.2;
+}
+
+.msf-tab span:last-child {
+  font-size: 11px;
+  font-weight: 400;
+  color: var(--muted);
+}
+
+.msf-sheet {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 12px;
+  align-items: start;
+}
+
+.msf-block {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  overflow: hidden;
+  box-shadow: var(--shadow-sm);
+}
+
+.msf-head,
+.msf-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 96px 84px;
+  gap: 8px;
+  align-items: center;
+  padding: 4px 10px;
+  border-bottom: 1px solid var(--border);
+}
+
+.msf-head {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+  background: var(--bg);
+}
+
+.msf-head span:last-child {
+  text-align: right;
+}
+
+.msf-row:last-child {
+  border-bottom: 0;
+}
+
+.msf-row--dirty {
+  background: #fffbeb;
+}
+
+.msf-row--unlinked {
+  color: var(--muted);
+  opacity: 0.7;
+}
+
+.msf-section {
+  padding: 6px 10px;
+  font-size: 12px;
+  font-weight: 800;
+  text-align: center;
+  letter-spacing: 0.04em;
+  background: var(--soft-blue);
+  color: var(--glam-navy);
+  border-bottom: 1px solid var(--border);
+}
+
+.msf-label {
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.msf-pack {
+  display: flex;
+  flex-direction: column;
+  font-size: 11px;
+  color: var(--muted);
+  line-height: 1.2;
+}
+
+.msf-pack em {
+  font-style: normal;
+  color: var(--glam-navy);
+  font-weight: 600;
+}
+
+.msf-input.input {
+  min-height: 34px;
+  padding: 4px 8px;
+  text-align: right;
+  font-size: 0.95rem;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Pegada al fondo del área de contenido (no `fixed`: taparía el pie del sidebar). */
+.msf-savebar {
+  position: sticky;
+  bottom: 0;
+  z-index: 20;
+  margin: 0 -8px -8px;
+  border-radius: 12px 12px 0 0;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 24px;
+  background: var(--card);
+  border-top: 1px solid var(--border);
+  box-shadow: 0 -8px 24px rgba(38, 45, 96, 0.08);
+  color: var(--muted);
+  font-size: 14px;
+}
+
+.msf-savebar--active {
+  color: var(--glam-navy);
+  font-weight: 600;
+  border-top-color: var(--glam-blue);
+}
+
+@media (max-width: 720px) {
+  .msf-head,
+  .msf-row {
+    grid-template-columns: minmax(0, 1fr) 84px 72px;
+    padding: 4px 8px;
+  }
+  .msf-savebar {
+    padding: 10px 16px;
+  }
+}
+
+/* Formato de pedido (Punto de venta → Formato de pedido): renglones editables por bloque. */
+.ffa-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 4px 10px;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  color: var(--muted);
+  background: var(--bg);
+  border-bottom: 1px solid var(--border);
+}
+
+.ffa-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 10px;
+  border-bottom: 1px solid var(--border);
+  font-size: 13px;
+}
+
+.ffa-row--section {
+  background: var(--soft-blue);
+  color: var(--glam-navy);
+  text-align: center;
+}
+
+.ffa-row--section .ffa-main {
+  align-items: center;
+}
+
+.ffa-main {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.ffa-main strong {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.ffa-meta {
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.ffa-muted {
+  color: var(--muted);
+  font-style: italic;
+}
+
+.ffa-warn {
+  color: #b45309;
+}
+
+.ffa-actions {
+  display: inline-flex;
+  gap: 2px;
+  flex-shrink: 0;
+}
+
+.ffa-actions button {
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  padding: 4px;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.ffa-actions button:hover {
+  background: var(--bg);
+  color: var(--glam-navy);
+}

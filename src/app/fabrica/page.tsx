@@ -7,6 +7,7 @@ import {
   AlertTriangle,
   Boxes,
   Droplets,
+  FileDown,
   LogOut,
   Package,
   PackageCheck,
@@ -19,6 +20,8 @@ import { httpClient, getApiErrorMessage } from "@/services/http-client";
 import { useAuthStore } from "@/stores/auth.store";
 import { useRealtime } from "@/components/realtime/RealtimeProvider";
 import { formatQuantity } from "@/lib/format-money";
+import { packQtyLabel, packUnitLabel, unitLabel } from "@/components/pos-admin/pos-labels";
+import { useFactoryFormDownload } from "@/components/pos-admin/useFactoryFormDownload";
 import { RESTOCK_ORIGIN } from "@glamouroso/shared/constants";
 import { ListResponse, RestockOrder, RestockOrderItem } from "@/types";
 import { toast } from "sonner";
@@ -51,12 +54,6 @@ function firstOfMonthInMexico(): string {
   return `${todayInMexico().slice(0, 7)}-01`;
 }
 
-/** "1 bidón" y no "1 bidones": lo lee una persona de almacén. */
-function unitLabel(quantity: number, unit: string): string {
-  if (unit === "bidon") return quantity === 1 ? "bidón" : "bidones";
-  return quantity === 1 ? "pieza" : "piezas";
-}
-
 /**
  * Rangos que de verdad se usan en almacén: cuánto salió hoy, cuánto ayer,
  * cuánto en la semana. Teclear dos fechas para ver el día de hoy es trabajo
@@ -84,6 +81,7 @@ export default function FactoryPage() {
   const [sendingId, setSendingId] = useState<string | null>(null);
   /** Nota de envío en captura, por pedido. Se manda al marcar enviado. */
   const [dispatchNotes, setDispatchNotes] = useState<Record<string, string>>({});
+  const { download: downloadForm, isDownloading } = useFactoryFormDownload();
 
   const loadPending = useCallback(async () => {
     setLoading(true);
@@ -274,6 +272,16 @@ export default function FactoryPage() {
                   </span>
                   <div style={{ flex: 1 }} />
                   <button
+                    type="button"
+                    className="factory-download"
+                    disabled={isDownloading(order.id)}
+                    onClick={() => void downloadForm(`/factory/orders/${order.id}/form`, order.id)}
+                    title="El formato de pedido en PDF, para imprimirlo y palomear a mano"
+                  >
+                    <FileDown size={18} />
+                    {isDownloading(order.id) ? "Generando..." : "Formato"}
+                  </button>
+                  <button
                     className="factory-send"
                     disabled={!readyToSend.get(order.id) || sendingId === order.id}
                     onClick={() => void send(order)}
@@ -324,7 +332,7 @@ export default function FactoryPage() {
                           <span className="factory-requested">
                             {formatQuantity(item.requestedQty)}
                           </span>{" "}
-                          {item.unit === "bidon" ? "bidones" : "pz"}
+                          {packUnitLabel(Number(item.requestedQty), item.unit, item.unitsPerPackage)}
                         </td>
                         <td style={{ textAlign: "right" }}>
                           <input
@@ -428,6 +436,17 @@ export default function FactoryPage() {
                         })
                       : ""}
                   </span>
+                  <div style={{ flex: 1 }} />
+                  <button
+                    type="button"
+                    className="factory-download"
+                    disabled={isDownloading(order.id)}
+                    onClick={() => void downloadForm(`/factory/orders/${order.id}/form`, order.id)}
+                    title="El formato de pedido en PDF"
+                  >
+                    <FileDown size={18} />
+                    {isDownloading(order.id) ? "Generando..." : "Formato"}
+                  </button>
                 </div>
                 <table className="factory-table">
                   <tbody>
@@ -443,7 +462,7 @@ export default function FactoryPage() {
                             ) : null}
                           </td>
                           <td style={{ textAlign: "right" }}>
-                            {formatQuantity(enviado)} {item.unit === "bidon" ? "bidones" : "pz"}
+                            {packQtyLabel(enviado, item.unit, item.unitsPerPackage)}
                             {short ? (
                               <div className="page-kicker" style={{ margin: 0 }}>
                                 de {formatQuantity(item.requestedQty)} pedidos

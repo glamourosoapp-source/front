@@ -1,5 +1,6 @@
 "use client";
 
+import { config } from "@/config";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { Button, Dialog, DialogActions, DialogContent, DialogTitle } from "@mui/material";
@@ -31,7 +32,7 @@ import { BranchHealthChip } from "@/components/pos-admin/BranchHealthChip";
 import { FilterSegmented } from "@/components/pos-admin/FilterBar";
 import {
   BRANCH_TYPE_COPY,
-  businessWeekStart,
+  posWeekStart,
   relativeDays,
   shiftDateOnly,
   todayInMexico,
@@ -71,7 +72,7 @@ const MONTH_SHORT = ["ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "se
 /**
  * Columnas de la tabla de ventas por periodo: las últimas N de cada
  * granularidad, terminando en la de hoy. Las claves son las mismas que manda
- * el Back (`YYYY-MM-DD` del día o del sábado, `YYYY-MM`, `YYYY`).
+ * el Back (`YYYY-MM-DD` del día o del viernes que abre la semana, `YYYY-MM`, `YYYY`).
  */
 function pivotBuckets(granularity: PivotGranularity, today: string): { keys: string[]; from: string; to: string } {
   if (granularity === "day") {
@@ -79,7 +80,7 @@ function pivotBuckets(granularity: PivotGranularity, today: string): { keys: str
     return { keys, from: keys[0]!, to: today };
   }
   if (granularity === "week") {
-    const thisWeek = businessWeekStart(today);
+    const thisWeek = posWeekStart(today);
     const keys = Array.from({ length: 12 }, (_, i) => shiftDateOnly(thisWeek, (i - 11) * 7));
     return { keys, from: keys[0]!, to: today };
   }
@@ -102,7 +103,7 @@ function pivotLabel(granularity: PivotGranularity, key: string): string {
     return `${MONTH_SHORT[m - 1]} ${String(y).slice(2)}`;
   }
   const [, m, d] = key.split("-").map(Number) as [number, number, number];
-  if (granularity === "week") return `sáb ${d} ${MONTH_SHORT[m - 1]}`;
+  if (granularity === "week") return `vie ${d} ${MONTH_SHORT[m - 1]}`;
   return weekdayLabel(key);
 }
 
@@ -478,7 +479,7 @@ export function PosOverviewTab() {
             </div>
           </div>
           <strong>{formatMoney(totals.week)}</strong>
-          <small>{totals.ticketsWeek} tickets, sábado a viernes</small>
+          <small>{totals.ticketsWeek} tickets, viernes a jueves</small>
         </div>
         <div className="card metric">
           <div className="metric-head">
@@ -615,7 +616,7 @@ export function PosOverviewTab() {
               {pivotGranularity === "day"
                 ? "día de negocio (últimos 14)"
                 : pivotGranularity === "week"
-                  ? "semana de negocio, sábado a viernes (últimas 12)"
+                  ? "semana del punto de venta, viernes a jueves (últimas 12)"
                   : pivotGranularity === "month"
                     ? "mes (últimos 12)"
                     : "año (últimos 5)"}
@@ -722,7 +723,10 @@ export function PosOverviewTab() {
           </div>
           <strong style={{ color: totals.openRestock ? "#d97706" : undefined }}>{totals.openRestock}</strong>
           <small>
-            <Link href="/dashboard/fabrica" style={{ color: "var(--glam-blue)" }}>
+            <Link
+              href={config.factoryModuleEnabled ? "/dashboard/fabrica" : "/dashboard/pos/surtido"}
+              style={{ color: "var(--glam-blue)" }}
+            >
               Pedidos a fábrica sin enviar
             </Link>
           </small>

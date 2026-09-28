@@ -1,3 +1,4 @@
+import type { ContainerMaterial } from "./constants";
 import type {
   BranchType,
   InventoryMovementType,
@@ -117,6 +118,8 @@ export interface Product {
   unit: string;
   unitType?: string | null;
   unitsPerPackage?: number | null;
+  /** Caja de otra pieza: vender la caja descuenta `unitsPerPackage` piezas de esa pieza. */
+  packOfProductId?: string | null;
   price: string | number;
   wholesalePrice?: string | number;
   cost?: string | number;
@@ -152,6 +155,8 @@ export interface ProductLine {
   literProductId: string | null;
   literProduct?: Product | null;
   litersPerBidon: string | number;
+  /** Envase en que se venden sus presentaciones: PET, o polietileno para las líneas agresivas. */
+  containerMaterial?: ContainerMaterial | null;
   isActive: boolean;
   /** true si tiene los dos SKU y puede venderse por litro. */
   canSellByLiter?: boolean;
@@ -414,7 +419,26 @@ export interface PosSaleItem {
   serverUnitPrice?: string | number | null;
   /** Desglose de bidones + litros sueltos cuando la partida se cobró por litro. */
   pricingBreakdown?: Record<string, unknown> | null;
+  /** Envase y tapa que se descontaron con esta partida (presentaciones envasadas de una línea). */
+  containerProductId?: string | null;
+  capProductId?: string | null;
+  /** Por qué NO se descontó envase (p. ej. polietileno de 2 L sin regla). null = sin problema. */
+  containerWarning?: string | null;
   total: string | number;
+}
+
+/** Regla de envase y tapa por material × litros, editable por organización. */
+export interface PosContainerRule {
+  id?: string;
+  organizationId?: string;
+  material: ContainerMaterial;
+  liters: string | number;
+  containerProductId: string | null;
+  containerProduct?: Product | null;
+  capProductId: string | null;
+  capProduct?: Product | null;
+  createdAt?: string;
+  updatedAt?: string;
 }
 
 export interface PosSale {
@@ -639,8 +663,20 @@ export interface FactoryFormRow {
   qty: number | null;
   /** Costo por pieza (`products.cost`). */
   unitCost: number | null;
-  /** `qty × packSize × unitCost`. */
+  /** `qty × unitPrice` si el renglón trae precio a tienda; si no, `qty × packSize × unitCost`. */
   amount: number | null;
+  /** Precio a tienda por unidad de Cant (por bidón, garrafa, caja o pieza), del formato de tiendas. */
+  unitPrice?: number | null;
+  /** Viaja en bidón vacío de 20 L: transparente o de color (HIPOCLORITO, CLORO 20L). */
+  bidon?: "transparent" | "color" | null;
+  /** Cada caja pedida lleva una caja azul. */
+  blueBox?: boolean;
+  /**
+   * Solo en el formato de stock mínimo (`source.kind = "min_stock"`): el mínimo
+   * de la sucursal en su unidad base (litros para líneas, piezas para
+   * productos). `qty` es ese mismo mínimo expresado en empaques.
+   */
+  minStock?: number | null;
 }
 
 export interface FactoryFormPage {
@@ -657,10 +693,84 @@ export interface FactoryFormBidones {
   color: { qty: number; amount: number };
 }
 
+/** Un renglón del formato tal como lo administra el panel (Punto de venta → Formato de pedido). */
+export interface FactoryFormAdminRow {
+  id: string;
+  page: number;
+  block: number;
+  row: number;
+  kind: FactoryFormRowKind;
+  label: string;
+  packSize: number;
+  packLabel: string;
+  unitPrice: number | null;
+  bidon: "transparent" | "color" | null;
+  blueBox: boolean;
+  lineId: string | null;
+  productId: string | null;
+  /** Nombre de la línea o producto del catálogo al que está ligado. */
+  targetName: string | null;
+}
+
+/** El formato completo para administrarlo y descargarlo en Excel. */
+export interface FactoryFormAdmin {
+  rows: FactoryFormAdminRow[];
+  charges: FactoryFormCharges;
+}
+
+/** Línea o producto del catálogo que se puede ligar a un renglón. */
+export interface FactoryFormTarget {
+  type: "line" | "product";
+  id: string;
+  name: string;
+  /** Litros por bidón (línea) o piezas por empaque (producto). */
+  packSize: number;
+  /** Costo del catálogo por empaque, como sugerencia del precio a tienda. */
+  cost: number;
+  /** Ya está en otro renglón del formato. */
+  inForm: boolean;
+}
+
+/** Precios de los cargos del pie del formato. */
+export interface FactoryFormCharges {
+  bidonTransparent: number;
+  bidonColor: number;
+  blueBox: number;
+  publicity: number;
+}
+
+/** Un pedido de surtido todavía abierto (pendiente, aprobado o en preparación). */
+export interface FactoryFormOpenOrder {
+  id: string;
+  origin: string;
+  status: string;
+  createdAt: string;
+  itemsCount: number;
+}
+
+/** Con qué se precargó la entrada de surtido. */
+export interface FactoryFormEntryBasis {
+  /** `order`: las partidas de un pedido abierto; `shortages`: el faltante de hoy; `blank`: nada. */
+  kind: "order" | "shortages" | "blank";
+  orderId?: string | null;
+  /** Pedidos abiertos de la sucursal, el más reciente primero. */
+  openOrders: FactoryFormOpenOrder[];
+}
+
 /** Formato de pedido a fábrica completo, listo para dibujarse en PDF. */
 export interface FactoryForm {
-  /** Fuente: faltantes recién calculados o un pedido de surtido. */
-  source: { kind: "shortages" | "order"; branchId: string; orderId?: string | null };
+  /**
+   * Fuente: faltantes recién calculados, un pedido de surtido, los stocks
+   * mínimos de la sucursal (la misma hoja, con el mínimo en `Cant`), o la
+   * captura de una entrada de surtido (`entry`, precargada y editable).
+   */
+  source: {
+    kind: "shortages" | "order" | "min_stock" | "entry";
+    branchId: string;
+    orderId?: string | null;
+  };
+  /** Solo con `source.kind = "entry"`: de dónde salió lo precargado y qué pedidos siguen abiertos. */
+  entry?: FactoryFormEntryBasis | null;
   /** Fecha del pedido o del cálculo (YYYY-MM-DD). */
   date: string;
   /** Sucursal o franquicia: nombre y código. */
@@ -670,7 +780,13 @@ export interface FactoryForm {
   /** Faltantes o partidas que no están en el formato: sección OTROS al final. */
   extras: FactoryFormRow[];
   bidones: FactoryFormBidones;
-  /** Suma de las hojas + OTROS + bidones. */
+  /** Cajas azules: una por cada caja pedida de los renglones que la llevan. */
+  blueBoxes?: { qty: number; amount: number };
+  /** Publicidad del pedido (pie de la hoja 4). */
+  publicity?: { qty: number; amount: number };
+  /** Precios de los cargos del pie (configurables por organización). */
+  charges?: FactoryFormCharges;
+  /** Suma de las hojas + OTROS + bidones + cajas azules + publicidad. */
   grandTotal: number;
 }
 

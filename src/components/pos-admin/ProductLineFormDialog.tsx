@@ -13,7 +13,7 @@ import {
   Switch,
   TextField,
 } from "@mui/material";
-import { BIDON_LITERS } from "@glamouroso/shared/constants";
+import { BIDON_LITERS, CONTAINER_MATERIALS } from "@glamouroso/shared/constants";
 import { httpClient, getApiErrorMessage } from "@/services/http-client";
 import { useDebounce } from "@/hooks/useDebounce";
 import { formatMoney } from "@/lib/format-money";
@@ -43,6 +43,9 @@ export function ProductLineFormDialog({ open, line, onClose, onSaved }: ProductL
   const isEdit = Boolean(line);
   const [isActive, setIsActive] = useState(line?.isActive ?? true);
   const [saving, setSaving] = useState(false);
+  const [polyethylene, setPolyethylene] = useState(
+    line?.containerMaterial === CONTAINER_MATERIALS.POLYETHYLENE
+  );
 
   const [bidon, setBidon] = useState<Product | null>((line?.bidonProduct as Product) ?? null);
   const [liter, setLiter] = useState<Product | null>((line?.literProduct as Product) ?? null);
@@ -53,6 +56,7 @@ export function ProductLineFormDialog({ open, line, onClose, onSaved }: ProductL
   useEffect(() => {
     if (!open) return;
     setIsActive(line?.isActive ?? true);
+    setPolyethylene(line?.containerMaterial === CONTAINER_MATERIALS.POLYETHYLENE);
     setBidon((line?.bidonProduct as Product) ?? null);
     setLiter((line?.literProduct as Product) ?? null);
     setSearch("");
@@ -100,6 +104,7 @@ export function ProductLineFormDialog({ open, line, onClose, onSaved }: ProductL
       bidonProductId: bidon?.id ?? null,
       literProductId: liter?.id ?? null,
       litersPerBidon: Number(form.get("litersPerBidon") || BIDON_LITERS),
+      containerMaterial: polyethylene ? CONTAINER_MATERIALS.POLYETHYLENE : CONTAINER_MATERIALS.PET,
     };
 
     setSaving(true);
@@ -175,6 +180,25 @@ export function ProductLineFormDialog({ open, line, onClose, onSaved }: ProductL
             defaultValue={Number(line?.litersPerBidon ?? BIDON_LITERS)}
             inputProps={{ min: 1, step: 1 }}
             fullWidth
+          />
+          <FormControlLabel
+            sx={{ gridColumn: "1 / -1", alignItems: "flex-start" }}
+            control={
+              <Switch
+                checked={polyethylene}
+                onChange={(e) => setPolyethylene(e.target.checked)}
+              />
+            }
+            label={
+              <>
+                <span>Envase de polietileno</span>
+                <br />
+                <span className="page-kicker" style={{ margin: 0 }}>
+                  Línea agresiva (quita sarro, desengrasante, cloro, sosa, hipoclorito). Sus
+                  presentaciones descuentan envase de polietileno: solo existe en 1 L y galón.
+                </span>
+              </>
+            }
           />
           {isEdit ? (
             <FormControlLabel

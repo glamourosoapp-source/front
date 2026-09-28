@@ -3,6 +3,7 @@
 import type { CSSProperties } from "react";
 import type { TicketEmphasis, TicketSettings } from "@glamouroso/shared";
 import { ticketFooterLines, ticketHeaderBlock } from "@glamouroso/shared";
+import { POS_PAYMENT_METHODS, posPaymentMethodLabel } from "@glamouroso/shared/constants";
 import { ticketColumns } from "@/lib/print/escpos";
 import { encodeCode39 } from "@/lib/print/code39";
 import type { PosSale, PosSaleItem } from "@/types";
@@ -187,16 +188,23 @@ export function TicketDocument({
         <span>{money(sale.total)}</span>
       </div>
       {settings.showPaymentDetail ? (
-        <>
+        sale.paymentMethod === POS_PAYMENT_METHODS.CASH || !sale.paymentMethod ? (
+          <>
+            <div style={rowStyle}>
+              <span>Pagó con</span>
+              <span>{money(sale.amountTendered)}</span>
+            </div>
+            <div style={rowStyle}>
+              <span>Cambio</span>
+              <span>{money(sale.changeAmount)}</span>
+            </div>
+          </>
+        ) : (
           <div style={rowStyle}>
-            <span>Pagó con</span>
-            <span>{money(sale.amountTendered)}</span>
+            <span>Forma de pago</span>
+            <span>{posPaymentMethodLabel(sale.paymentMethod)}</span>
           </div>
-          <div style={rowStyle}>
-            <span>Cambio</span>
-            <span>{money(sale.changeAmount)}</span>
-          </div>
-        </>
+        )
       ) : null}
       <div style={{ overflow: "hidden", whiteSpace: "nowrap" }}>{separator}</div>
 

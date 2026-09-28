@@ -1,5 +1,6 @@
 "use client";
 
+import { config } from "@/config";
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
@@ -31,6 +32,7 @@ import {
   Factory,
   Handshake,
   ReceiptText,
+  FileSpreadsheet,
 } from "lucide-react";
 import type { PermissionModule } from "@glamouroso/shared";
 import { useAuthStore } from "@/stores/auth.store";
@@ -116,6 +118,7 @@ const sections: NavSection[] = [
       { href: "/dashboard/pos/lineas", label: "Líneas de líquidos", icon: Droplets, module: "posInventory" },
       { href: "/dashboard/pos/cortes", label: "Cortes y reportes", icon: Receipt, module: "posReports" },
       { href: "/dashboard/pos/surtido", label: "Faltantes y surtido", icon: Truck, module: "posRestock" },
+      { href: "/dashboard/pos/formato", label: "Formato de pedido", icon: FileSpreadsheet, module: "posRestock" },
       { href: "/dashboard/pos/ticket", label: "Ticket de venta", icon: ReceiptText, module: "settings" },
     ],
   },
@@ -221,6 +224,8 @@ function isLinkVisible(link: NavLink, can: CanFn): boolean {
 
 function filterSectionsByPermissions(can: CanFn): NavSection[] {
   return sections
+    // Fábrica va detrás de bandera: apagada, su sección no se pinta.
+    .filter((section) => section.id !== "fabrica" || config.factoryModuleEnabled)
     .map((section) => ({
       ...section,
       links: section.links?.filter((link) => isLinkVisible(link, can)),

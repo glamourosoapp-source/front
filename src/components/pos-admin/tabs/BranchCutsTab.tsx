@@ -11,7 +11,7 @@ import { usePermissions } from "@/lib/permissions";
 import type { CashCut, ListResponse } from "@/types";
 import { toast } from "sonner";
 import { FilterDivider } from "../FilterBar";
-import { businessWeekStart, formatDateTime, shiftDateOnly, todayInMexico } from "../pos-labels";
+import { formatDateTime, posWeekStart, shiftDateOnly, todayInMexico } from "../pos-labels";
 
 type Granularity = "day" | "week" | "month" | "range";
 
@@ -25,7 +25,7 @@ const GRANULARITY_LABELS: Record<string, string> = {
 function rangeFor(granularity: Granularity, anchor: string, rangeTo: string) {
   if (granularity === "day") return { from: anchor, to: anchor };
   if (granularity === "week") {
-    const from = businessWeekStart(anchor);
+    const from = posWeekStart(anchor);
     return { from, to: shiftDateOnly(from, 6) };
   }
   if (granularity === "month") {
@@ -120,7 +120,7 @@ export function BranchCutsTab({ branchId }: { branchId: string }) {
               sx={{ minWidth: 170 }}
             >
               <MenuItem value="day">Día</MenuItem>
-              <MenuItem value="week">Semana (sáb–vie)</MenuItem>
+              <MenuItem value="week">Semana (vie–jue)</MenuItem>
               <MenuItem value="month">Mes</MenuItem>
               <MenuItem value="range">Rango</MenuItem>
             </TextField>

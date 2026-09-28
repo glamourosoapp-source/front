@@ -18,7 +18,7 @@ import { buildVoidEvent } from "@/lib/pos-offline/sale-event";
 import type { PosSaleEventPayload } from "@glamouroso/shared/pos-sync";
 import { businessStamp } from "@/lib/business-time";
 import { formatMoney } from "@/lib/format-money";
-import { POS_SALE_STATUS } from "@glamouroso/shared/constants";
+import { POS_SALE_STATUS, posPaymentMethodLabel } from "@glamouroso/shared/constants";
 import type { PosSale } from "@/types";
 import { toast } from "sonner";
 
@@ -194,6 +194,7 @@ export function PosDaySalesDialog({
               <th>Ticket</th>
               <th>Hora</th>
               <th>Cliente</th>
+              <th>Pago</th>
               <th style={{ textAlign: "right" }}>Total</th>
               <th>Estado</th>
               <th />
@@ -210,6 +211,7 @@ export function PosDaySalesDialog({
                   })}
                 </td>
                 <td>{sale.customer?.name || "Mostrador"}</td>
+                <td>{posPaymentMethodLabel(sale.paymentMethod)}</td>
                 <td className="num">{formatMoney(sale.total)}</td>
                 <td>
                   {sale.status === POS_SALE_STATUS.VOIDED ? (

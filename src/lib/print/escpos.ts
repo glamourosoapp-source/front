@@ -1,6 +1,7 @@
 import type { PosSale, PosSaleItem } from "@/types";
 import type { TicketEmphasis, TicketSettings } from "@glamouroso/shared";
 import { ticketFooterLines, ticketHeaderBlock } from "@glamouroso/shared";
+import { POS_PAYMENT_METHODS, posPaymentMethodLabel } from "@glamouroso/shared/constants";
 
 /**
  * Ticket térmico en comandos ESC/POS.
@@ -254,8 +255,13 @@ function appendTicket(
   builder.row("TOTAL", money(sale.total));
   builder.size("normal").bold(false);
   if (settings.showPaymentDetail) {
-    builder.row("Pago con", money(sale.amountTendered));
-    builder.row("Cambio", money(sale.changeAmount));
+    // Con tarjeta o transferencia no hay cambio que verificar: va la forma de pago.
+    if (sale.paymentMethod === POS_PAYMENT_METHODS.CASH || !sale.paymentMethod) {
+      builder.row("Pago con", money(sale.amountTendered));
+      builder.row("Cambio", money(sale.changeAmount));
+    } else {
+      builder.row("Forma de pago", posPaymentMethodLabel(sale.paymentMethod));
+    }
   }
   builder.separator();
 

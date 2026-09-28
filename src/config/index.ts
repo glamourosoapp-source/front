@@ -1,6 +1,13 @@
 export const config = {
   apiBaseUrl: process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:3002/api",
   /**
+   * Bandera del módulo de fábrica: sección Fábrica del sidebar, app de la
+   * tablet (`/fabrica`) y sus pantallas. Apagada salvo que valga "true"; el
+   * Back lleva la suya (`FACTORY_MODULE_ENABLED`). Con fábrica apagada el
+   * surtido entra a la sucursal con la entrada de surtido.
+   */
+  factoryModuleEnabled: process.env.NEXT_PUBLIC_FACTORY_MODULE_ENABLED === "true",
+  /**
    * Instalador del Conector de impresión.
    *
    * Apunta a la última publicación del repo del conector: esa dirección no

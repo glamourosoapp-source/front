@@ -6,6 +6,7 @@ import { Droplets, FileDown, Package, RefreshCw, ShieldAlert } from "lucide-reac
 import { RESTOCK_ORDER_STATUS } from "@glamouroso/shared/constants";
 import { FilterBar, FilterDivider, FilterMeta, FilterSegmented } from "@/components/pos-admin/FilterBar";
 import { formatQuantity } from "@/lib/format-money";
+import { packQtyLabel } from "@/components/pos-admin/pos-labels";
 import { httpClient, getApiErrorMessage } from "@/services/http-client";
 import { usePermissions } from "@/lib/permissions";
 import { useRealtime } from "@/components/realtime/RealtimeProvider";
@@ -22,15 +23,19 @@ const SCOPE_OPTIONS: Array<{ value: Scope; label: string }> = [
 const APPROVED = new Set<string>([RESTOCK_ORDER_STATUS.APPROVED, RESTOCK_ORDER_STATUS.PREPARING]);
 const WITH_PENDING = new Set<string>([...APPROVED, RESTOCK_ORDER_STATUS.PENDING]);
 
-/** Una línea de líquido o un producto por pieza, sumado a través de todos los pedidos. */
+/** Una línea de líquido o un producto por pieza/caja, sumado a través de todos los pedidos. */
 interface Need {
   key: string;
   name: string;
-  unit: "bidon" | "pieza";
-  /** Bidones o piezas por preparar. */
+  unit: "bidon" | "pieza" | "paquete";
+  /** Bidones, cajas o piezas por preparar (empaques). */
   qty: number;
   /** Solo líquidos: bidones × litros por bidón. */
   liters: number;
+  /** Solo compras: piezas totales (cajas × piezas por caja; piezas sueltas tal cual). */
+  pieces: number;
+  /** Solo cajas: piezas por caja, congeladas en la partida. */
+  unitsPerPackage: number;
   orders: number;
   /** Código de sucursal → cantidad, para saber para quién es. */
   byBranch: Map<string, number>;
@@ -45,16 +50,29 @@ function consolidate(orders: RestockOrder[], includePrepared: boolean): Need[] {
       if (item.prepared && !includePrepared) continue;
       const qty = Number(item.requestedQty ?? 0);
       if (!qty) continue;
-      const unit = item.unit === "bidon" ? "bidon" : "pieza";
-      const key = `${unit}:${item.lineId ?? item.productId ?? item.productName}`;
+      const unitsPerPackage = item.unit === "paquete" ? Number(item.unitsPerPackage ?? 1) || 1 : 1;
+      const unit = item.unit === "bidon" ? "bidon" : unitsPerPackage > 1 ? "paquete" : "pieza";
+      // Una caja de 24 y una de 12 del mismo producto no se suman: son empaques distintos.
+      const key = `${unit}:${item.lineId ?? item.productId ?? item.productName}:${unitsPerPackage}`;
       const litersPerUnit = unit === "bidon" ? Number(item.litersPerUnit ?? 20) || 20 : 0;
       let need = needs.get(key);
       if (!need) {
-        need = { key, name: item.productName, unit, qty: 0, liters: 0, orders: 0, byBranch: new Map() };
+        need = {
+          key,
+          name: item.productName,
+          unit,
+          qty: 0,
+          liters: 0,
+          pieces: 0,
+          unitsPerPackage,
+          orders: 0,
+          byBranch: new Map(),
+        };
         needs.set(key, need);
       }
       need.qty += qty;
       need.liters += qty * litersPerUnit;
+      need.pieces += unit === "bidon" ? 0 : qty * unitsPerPackage;
       need.orders += 1;
       need.byBranch.set(branchCode, (need.byBranch.get(branchCode) ?? 0) + qty);
     }
@@ -119,13 +137,14 @@ export default function FactoryProductionPage() {
 
   const needs = useMemo(() => consolidate(scoped, includePrepared), [scoped, includePrepared]);
   const liquids = useMemo(() => needs.filter((need) => need.unit === "bidon"), [needs]);
-  const pieces = useMemo(() => needs.filter((need) => need.unit === "pieza"), [needs]);
+  const pieces = useMemo(() => needs.filter((need) => need.unit !== "bidon"), [needs]);
 
   const totals = useMemo(
     () => ({
       bidones: liquids.reduce((sum, need) => sum + need.qty, 0),
       liters: liquids.reduce((sum, need) => sum + need.liters, 0),
-      pieces: pieces.reduce((sum, need) => sum + need.qty, 0),
+      pieces: pieces.reduce((sum, need) => sum + need.pieces, 0),
+      cajas: pieces.filter((need) => need.unit === "paquete").reduce((sum, need) => sum + need.qty, 0),
       orders: scoped.length,
       branches: new Set(scoped.map((order) => order.branchId)).size,
     }),
@@ -150,20 +169,34 @@ export default function FactoryProductionPage() {
 
   /** Una sola hoja con las dos listas: la que se lleva a producción y a comprar. */
   function exportCsv() {
-    const rows: string[][] = [["Tipo", "Producto", "Cantidad", "Unidad", "Litros", "Pedidos", "Para quién"]];
+    const rows: string[][] = [
+      ["Tipo", "Producto", "Cantidad", "Unidad", "Piezas por empaque", "Piezas", "Litros", "Pedidos", "Para quién"],
+    ];
     for (const need of liquids) {
       rows.push([
         "Producir",
         need.name,
         String(need.qty),
         "bidones",
+        "",
+        "",
         String(need.liters),
         String(need.orders),
         branchesLabel(need),
       ]);
     }
     for (const need of pieces) {
-      rows.push(["Comprar", need.name, String(need.qty), "piezas", "", String(need.orders), branchesLabel(need)]);
+      rows.push([
+        "Comprar",
+        need.name,
+        String(need.qty),
+        need.unit === "paquete" ? "cajas" : "piezas",
+        need.unit === "paquete" ? String(need.unitsPerPackage) : "",
+        String(need.pieces),
+        "",
+        String(need.orders),
+        branchesLabel(need),
+      ]);
     }
     const csv = rows
       .map((row) => row.map((cell) => `"${cell.replace(/"/g, '""')}"`).join(","))
@@ -230,6 +263,7 @@ export default function FactoryProductionPage() {
           <strong>{formatQuantity(totals.pieces)}</strong>
           <small>
             {pieces.length} {pieces.length === 1 ? "producto" : "productos"} distintos
+            {totals.cajas ? ` · ${formatQuantity(totals.cajas)} cajas` : ""}
           </small>
         </div>
         <div className="card metric">
@@ -316,6 +350,7 @@ export default function FactoryProductionPage() {
             <Package size={18} style={{ color: "var(--glam-blue)" }} /> Para comprar
           </h2>
           <span className="page-kicker" style={{ margin: 0 }}>
+            {totals.cajas ? `${formatQuantity(totals.cajas)} cajas · ` : ""}
             {formatQuantity(totals.pieces)} piezas
           </span>
         </div>
@@ -324,6 +359,7 @@ export default function FactoryProductionPage() {
             <thead>
               <tr>
                 <th>Producto</th>
+                <th style={{ textAlign: "right" }}>Cantidad</th>
                 <th style={{ textAlign: "right" }}>Piezas</th>
                 <th style={{ textAlign: "right" }}>Pedidos</th>
                 <th>Para quién</th>
@@ -336,15 +372,16 @@ export default function FactoryProductionPage() {
                     <strong>{need.name}</strong>
                   </td>
                   <td style={{ textAlign: "right", fontWeight: 700, color: "var(--glam-navy)" }}>
-                    {formatQuantity(need.qty)}
+                    {packQtyLabel(need.qty, need.unit, need.unitsPerPackage)}
                   </td>
+                  <td style={{ textAlign: "right" }}>{formatQuantity(need.pieces)}</td>
                   <td style={{ textAlign: "right" }}>{need.orders}</td>
                   <td style={{ color: "var(--muted)", fontSize: 13 }}>{branchesLabel(need)}</td>
                 </tr>
               ))}
               {!pieces.length && !loading ? (
                 <tr>
-                  <td colSpan={4} style={{ textAlign: "center", padding: 28, color: "var(--muted)" }}>
+                  <td colSpan={5} style={{ textAlign: "center", padding: 28, color: "var(--muted)" }}>
                     No hay piezas pendientes de comprar.
                   </td>
                 </tr>

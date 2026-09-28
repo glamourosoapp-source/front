@@ -6,6 +6,7 @@ export * from "./permissions";
 export * from "./product-pricing";
 export * from "./pos-pricing";
 export * from "./pos-restock";
+export * from "./pos-containers";
 export * from "./pos-health";
 export * from "./pos-sync";
 export * from "./utils/customer-address";
