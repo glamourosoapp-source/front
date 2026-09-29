@@ -8,6 +8,12 @@ export const config = {
    */
   factoryModuleEnabled: process.env.NEXT_PUBLIC_FACTORY_MODULE_ENABLED === "true",
   /**
+   * Bandera del módulo de franquicias: sección Franquicias del sidebar, sus
+   * pantallas del panel y el portal (`/franquicia`). Apagada salvo que valga
+   * "true"; el Back lleva la suya (`FRANCHISE_MODULE_ENABLED`).
+   */
+  franchiseModuleEnabled: process.env.NEXT_PUBLIC_FRANCHISE_MODULE_ENABLED === "true",
+  /**
    * Instalador del Conector de impresión.
    *
    * Apunta a la última publicación del repo del conector: esa dirección no

@@ -5,6 +5,8 @@ import { useRouter } from "next/navigation";
 import { ShieldAlert } from "lucide-react";
 import { useAuthStore } from "@/stores/auth.store";
 import { usePermissions } from "@/lib/permissions";
+import { config } from "@/config";
+import { FranchiseDisabledNotice } from "@/components/pos-admin/FranchiseDisabledNotice";
 
 /**
  * Portal de franquicias: pantalla propia, fuera de `/dashboard`.
@@ -31,6 +33,15 @@ export default function FranchiseLayout({ children }: { children: ReactNode }) {
 
   if (!checked || !user) {
     return <main style={{ display: "grid", placeItems: "center", height: "100vh" }}>Cargando...</main>;
+  }
+
+  // Módulo detrás de bandera: apagado, el portal no levanta pedidos.
+  if (!config.franchiseModuleEnabled) {
+    return (
+      <main style={{ display: "grid", placeItems: "center", height: "100vh", padding: 24 }}>
+        <FranchiseDisabledNotice />
+      </main>
+    );
   }
 
   if (!can("franchise", "view")) {

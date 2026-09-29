@@ -25,7 +25,7 @@ export function landingRouteFor(permissions: PermissionMap | null | undefined): 
   if (!worksInDashboard) {
     if (allows("pos")) return "/pos";
     if (allows("factory") && config.factoryModuleEnabled) return "/fabrica";
-    if (allows("franchise")) return "/franquicia";
+    if (allows("franchise") && config.franchiseModuleEnabled) return "/franquicia";
   }
   return "/dashboard";
 }

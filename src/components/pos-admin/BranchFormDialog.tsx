@@ -17,6 +17,7 @@ import {
 } from "@mui/material";
 import { BRANCH_TYPES, type BranchType } from "@glamouroso/shared/constants";
 import { httpClient, getApiErrorMessage } from "@/services/http-client";
+import { config } from "@/config";
 import { Branch } from "@/types";
 import { toast } from "sonner";
 
@@ -130,7 +131,10 @@ export function BranchFormDialog({
             helperText="Una franquicia solo levanta pedidos a fábrica, sin caja ni inventario."
           >
             <MenuItem value={BRANCH_TYPES.BRANCH}>Sucursal con punto de venta</MenuItem>
-            <MenuItem value={BRANCH_TYPES.FRANCHISE}>Franquicia (solo pedidos)</MenuItem>
+            {/* Con el módulo de franquicias apagado no se crean nuevas; una que ya lo es conserva su tipo. */}
+            {(config.franchiseModuleEnabled || branch?.type === BRANCH_TYPES.FRANCHISE) && (
+              <MenuItem value={BRANCH_TYPES.FRANCHISE}>Franquicia (solo pedidos)</MenuItem>
+            )}
           </TextField>
           <TextField
             select

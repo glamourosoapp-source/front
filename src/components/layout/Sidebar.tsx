@@ -224,8 +224,9 @@ function isLinkVisible(link: NavLink, can: CanFn): boolean {
 
 function filterSectionsByPermissions(can: CanFn): NavSection[] {
   return sections
-    // Fábrica va detrás de bandera: apagada, su sección no se pinta.
+    // Fábrica y Franquicias van detrás de bandera: apagadas, su sección no se pinta.
     .filter((section) => section.id !== "fabrica" || config.factoryModuleEnabled)
+    .filter((section) => section.id !== "franquicias" || config.franchiseModuleEnabled)
     .map((section) => ({
       ...section,
       links: section.links?.filter((link) => isLinkVisible(link, can)),
