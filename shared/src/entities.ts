@@ -632,6 +632,12 @@ export interface RestockOrder {
   items?: RestockOrderItem[];
   /** Devoluciones a fábrica ligadas a este pedido: lo que el transportista se llevó de regreso. */
   returns?: FactoryReturn[];
+  /**
+   * Total del formato de pedido (precio de tienda + bidones vacíos, cajas
+   * azules y publicidad) con lo que se envía: cambia al editar lo despachado.
+   * `null` en los pedidos de franquicia, que suman su precio de mayoreo congelado.
+   */
+  total?: number | null;
   createdAt?: string;
   updatedAt?: string;
 }

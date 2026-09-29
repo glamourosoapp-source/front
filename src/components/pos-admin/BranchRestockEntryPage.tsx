@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { Button, Dialog, DialogActions, DialogContent, DialogTitle, MenuItem, TextField } from "@mui/material";
 import { ArrowLeft, Download, PackagePlus, RotateCcw, ShieldAlert, Truck } from "lucide-react";
-import type { FactoryForm, FactoryFormRow } from "@glamouroso/shared";
+import type { FactoryForm } from "@glamouroso/shared";
 import { httpClient, getApiErrorMessage } from "@/services/http-client";
 import { usePermissions } from "@/lib/permissions";
 import { formatMoney, formatQuantity } from "@/lib/format-money";
@@ -14,20 +14,17 @@ import { toast } from "sonner";
 import {
   FactoryFormSheet,
   allRows,
-  isLinked,
-  packsOf,
   round2,
   rowKey,
   sameValue,
   sheetPages,
-  targetKey,
-  toBase,
   uniqueTargets,
   unitOf,
   unlinkedCount,
   type SheetValues,
 } from "./FactoryFormSheet";
-import { RESTOCK_ORIGIN_LABELS, RESTOCK_STATUS_LABELS, formatDate } from "./pos-labels";
+import { capturedRows, capturedTotals, formWithValues, initialValues, sheetCharges } from "./factory-form-values";
+import { RESTOCK_ORIGIN_LABELS, RESTOCK_STATUS_LABELS, formatDate, unitLabel } from "./pos-labels";
 
 /** `order:<id>` | `shortages` | `blank`: con qué se precarga la hoja. */
 type BasisKey = string;
@@ -85,11 +82,8 @@ export function BranchRestockEntryPage() {
           `/pos/restock/branches/${branchId}/entry-form`,
           basisParams(key)
         );
-        const initial: SheetValues = {};
         // El Back pone la cantidad solo en el primer renglón de cada producto.
-        for (const row of uniqueTargets(allRows(data))) {
-          initial[targetKey(row)] = row.qty ? String(round2(row.qty)) : "";
-        }
+        const initial = initialValues(data);
         setForm(data);
         setValues(initial);
         setPrefill(initial);
@@ -121,56 +115,11 @@ export function BranchRestockEntryPage() {
   const unlinked = useMemo(() => (form ? unlinkedCount(form) : 0), [form]);
 
   /** Lo capturado: una entrada por línea o producto con cantidad (el formato puede repetir un producto). */
-  const captured = useMemo(() => {
-    const list: Array<{ row: FactoryFormRow; packs: number; base: number; amount: number }> = [];
-    for (const row of rows) {
-      const packs = packsOf(values[targetKey(row)]);
-      if (packs <= 0) continue;
-      const base = toBase(values[targetKey(row)], row.packSize);
-      list.push({ row, packs, base, amount: round2(base * (row.unitCost ?? 0)) });
-    }
-    return list;
-  }, [rows, values]);
-
-  const totals = useMemo(
-    () =>
-      captured.reduce(
-        (acc, item) => ({
-          liters: round2(acc.liters + (item.row.lineId ? item.base : 0)),
-          pieces: round2(acc.pieces + (item.row.lineId ? 0 : item.base)),
-          amount: round2(acc.amount + item.amount),
-        }),
-        { liters: 0, pieces: 0, amount: 0 }
-      ),
-    [captured]
-  );
+  const captured = useMemo(() => capturedRows(rows, values), [rows, values]);
+  const totals = useMemo(() => capturedTotals(captured), [captured]);
 
   /** Cargos del pie con lo capturado: bidones vacíos, cajas azules y publicidad (reglas del formato de tiendas). */
-  const charges = useMemo(() => {
-    const prices = form?.charges;
-    let transparent = 0;
-    let color = 0;
-    let blue = 0;
-    for (const { row, packs } of captured) {
-      if (row.bidon === "transparent") transparent += packs;
-      if (row.bidon === "color") color += packs;
-      if (row.blueBox) blue += packs;
-    }
-    const publicityQty = Math.max(0, Math.floor(Number(publicity) || 0));
-    const bidones = round2(transparent * (prices?.bidonTransparent ?? 0) + color * (prices?.bidonColor ?? 0));
-    const blueAmount = round2(blue * (prices?.blueBox ?? 0));
-    const publicityAmount = round2(publicityQty * (prices?.publicity ?? 0));
-    return {
-      transparent,
-      color,
-      bidones,
-      blue,
-      blueAmount,
-      publicityQty,
-      publicityAmount,
-      total: round2(bidones + blueAmount + publicityAmount),
-    };
-  }, [captured, form?.charges, publicity]);
+  const charges = useMemo(() => sheetCharges(captured, form?.charges, publicity), [captured, form?.charges, publicity]);
 
   const changedFromPrefill = useMemo(
     () => Object.keys(values).filter((key) => !sameValue(values[key], prefill[key])).length,
@@ -224,42 +173,8 @@ export function BranchRestockEntryPage() {
     if (!form) return;
     setExporting(true);
     try {
-      // Un producto repetido en el formato lleva su cantidad solo en el primer renglón.
-      const firstRows = new Set(uniqueTargets(allRows(form)).map(rowKey));
-      const withValues = (row: FactoryFormRow): FactoryFormRow => {
-        if (!isLinked(row)) return row;
-        if (!firstRows.has(rowKey(row))) return { ...row, qty: null, amount: null };
-        const packs = packsOf(values[targetKey(row)]);
-        const amount = packs > 0 && canSeeCosts ? round2(packs * row.packSize * (row.unitCost ?? 0)) : null;
-        return { ...row, qty: packs > 0 ? round2(packs) : null, amount, unitCost: canSeeCosts ? row.unitCost : null };
-      };
-      const pages = form.pages.map((p) => ({ ...p, blocks: p.blocks.map((block) => block.map(withValues)) }));
-      const rowsTotal = (blocks: FactoryFormRow[][]) => blocks.flat().reduce((sum, row) => sum + (row.amount ?? 0), 0);
-      const extras = form.extras.map(withValues);
-      const last = pages.length - 1;
-      const priced = pages.map((p, index) => ({
-        ...p,
-        total: canSeeCosts
-          ? round2(
-              rowsTotal(p.blocks) +
-                (p.page === 1 ? charges.bidones : 0) +
-                (index === last ? rowsTotal([extras]) + charges.blueAmount + charges.publicityAmount : 0)
-            )
-          : 0,
-      }));
       await exportFactoryFormPdf(
-        {
-          ...form,
-          pages: priced,
-          extras,
-          bidones: {
-            transparent: { qty: charges.transparent, amount: canSeeCosts ? round2(charges.transparent * (form.charges?.bidonTransparent ?? 0)) : 0 },
-            color: { qty: charges.color, amount: canSeeCosts ? round2(charges.color * (form.charges?.bidonColor ?? 0)) : 0 },
-          },
-          blueBoxes: { qty: charges.blue, amount: canSeeCosts ? charges.blueAmount : 0 },
-          publicity: { qty: charges.publicityQty, amount: canSeeCosts ? charges.publicityAmount : 0 },
-          grandTotal: canSeeCosts ? round2(priced.reduce((sum, p) => sum + p.total, 0)) : 0,
-        },
+        formWithValues(form, values, charges, canSeeCosts),
         { ...RESTOCK_ENTRY_FORM_OPTIONS, footers: true }
       );
     } catch (error) {
@@ -434,7 +349,7 @@ export function BranchRestockEntryPage() {
                   <tr key={rowKey(row)}>
                     <td>{row.label}</td>
                     <td style={{ textAlign: "right" }}>
-                      {formatQuantity(packs)} {row.packLabel}
+                      {formatQuantity(packs)} {unitLabel(packs, row.lineId ? "bidon" : "pieza", row.packLabel)}
                     </td>
                     <td style={{ textAlign: "right" }}>
                       {formatQuantity(base)} {unitOf(row)}

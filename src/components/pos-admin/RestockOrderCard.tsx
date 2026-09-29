@@ -1,7 +1,8 @@
 "use client";
 
+import { useState } from "react";
 import { Button, Chip } from "@mui/material";
-import { Check, FileDown, PackagePlus, Truck, X } from "lucide-react";
+import { Check, Eye, FileDown, PackagePlus, Pencil, Send, Truck, X } from "lucide-react";
 import Link from "next/link";
 import {
   FACTORY_RETURN_REASON_LABELS,
@@ -28,9 +29,11 @@ import {
   RESTOCK_STATUS_LABELS,
   formatDateTime,
   packQtyLabel,
+  restockOrderSheetHref,
   restockItemAmount,
 } from "./pos-labels";
 import { useFactoryFormDownload } from "./useFactoryFormDownload";
+import { RestockSendDialog } from "./RestockSendDialog";
 
 interface RestockOrderCardProps {
   order: RestockOrder;
@@ -47,6 +50,14 @@ interface RestockOrderCardProps {
    * pedidos abiertos; quien la pasa ya revisó el permiso y que no sea franquicia.
    */
   entryHref?: string | null;
+  /**
+   * "Enviado a sucursal" y "Editar envío": con fábrica apagada, el panel marca
+   * el pedido como enviado (sube al inventario) y corrige lo que se manda.
+   * Quien lo pasa ya revisó `posRestock:update` + `posInventory:update`.
+   */
+  canDispatch?: boolean;
+  /** Tras enviar o editar, para que la lista recargue el pedido y su total. */
+  onChanged?: (order: RestockOrder) => void;
 }
 
 /**
@@ -62,11 +73,19 @@ export function RestockOrderCard({
   showBranch = true,
   linkBranch = false,
   entryHref = null,
+  canDispatch = false,
+  onChanged,
 }: RestockOrderCardProps) {
   const { download: downloadForm, downloading: downloadingForm } = useFactoryFormDownload();
+  const [sending, setSending] = useState(false);
   const isFranchise = order.origin === RESTOCK_ORIGIN.FRANCHISE;
   const isSentOrReceived =
     order.status === RESTOCK_ORDER_STATUS.SENT || order.status === RESTOCK_ORDER_STATUS.RECEIVED;
+  const isOpen =
+    order.status === RESTOCK_ORDER_STATUS.PENDING ||
+    order.status === RESTOCK_ORDER_STATUS.APPROVED ||
+    order.status === RESTOCK_ORDER_STATUS.PREPARING;
+  const dispatchable = canDispatch && !isFranchise && order.status !== RESTOCK_ORDER_STATUS.CANCELLED;
   const items = order.items ?? [];
   // Lo que el transportista se llevó de regreso: cada partida devuelta cae en la
   // del pedido con su mismo producto o línea; lo que el pedido no traía va aparte.
@@ -147,10 +166,44 @@ export function RestockOrderCard({
           >
             {downloadingForm ? "Generando..." : "Descargar formato"}
           </Button>
-          {entryHref &&
-          (order.status === RESTOCK_ORDER_STATUS.PENDING ||
-            order.status === RESTOCK_ORDER_STATUS.APPROVED ||
-            order.status === RESTOCK_ORDER_STATUS.PREPARING) ? (
+          <Button
+            size="small"
+            variant="outlined"
+            startIcon={<Eye size={14} />}
+            component={Link}
+            href={restockOrderSheetHref(order.id)}
+            title="La hoja del formato con cómo quedó el pedido"
+          >
+            Ver formato
+          </Button>
+          {dispatchable && isOpen ? (
+            <Button
+              size="small"
+              variant="contained"
+              startIcon={<Send size={14} />}
+              onClick={() => setSending(true)}
+              title="Fábrica ya lo mandó: sube lo enviado al inventario de la sucursal"
+            >
+              Enviado a sucursal
+            </Button>
+          ) : null}
+          {dispatchable ? (
+            <Button
+              size="small"
+              variant="outlined"
+              startIcon={<Pencil size={14} />}
+              component={Link}
+              href={restockOrderSheetHref(order.id, true)}
+              title={
+                isSentOrReceived
+                  ? "Corrige lo que se envió: la diferencia entra o sale del inventario"
+                  : "Corrige lo que se va a mandar (lo que no hay en fábrica)"
+              }
+            >
+              Editar envío
+            </Button>
+          ) : null}
+          {entryHref && isOpen ? (
             <Button
               size="small"
               variant="contained"
@@ -250,6 +303,20 @@ export function RestockOrderCard({
               </tr>
             ))}
           </tbody>
+          {!isFranchise && order.total != null ? (
+            <tfoot>
+              <tr>
+                <td colSpan={2} style={{ textAlign: "right", fontWeight: 700 }}>
+                  Total del pedido
+                  <div className="page-kicker" style={{ margin: 0, fontWeight: 400 }}>
+                    precio de tienda del formato, con bidones y cajas azules
+                  </div>
+                </td>
+                <td style={{ textAlign: "right", fontWeight: 700 }}>{formatMoney(order.total)}</td>
+                <td />
+              </tr>
+            </tfoot>
+          ) : null}
           {totalFrozen != null ? (
             <tfoot>
               <tr>
@@ -279,6 +346,17 @@ export function RestockOrderCard({
             </div>
           ) : null}
         </div>
+      ) : null}
+      {sending ? (
+        <RestockSendDialog
+          order={order}
+          editHref={restockOrderSheetHref(order.id, true)}
+          onClose={() => setSending(false)}
+          onSent={(updated) => {
+            setSending(false);
+            onChanged?.(updated);
+          }}
+        />
       ) : null}
       {order.dispatchNotes ? (
         <p className="page-kicker" style={{ marginBottom: 0, color: "#92400e" }}>

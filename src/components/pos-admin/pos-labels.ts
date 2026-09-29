@@ -1,3 +1,4 @@
+import { config } from "@/config";
 import { BRANCH_TYPES, RESTOCK_ORDER_STATUS, RESTOCK_ORIGIN } from "@glamouroso/shared/constants";
 import type { BranchHealthLevel } from "@glamouroso/shared";
 import { formatQuantity } from "@/lib/format-money";
@@ -203,6 +204,21 @@ export function packQtyLabel(
  * PIEZA (o por bidón), y la cantidad son empaques, así que una caja × 24 vale
  * `qty × 24 × precio`. `quantity` permite valuar lo despachado en vez de lo pedido.
  */
+/** Hoja de un pedido de surtido: cómo quedó (`edit` = editar lo que se envía). */
+export function restockOrderSheetHref(orderId: string, edit = false): string {
+  return `/dashboard/pos/surtido/pedidos/${orderId}${edit ? "?modo=editar" : ""}`;
+}
+
+/**
+ * Aviso al aprobar un pedido. Con el módulo de fábrica apagado nadie "lo ve"
+ * en la tablet: el pedido espera a que el panel lo marque como enviado.
+ */
+export function approvedRestockMessage(prefix = "Pedido aprobado"): string {
+  return config.factoryModuleEnabled
+    ? `${prefix}: fábrica ya lo ve`
+    : `${prefix}. Cuando salga de fábrica, márcalo como enviado a la sucursal`;
+}
+
 export function restockItemAmount(
   item: { unit: string; unitPrice?: string | number | null; unitsPerPackage?: string | number | null },
   quantity: string | number | null | undefined

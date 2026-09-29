@@ -221,6 +221,37 @@ export const sendRestockOrderSchema = z.object({
   notes: optionalString,
 });
 
+/**
+ * Lo que sale (o salió) de fábrica en cada partida, en empaques. Antes de
+ * enviar solo corrige lo que se va a mandar; en un pedido ya enviado la
+ * diferencia contra lo que se había cargado entra o sale del inventario de la
+ * sucursal por kardex.
+ */
+export const editRestockDispatchSchema = z.object({
+  items: z
+    .array(
+      z
+        .object({
+          /** Partida del pedido; sin ella, `lineId` o `productId` agregan una partida nueva. */
+          itemId: z.string().uuid().optional(),
+          lineId: z.string().uuid().optional(),
+          productId: z.string().uuid().optional(),
+          dispatchedQty: z.coerce.number().min(0).max(100_000),
+          /** Por qué se manda distinto de lo pedido (p. ej. "no hay en fábrica"). */
+          notes: z.union([z.null(), z.string().max(500)]).optional(),
+        })
+        .superRefine((value, ctx) => {
+          const targets = [value.itemId, value.lineId, value.productId].filter(Boolean).length;
+          if (targets !== 1) {
+            ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Indica itemId, lineId o productId (solo uno)" });
+          }
+        })
+    )
+    .min(1)
+    .max(500),
+  notes: optionalString,
+});
+
 export const queryFactoryStatsSchema = z.object({
   from: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
   to: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),

@@ -9,7 +9,7 @@ import { usePermissions } from "@/lib/permissions";
 import { FilterBar, FilterDivider, FilterMeta } from "@/components/pos-admin/FilterBar";
 import { RestockOrderCard } from "@/components/pos-admin/RestockOrderCard";
 import { UnlinkedProductsTab } from "@/components/pos-admin/UnlinkedProductsTab";
-import { packQtyLabel, packTotals, unitLabel } from "@/components/pos-admin/pos-labels";
+import { approvedRestockMessage, packQtyLabel, packTotals, unitLabel } from "@/components/pos-admin/pos-labels";
 import { useFactoryFormDownload } from "@/components/pos-admin/useFactoryFormDownload";
 import { RESTOCK_ORDER_STATUS, RESTOCK_ORIGIN } from "@glamouroso/shared/constants";
 import { Branch, BranchShortage, ListResponse, RestockOrder } from "@/types";
@@ -123,7 +123,7 @@ export default function PosSurtidoPage() {
     try {
       if (action === "approve") {
         await httpClient.put(`/pos/restock/orders/${order.id}`, { status: RESTOCK_ORDER_STATUS.APPROVED });
-        toast.success("Pedido aprobado: fábrica ya lo ve");
+        toast.success(approvedRestockMessage());
       } else {
         await httpClient.post(`/pos/restock/orders/${order.id}/cancel`, {});
         toast.success("Pedido cancelado");
@@ -308,6 +308,10 @@ export default function PosSurtidoPage() {
                   ? `/dashboard/pos/sucursales/${order.branch.id}/entrada?order=${order.id}`
                   : null
               }
+              canDispatch={
+                canUpdate && can("posInventory", "update") && order.branch?.type !== "franchise"
+              }
+              onChanged={() => void loadOrders()}
               onApprove={(o) => void act(o, "approve")}
               onCancel={(o) => void act(o, "cancel")}
             />

@@ -12,7 +12,7 @@ import type { Branch, BranchShortage, ListResponse, RestockOrder } from "@/types
 import { toast } from "sonner";
 import { RestockOrderCard } from "../RestockOrderCard";
 import { FilterBar, FilterDateRange, FilterMeta, type DateRangeOption } from "../FilterBar";
-import { RESTOCK_STATUS_LABELS, packQtyLabel, packTotals } from "../pos-labels";
+import { RESTOCK_STATUS_LABELS, approvedRestockMessage, packQtyLabel, packTotals } from "../pos-labels";
 import { useFactoryFormDownload } from "../useFactoryFormDownload";
 
 /** Aquí sí hay "Todo": el historial completo de la sucursal es lo normal. */
@@ -117,7 +117,7 @@ export function BranchRestockTab({ branch }: { branch: Branch }) {
     try {
       if (action === "approve") {
         await httpClient.put(`/pos/restock/orders/${order.id}`, { status: RESTOCK_ORDER_STATUS.APPROVED });
-        toast.success("Pedido aprobado: fábrica ya lo ve");
+        toast.success(approvedRestockMessage());
       } else {
         await httpClient.post(`/pos/restock/orders/${order.id}/cancel`, {});
         toast.success("Pedido cancelado");
@@ -269,6 +269,11 @@ export function BranchRestockTab({ branch }: { branch: Branch }) {
           canUpdate={canUpdate}
           showBranch={false}
           entryHref={canRegisterEntry ? `${entryHref}?order=${order.id}` : null}
+          canDispatch={canRegisterEntry}
+          onChanged={() => {
+            void load();
+            void loadShortages();
+          }}
           onApprove={(o) => void act(o, "approve")}
           onCancel={(o) => void act(o, "cancel")}
         />

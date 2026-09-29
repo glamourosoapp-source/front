@@ -11,7 +11,7 @@ import {
   FilterMeta,
   type DateRangeOption,
 } from "@/components/pos-admin/FilterBar";
-import { RESTOCK_STATUS_LABELS, restockItemAmount } from "@/components/pos-admin/pos-labels";
+import { RESTOCK_STATUS_LABELS, approvedRestockMessage, restockItemAmount } from "@/components/pos-admin/pos-labels";
 import { formatMoney } from "@/lib/format-money";
 import { httpClient, getApiErrorMessage } from "@/services/http-client";
 import { usePermissions } from "@/lib/permissions";
@@ -139,7 +139,7 @@ export default function FranchiseOrdersPage() {
     try {
       if (action === "approve") {
         await httpClient.put(`/pos/restock/orders/${order.id}`, { status: RESTOCK_ORDER_STATUS.APPROVED });
-        toast.success(`Pedido de ${order.branch?.code} aprobado: fábrica ya lo ve`);
+        toast.success(approvedRestockMessage(`Pedido de ${order.branch?.code} aprobado`));
       } else {
         await httpClient.post(`/pos/restock/orders/${order.id}/cancel`, {});
         toast.success("Pedido cancelado");

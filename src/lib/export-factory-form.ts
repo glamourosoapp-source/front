@@ -468,12 +468,22 @@ function drawPage(
 export function drawFactoryForm(doc: jsPDF, form: FactoryForm, options: FactoryFormDrawOptions = {}): void {
   const resolved = { ...DEFAULT_OPTIONS, ...options };
   const pages = layoutPages(form, resolved.footers);
+  // Hoja de llenado (la "Hoja3" del Excel de tiendas): solo en pedidos y
+  // entradas. Cuenta en el "Hoja n/N" del pie para que no diga 1/4 en un PDF de 5.
+  const bidonRows = resolved.footers ? bidonSheetRows(form) : [];
+  const pageCount = pages.length + (bidonRows.length ? 1 : 0);
   pages.forEach((page, index) => {
     if (index > 0) doc.addPage("letter", "portrait");
-    drawPage(doc, form, page, index, pages.length, resolved);
+    drawPage(doc, form, page, index, pageCount, resolved);
   });
-  // Hoja de llenado (la "Hoja3" del Excel de tiendas): solo en pedidos y entradas.
-  if (resolved.footers) drawBidonSheet(doc, form);
+  if (bidonRows.length) drawBidonSheet(doc, form, bidonRows, pageCount);
+}
+
+/** Renglones que viajan en bidón, en el orden del formato. */
+function bidonSheetRows(form: FactoryForm) {
+  return form.pages
+    .flatMap((page) => page.blocks.flat())
+    .filter((row) => row.kind === "product" && row.bidon);
 }
 
 /**
@@ -481,13 +491,18 @@ export function drawFactoryForm(doc: jsPDF, form: FactoryForm, options: FactoryF
  * formato, con su cantidad, y el total de bidones transparentes y de color.
  * Es la hoja que usa quien llena los bidones.
  */
-function drawBidonSheet(doc: jsPDF, form: FactoryForm): void {
-  const rows = form.pages
-    .flatMap((page) => page.blocks.flat())
-    .filter((row) => row.kind === "product" && row.bidon);
+function drawBidonSheet(
+  doc: jsPDF,
+  form: FactoryForm,
+  rows: ReturnType<typeof bidonSheetRows>,
+  pageCount: number
+): void {
   if (!rows.length) return;
   doc.addPage("letter", "portrait");
   drawHeader(doc, form, "BIDONES");
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(5);
+  doc.text(`Hoja ${pageCount}/${pageCount}`, PAGE_W - MARGIN, PAGE_H - 2, { align: "right" });
   const columns = 3;
   const perColumn = Math.ceil(rows.length / columns);
   const gap = 4;

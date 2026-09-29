@@ -122,6 +122,21 @@ interface FactoryFormSheetProps {
   qtyHeader: string;
   /** Prefijo del `aria-label` de cada campo ("Mínimo de", "Cantidad de"). */
   inputLabel: string;
+  /** Solo lectura: la cantidad se pinta como texto, no como campo. */
+  readOnly?: boolean;
+  /** Esconde los renglones sin cantidad (y las secciones), para leer rápido cómo quedó un pedido. */
+  onlyFilled?: boolean;
+}
+
+/** Cuántos renglones con cantidad trae una hoja (uno por línea o producto). */
+function filledCount(page: SheetPage, values: SheetValues): number {
+  const seen = new Set<string>();
+  for (const row of page.blocks.flat()) {
+    if (!isLinked(row)) continue;
+    const key = targetKey(row);
+    if (packsOf(values[key]) > 0) seen.add(key);
+  }
+  return seen.size;
 }
 
 export function FactoryFormSheet({
@@ -134,6 +149,8 @@ export function FactoryFormSheet({
   disabled = false,
   qtyHeader,
   inputLabel,
+  readOnly = false,
+  onlyFilled = false,
 }: FactoryFormSheetProps) {
   const sheetRef = useRef<HTMLDivElement>(null);
   const current = pages.find((p) => p.page === page) ?? pages[0];
@@ -166,7 +183,10 @@ export function FactoryFormSheet({
             value={p.page}
             label={
               <span className="msf-tab">
-                <strong>{p.page === 0 ? "Otros" : `Hoja ${p.page}`}</strong>
+                <strong>
+                  {p.page === 0 ? "Otros" : `Hoja ${p.page}`}
+                  {readOnly || onlyFilled ? ` · ${filledCount(p, values)}` : ""}
+                </strong>
                 <span>{PAGE_HINTS[p.page] ?? ""}</span>
               </span>
             }
@@ -176,14 +196,24 @@ export function FactoryFormSheet({
 
       {current ? (
         <div className="msf-sheet" ref={sheetRef} key={current.page}>
-          {current.blocks.map((block, blockIndex) => (
+          {onlyFilled && !filledCount(current, values) ? (
+            <p className="page-kicker" style={{ margin: 0 }}>
+              Esta hoja no trae cantidades.
+            </p>
+          ) : null}
+          {current.blocks.map((block, blockIndex) => {
+            const visible = onlyFilled
+              ? block.filter((row) => isLinked(row) && packsOf(values[targetKey(row)]) > 0)
+              : block;
+            if (!visible.length) return null;
+            return (
             <div className="msf-block" key={blockIndex}>
               <div className="msf-head">
                 <span>Producto</span>
                 <span>Empaque</span>
                 <span>{qtyHeader}</span>
               </div>
-              {block.map((row) => {
+              {visible.map((row) => {
                 if (row.kind === "blank") return null;
                 const key = rowKey(row);
                 if (row.kind === "section") {
@@ -219,6 +249,11 @@ export function FactoryFormSheet({
                         </em>
                       ) : null}
                     </span>
+                    {readOnly ? (
+                      <strong className="msf-input" style={{ textAlign: "right", alignSelf: "center" }}>
+                        {packsOf(value) > 0 ? formatQuantity(packsOf(value)) : ""}
+                      </strong>
+                    ) : (
                     <input
                       data-msf
                       className="input msf-input"
@@ -235,11 +270,13 @@ export function FactoryFormSheet({
                       // La rueda del mouse sobre un input numérico enfocado cambia el valor sin querer.
                       onWheel={(event) => event.currentTarget.blur()}
                     />
+                    )}
                   </div>
                 );
               })}
             </div>
-          ))}
+            );
+          })}
         </div>
       ) : null}
     </>
