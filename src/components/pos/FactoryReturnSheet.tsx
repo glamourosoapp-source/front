@@ -8,7 +8,7 @@ import { FACTORY_RETURN_REASON_LABELS } from "@glamouroso/shared/constants";
 import type { FactoryReturn } from "@/types";
 
 function money(value: string | number | null | undefined): string {
-  return `$${Number(value ?? 0).toFixed(2)}`;
+  return `$${Number(value ?? 0).toLocaleString("es-MX", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
 
 function quantity(value: string | number): string {

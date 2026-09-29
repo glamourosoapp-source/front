@@ -50,6 +50,12 @@ interface PosState {
   removeLine: (key: string) => void;
   selectLine: (key: string | null) => void;
   clearActiveTicket: () => void;
+  /**
+   * Tras cobrar: si ya hay otra pestaña de venta vacía, la cobrada se cierra y
+   * se pasa a esa; si no, la cobrada se vacía y queda como ticket nuevo. Así no
+   * se acumulan pestañas vacías cuando se cobran tickets pendientes.
+   */
+  finishActiveTicket: () => void;
 }
 
 const STORAGE_KEY = "pos.tickets";
@@ -242,6 +248,20 @@ export const usePosStore = create<PosState>((set, get) => ({
     }),
 
   selectLine: (selectedLineKey) => set({ selectedLineKey }),
+
+  finishActiveTicket: () => {
+    const { tickets, activeTicketId } = get();
+    const spare = tickets.find(
+      (ticket) => ticket.id !== activeTicketId && ticket.kind !== "return" && !ticket.lines.length
+    );
+    if (!spare) {
+      get().clearActiveTicket();
+      return;
+    }
+    const remaining = tickets.filter((ticket) => ticket.id !== activeTicketId);
+    persist(remaining, spare.id);
+    set({ tickets: remaining, activeTicketId: spare.id, selectedLineKey: null });
+  },
 
   clearActiveTicket: () =>
     set((state) => {

@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useEffect, useState } from "react";
+import { FormEvent, useEffect, useRef, useState } from "react";
 import { Button, Dialog, DialogActions, DialogContent, DialogTitle, TextField } from "@mui/material";
 
 interface PosQuantityDialogProps {
@@ -27,6 +27,7 @@ export function PosQuantityDialog({
   onConfirm,
 }: PosQuantityDialogProps) {
   const [value, setValue] = useState(String(initialValue));
+  const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (open) setValue(String(initialValue));
@@ -46,7 +47,22 @@ export function PosQuantityDialog({
     !Number.isFinite(parsed) || parsed <= 0 || (!allowDecimals && !Number.isInteger(parsed));
 
   return (
-    <Dialog open={open} onClose={onClose} fullWidth maxWidth="xs">
+    <Dialog
+      open={open}
+      onClose={onClose}
+      fullWidth
+      maxWidth="xs"
+      // El valor precargado ("1" o la cantidad actual) va seleccionado: el
+      // cajero teclea encima. Sin esto, teclear 18 sobre "1" dejaba 118. Al
+      // terminar la transición el foco trampa de MUI ya pasó por el papel del
+      // diálogo, así que se enfoca y selecciona aquí además del autoFocus.
+      TransitionProps={{
+        onEntered: () => {
+          inputRef.current?.focus();
+          inputRef.current?.select();
+        },
+      }}
+    >
       <form onSubmit={submit}>
         <DialogTitle>{title}</DialogTitle>
         <DialogContent dividers>
@@ -55,6 +71,8 @@ export function PosQuantityDialog({
             value={value}
             onChange={(event) => setValue(event.target.value)}
             autoFocus
+            inputRef={inputRef}
+            onFocus={(event) => event.target.select()}
             fullWidth
             error={Boolean(value) && invalid}
             helperText={

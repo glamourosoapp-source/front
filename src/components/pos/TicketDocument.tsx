@@ -29,7 +29,8 @@ const LINE_HEIGHT = { tight: 1.2, normal: 1.35, loose: 1.6 } as const;
 const EMPHASIS_SCALE: Record<TicketEmphasis, number> = { normal: 1, large: 1.35, xlarge: 1.7 };
 
 function money(value: string | number | null | undefined): string {
-  return `$${Number(value ?? 0).toFixed(2)}`;
+  // Con separador de miles, igual que la barra de la caja ($1,000.00, no $1000.00).
+  return `$${Number(value ?? 0).toLocaleString("es-MX", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
 
 function quantity(value: string | number): string {
@@ -158,7 +159,7 @@ export function TicketDocument({
             {breakdown ? (
               <div style={{ fontStyle: "italic" }}>
                 {Number(breakdown.bidones) > 0
-                  ? `${breakdown.bidones} bidón × ${money(breakdown.bidonPrice)}`
+                  ? `${breakdown.bidones} ${Number(breakdown.bidones) === 1 ? "bidón" : "bidones"} × ${money(breakdown.bidonPrice)}`
                   : ""}
                 {Number(breakdown.bidones) > 0 && Number(breakdown.restLiters) > 0 ? " + " : ""}
                 {Number(breakdown.restLiters) > 0

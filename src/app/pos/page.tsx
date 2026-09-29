@@ -129,6 +129,7 @@ export default function PosPage() {
     removeLine,
     selectLine,
     clearActiveTicket,
+    finishActiveTicket,
   } = usePosStore();
 
   const ticket =
@@ -805,7 +806,7 @@ export default function PosPage() {
           paymentMethod: localSale.sale.paymentMethod,
         });
         window.setTimeout(() => setSuccessChange(null), 2600);
-        clearActiveTicket();
+        finishActiveTicket();
         if (print) void printSale(localSale.sale);
         focusCode();
         // La existencia del catálogo local baja con la venta: el siguiente
@@ -831,7 +832,7 @@ export default function PosPage() {
       storageReady,
       backup,
       setLastSale,
-      clearActiveTicket,
+      finishActiveTicket,
       printSale,
       focusCode,
       deductLocalStock,
@@ -1151,7 +1152,8 @@ export default function PosPage() {
           <button
             className="pos-action"
             onClick={toggleWholesale}
-            disabled={!selectedLine}
+            // Una devolución no lleva precios: mayoreo no aplica (F11 ya lo ignora).
+            disabled={!selectedLine || isReturn}
           >
             <span className="pos-action-key">F11</span>
             <Tag size={14} /> Mayoreo
@@ -1166,6 +1168,8 @@ export default function PosPage() {
               setCustomerIntent("assign");
               setDialog("customer");
             }}
+            // Una devolución no lleva cliente (F8 ya lo ignora).
+            disabled={isReturn}
           >
             <span className="pos-action-key">F8</span>
             <UserRound size={14} /> Cliente

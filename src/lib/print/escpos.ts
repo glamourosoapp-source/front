@@ -174,7 +174,7 @@ class EscPosBuilder {
 }
 
 function money(value: string | number | null | undefined): string {
-  return `$${Number(value ?? 0).toFixed(2)}`;
+  return `$${Number(value ?? 0).toLocaleString("es-MX", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
 
 function quantity(value: string | number): string {
@@ -191,7 +191,7 @@ function breakdownLine(item: PosSaleItem): string | null {
   if (!breakdown) return null;
   const parts: string[] = [];
   if (Number(breakdown.bidones) > 0) {
-    parts.push(`${breakdown.bidones} bidon x ${money(breakdown.bidonPrice)}`);
+    parts.push(`${breakdown.bidones} ${Number(breakdown.bidones) === 1 ? "bidon" : "bidones"} x ${money(breakdown.bidonPrice)}`);
   }
   if (Number(breakdown.restLiters) > 0) {
     parts.push(`${quantity(Number(breakdown.restLiters))} L x ${money(breakdown.literPrice)}`);
