@@ -1,8 +1,7 @@
 "use client";
 
-import { useState } from "react";
 import { Button, Chip } from "@mui/material";
-import { Check, Eye, FileDown, PackagePlus, Pencil, Send, Truck, X } from "lucide-react";
+import { Check, Eye, FileDown, Truck, X } from "lucide-react";
 import Link from "next/link";
 import {
   FACTORY_RETURN_REASON_LABELS,
@@ -11,17 +10,6 @@ import {
 } from "@glamouroso/shared/constants";
 import { formatMoney, formatQuantity } from "@/lib/format-money";
 import type { FactoryReturn, FactoryReturnItem, RestockOrder } from "@/types";
-
-const RETURN_RED = "#b91c1c";
-
-/** Partida devuelta con el folio de su devolución, para decir de dónde salió. */
-type ReturnedLine = FactoryReturnItem & { folio: string };
-
-function returnedLabel(line: ReturnedLine): string {
-  const unit = line.saleUnit === "liter" ? "L" : "pz";
-  const reason = FACTORY_RETURN_REASON_LABELS[line.reason] ?? line.reason;
-  return `Devuelto: ${formatQuantity(line.quantity)} ${unit} de ${line.productName} (${reason}) · ${line.folio}`;
-}
 import {
   BRANCH_TYPE_COPY,
   RESTOCK_ORIGIN_LABELS,
@@ -33,59 +21,28 @@ import {
   restockItemAmount,
 } from "./pos-labels";
 import { useFactoryFormDownload } from "./useFactoryFormDownload";
-import { RestockSendDialog } from "./RestockSendDialog";
 
-interface RestockOrderCardProps {
-  order: RestockOrder;
-  /** Aprobar y cancelar piden `posRestock:update`; sin él no se pintan. */
-  canUpdate: boolean;
-  onApprove?: (order: RestockOrder) => void;
-  onCancel?: (order: RestockOrder) => void;
-  /** En el detalle de la sucursal el encabezado no repite la sucursal. */
-  showBranch?: boolean;
-  /** Abre el detalle de la sucursal desde el módulo de fábrica. */
-  linkBranch?: boolean;
-  /**
-   * Hoja de entrada de surtido precargada con este pedido. Solo se pinta en
-   * pedidos abiertos; quien la pasa ya revisó el permiso y que no sea franquicia.
-   */
-  entryHref?: string | null;
-  /**
-   * "Enviado a sucursal" y "Editar envío": con fábrica apagada, el panel marca
-   * el pedido como enviado (sube al inventario) y corrige lo que se manda.
-   * Quien lo pasa ya revisó `posRestock:update` + `posInventory:update`.
-   */
-  canDispatch?: boolean;
-  /** Tras enviar o editar, para que la lista recargue el pedido y su total. */
-  onChanged?: (order: RestockOrder) => void;
+const RETURN_RED = "#b91c1c";
+
+/** Partida devuelta con el folio de su devolución, para decir de dónde salió. */
+type ReturnedLine = FactoryReturnItem & { folio: string };
+
+function returnedLabel(line: ReturnedLine): string {
+  const unit = line.saleUnit === "liter" ? "L" : "pz";
+  const reason = FACTORY_RETURN_REASON_LABELS[line.reason] ?? line.reason;
+  return `Devuelto: ${formatQuantity(line.quantity)} ${unit} de ${line.productName} (${reason}) · ${line.folio}`;
 }
 
 /**
- * Un pedido de surtido tal como lo ve el administrador: quién lo pidió, en qué
- * va, sus partidas con lo pedido y lo despachado, y las notas de las dos
- * puntas (quien pidió y fábrica).
+ * Las partidas de un pedido de surtido: lo pedido contra lo despachado, las
+ * notas de las dos puntas (quien pidió y fábrica) y lo devuelto en rojo. Lo
+ * usan la tarjeta (Fábrica, Franquicias) y la pestaña "Partidas" de la hoja
+ * del pedido.
  */
-export function RestockOrderCard({
-  order,
-  canUpdate,
-  onApprove,
-  onCancel,
-  showBranch = true,
-  linkBranch = false,
-  entryHref = null,
-  canDispatch = false,
-  onChanged,
-}: RestockOrderCardProps) {
-  const { download: downloadForm, downloading: downloadingForm } = useFactoryFormDownload();
-  const [sending, setSending] = useState(false);
+export function RestockOrderDetail({ order }: { order: RestockOrder }) {
   const isFranchise = order.origin === RESTOCK_ORIGIN.FRANCHISE;
   const isSentOrReceived =
     order.status === RESTOCK_ORDER_STATUS.SENT || order.status === RESTOCK_ORDER_STATUS.RECEIVED;
-  const isOpen =
-    order.status === RESTOCK_ORDER_STATUS.PENDING ||
-    order.status === RESTOCK_ORDER_STATUS.APPROVED ||
-    order.status === RESTOCK_ORDER_STATUS.PREPARING;
-  const dispatchable = canDispatch && !isFranchise && order.status !== RESTOCK_ORDER_STATUS.CANCELLED;
   const items = order.items ?? [];
   // Lo que el transportista se llevó de regreso: cada partida devuelta cae en la
   // del pedido con su mismo producto o línea; lo que el pedido no traía va aparte.
@@ -103,137 +60,9 @@ export function RestockOrderCard({
   const totalFrozen = isFranchise
     ? items.reduce((sum, item) => sum + restockItemAmount(item, item.requestedQty), 0)
     : null;
-  const branchHref = order.branch
-    ? `${
-        order.branch.type === "franchise"
-          ? BRANCH_TYPE_COPY.franchise.listHref
-          : BRANCH_TYPE_COPY.branch.listHref
-      }/${order.branch.id}`
-    : null;
 
   return (
-    <div className="panel p-5">
-      <div className="toolbar" style={{ marginBottom: 8 }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-          <Truck size={18} style={{ color: "var(--glam-blue)" }} />
-          {showBranch ? (
-            linkBranch && branchHref ? (
-              <Link href={branchHref} style={{ fontWeight: 700, color: "var(--glam-navy)" }}>
-                {order.branch?.code} · {order.branch?.name}
-              </Link>
-            ) : (
-              <strong>
-                {order.branch?.code} · {order.branch?.name}
-              </strong>
-            )
-          ) : (
-            <strong>Pedido del {formatDateTime(order.createdAt)}</strong>
-          )}
-          <Chip
-            label={RESTOCK_STATUS_LABELS[order.status] ?? order.status}
-            size="small"
-            color={RESTOCK_STATUS_COLORS[order.status] ?? "default"}
-          />
-          <Chip
-            label={RESTOCK_ORIGIN_LABELS[order.origin] ?? order.origin}
-            size="small"
-            variant="outlined"
-          />
-          {showBranch ? (
-            <span className="page-kicker" style={{ margin: 0 }}>
-              {formatDateTime(order.createdAt)}
-            </span>
-          ) : null}
-          {order.sentAt ? (
-            <span className="page-kicker" style={{ margin: 0 }}>
-              · enviado {formatDateTime(order.sentAt)}
-            </span>
-          ) : null}
-          {order.receivedAt ? (
-            <span className="page-kicker" style={{ margin: 0 }}>
-              · recibido {formatDateTime(order.receivedAt)}
-            </span>
-          ) : null}
-        </div>
-        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-          <Button
-            size="small"
-            variant="outlined"
-            startIcon={<FileDown size={14} />}
-            disabled={downloadingForm}
-            onClick={() => void downloadForm(`/pos/restock/orders/${order.id}/form`)}
-            title="El formato de pedido a fábrica en PDF, con las partidas de este pedido"
-          >
-            {downloadingForm ? "Generando..." : "Descargar formato"}
-          </Button>
-          <Button
-            size="small"
-            variant="outlined"
-            startIcon={<Eye size={14} />}
-            component={Link}
-            href={restockOrderSheetHref(order.id)}
-            title="La hoja del formato con cómo quedó el pedido"
-          >
-            Ver formato
-          </Button>
-          {dispatchable && isOpen ? (
-            <Button
-              size="small"
-              variant="contained"
-              startIcon={<Send size={14} />}
-              onClick={() => setSending(true)}
-              title="Fábrica ya lo mandó: sube lo enviado al inventario de la sucursal"
-            >
-              Enviado a sucursal
-            </Button>
-          ) : null}
-          {dispatchable ? (
-            <Button
-              size="small"
-              variant="outlined"
-              startIcon={<Pencil size={14} />}
-              component={Link}
-              href={restockOrderSheetHref(order.id, true)}
-              title={
-                isSentOrReceived
-                  ? "Corrige lo que se envió: la diferencia entra o sale del inventario"
-                  : "Corrige lo que se va a mandar (lo que no hay en fábrica)"
-              }
-            >
-              Editar envío
-            </Button>
-          ) : null}
-          {entryHref && isOpen ? (
-            <Button
-              size="small"
-              variant="contained"
-              color="success"
-              startIcon={<PackagePlus size={14} />}
-              component={Link}
-              href={entryHref}
-              title="Captura lo que llegó con la hoja de fábrica precargada con este pedido"
-            >
-              Registrar entrada
-            </Button>
-          ) : null}
-          {canUpdate && order.status === RESTOCK_ORDER_STATUS.PENDING ? (
-            <>
-              <Button
-                size="small"
-                variant="contained"
-                startIcon={<Check size={14} />}
-                onClick={() => onApprove?.(order)}
-              >
-                Aprobar
-              </Button>
-              <Button size="small" color="error" startIcon={<X size={14} />} onClick={() => onCancel?.(order)}>
-                Cancelar
-              </Button>
-            </>
-          ) : null}
-        </div>
-      </div>
-
+    <>
       {order.notes ? (
         <p className="page-kicker" style={{ marginTop: 0 }}>
           <strong>Nota de quien pidió:</strong> {order.notes}
@@ -347,22 +176,133 @@ export function RestockOrderCard({
           ) : null}
         </div>
       ) : null}
-      {sending ? (
-        <RestockSendDialog
-          order={order}
-          editHref={restockOrderSheetHref(order.id, true)}
-          onClose={() => setSending(false)}
-          onSent={(updated) => {
-            setSending(false);
-            onChanged?.(updated);
-          }}
-        />
-      ) : null}
       {order.dispatchNotes ? (
         <p className="page-kicker" style={{ marginBottom: 0, color: "#92400e" }}>
           <strong>Nota de fábrica:</strong> {order.dispatchNotes}
         </p>
       ) : null}
+    </>
+  );
+}
+
+interface RestockOrderCardProps {
+  order: RestockOrder;
+  /** Aprobar y cancelar piden `posRestock:update`; sin él no se pintan. */
+  canUpdate: boolean;
+  onApprove?: (order: RestockOrder) => void;
+  onCancel?: (order: RestockOrder) => void;
+  /** En el detalle de la sucursal el encabezado no repite la sucursal. */
+  showBranch?: boolean;
+  /** Abre el detalle de la sucursal desde el módulo de fábrica. */
+  linkBranch?: boolean;
+}
+
+/**
+ * Un pedido de surtido completo en tarjeta, como lo ven Fábrica y Franquicias
+ * (módulos detrás de bandera): quién lo pidió, en qué va y sus partidas. Las
+ * sucursales usan la tabla de pedidos (`RestockOrdersTable`) y la hoja.
+ */
+export function RestockOrderCard({
+  order,
+  canUpdate,
+  onApprove,
+  onCancel,
+  showBranch = true,
+  linkBranch = false,
+}: RestockOrderCardProps) {
+  const { download: downloadForm, downloading: downloadingForm } = useFactoryFormDownload();
+  const branchHref = order.branch
+    ? `${
+        order.branch.type === "franchise"
+          ? BRANCH_TYPE_COPY.franchise.listHref
+          : BRANCH_TYPE_COPY.branch.listHref
+      }/${order.branch.id}`
+    : null;
+
+  return (
+    <div className="panel p-5">
+      <div className="toolbar" style={{ marginBottom: 8 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+          <Truck size={18} style={{ color: "var(--glam-blue)" }} />
+          {showBranch ? (
+            linkBranch && branchHref ? (
+              <Link href={branchHref} style={{ fontWeight: 700, color: "var(--glam-navy)" }}>
+                {order.branch?.code} · {order.branch?.name}
+              </Link>
+            ) : (
+              <strong>
+                {order.branch?.code} · {order.branch?.name}
+              </strong>
+            )
+          ) : (
+            <strong>Pedido del {formatDateTime(order.createdAt)}</strong>
+          )}
+          <Chip
+            label={RESTOCK_STATUS_LABELS[order.status] ?? order.status}
+            size="small"
+            color={RESTOCK_STATUS_COLORS[order.status] ?? "default"}
+          />
+          <Chip
+            label={RESTOCK_ORIGIN_LABELS[order.origin] ?? order.origin}
+            size="small"
+            variant="outlined"
+          />
+          {showBranch ? (
+            <span className="page-kicker" style={{ margin: 0 }}>
+              {formatDateTime(order.createdAt)}
+            </span>
+          ) : null}
+          {order.sentAt ? (
+            <span className="page-kicker" style={{ margin: 0 }}>
+              · enviado {formatDateTime(order.sentAt)}
+            </span>
+          ) : null}
+          {order.receivedAt ? (
+            <span className="page-kicker" style={{ margin: 0 }}>
+              · recibido {formatDateTime(order.receivedAt)}
+            </span>
+          ) : null}
+        </div>
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+          <Button
+            size="small"
+            variant="outlined"
+            startIcon={<FileDown size={14} />}
+            disabled={downloadingForm}
+            onClick={() => void downloadForm(`/pos/restock/orders/${order.id}/form`)}
+            title="El formato de pedido a fábrica en PDF, con las partidas de este pedido"
+          >
+            {downloadingForm ? "Generando..." : "Descargar formato"}
+          </Button>
+          <Button
+            size="small"
+            variant="outlined"
+            startIcon={<Eye size={14} />}
+            component={Link}
+            href={restockOrderSheetHref(order.id)}
+            title="La hoja del pedido: formato y partidas"
+          >
+            Ver pedido
+          </Button>
+          {canUpdate && order.status === RESTOCK_ORDER_STATUS.PENDING ? (
+            <>
+              <Button
+                size="small"
+                variant="contained"
+                startIcon={<Check size={14} />}
+                onClick={() => onApprove?.(order)}
+              >
+                Aprobar
+              </Button>
+              <Button size="small" color="error" startIcon={<X size={14} />} onClick={() => onCancel?.(order)}>
+                Cancelar
+              </Button>
+            </>
+          ) : null}
+        </div>
+      </div>
+
+      <RestockOrderDetail order={order} />
     </div>
   );
 }

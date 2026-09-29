@@ -1,14 +1,13 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import Link from "next/link";
 import { Button, MenuItem, TextField } from "@mui/material";
-import { FileSpreadsheet, Link2, RefreshCw } from "lucide-react";
+import { Link2, RefreshCw } from "lucide-react";
 import { httpClient, getApiErrorMessage } from "@/services/http-client";
 import { formatQuantity } from "@/lib/format-money";
 import { usePermissions } from "@/lib/permissions";
 import { LinkToFormDialog } from "@/components/pos-admin/LinkToFormDialog";
-import { FilterBar, FilterDivider, FilterMeta, FilterSearch } from "@/components/pos-admin/FilterBar";
+import { FilterBar, FilterMeta, FilterSearch } from "@/components/pos-admin/FilterBar";
 import { Branch, UnlinkedRestockItem } from "@/types";
 import { toast } from "sonner";
 
@@ -76,7 +75,7 @@ export function UnlinkedProductsTab({ branches }: { branches: Branch[] }) {
     <>
       <p className="page-kicker" style={{ margin: 0 }}>
         La caja deja vender cualquier producto aunque no esté en el formato de pedido; su existencia
-        queda en negativo y nunca entra al surtido. Lígalos en Formato de pedido para que se repongan.
+        queda en negativo y nunca entra al surtido. Lígalos a un renglón del formato para que se repongan.
       </p>
       <FilterBar>
         <TextField
@@ -106,16 +105,6 @@ export function UnlinkedProductsTab({ branches }: { branches: Branch[] }) {
           sx={{ height: 40, whiteSpace: "nowrap" }}
         >
           Actualizar
-        </Button>
-        <FilterDivider />
-        <Button
-          component={Link}
-          href="/dashboard/pos/formato"
-          variant="outlined"
-          startIcon={<FileSpreadsheet size={16} />}
-          sx={{ height: 40, whiteSpace: "nowrap" }}
-        >
-          Ir a Formato de pedido
         </Button>
         <FilterMeta>
           <strong>{productCount}</strong> {productCount === 1 ? "producto" : "productos"} sin formato

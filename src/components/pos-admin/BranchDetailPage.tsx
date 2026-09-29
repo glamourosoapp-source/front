@@ -102,6 +102,8 @@ export function BranchDetailPage({ type }: { type: BranchType }) {
 
   function selectTab(next: TabKey) {
     const query = new URLSearchParams(searchParams.toString());
+    // `bajo=1` solo aplica al llegar desde la señal "bajo stock mínimo".
+    query.delete("bajo");
     if (next === "resumen") query.delete("tab");
     else query.set("tab", next);
     const qs = query.toString();
@@ -212,7 +214,9 @@ export function BranchDetailPage({ type }: { type: BranchType }) {
       {tab === "ventas" ? <BranchSalesTab branchId={branch.id} /> : null}
       {tab === "pedidos" ? <BranchRestockTab branch={branch} /> : null}
       {tab === "cortes" ? <BranchCutsTab branchId={branch.id} /> : null}
-      {tab === "inventario" ? <BranchInventoryTab branchId={branch.id} /> : null}
+      {tab === "inventario" ? (
+        <BranchInventoryTab branchId={branch.id} initialBelowMin={searchParams.get("bajo") === "1"} />
+      ) : null}
       {tab === "usuarios" ? <BranchUsersTab branch={branch} /> : null}
       {tab === "clientes" ? <BranchCustomersTab branchId={branch.id} /> : null}
       {tab === "caja" ? <BranchSyncTab branch={branch} /> : null}

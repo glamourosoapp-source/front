@@ -114,11 +114,18 @@ const sections: NavSection[] = [
     label: "Punto de venta",
     links: [
       { href: "/dashboard/pos/sucursales", label: "Sucursales", icon: Store, module: "posBranches" },
-      { href: "/dashboard/pos/inventario", label: "Inventario", icon: Warehouse, module: "posInventory" },
-      { href: "/dashboard/pos/lineas", label: "Líneas de líquidos", icon: Droplets, module: "posInventory" },
-      { href: "/dashboard/pos/cortes", label: "Cortes y reportes", icon: Receipt, module: "posReports" },
       { href: "/dashboard/pos/surtido", label: "Faltantes y surtido", icon: Truck, module: "posRestock" },
+      { href: "/dashboard/pos/inventario", label: "Inventario", icon: Warehouse, module: "posInventory" },
+      { href: "/dashboard/pos/cortes", label: "Cortes y reportes", icon: Receipt, module: "posReports" },
+    ],
+  },
+  {
+    // Lo que se ajusta de vez en cuando, separado de la operación diaria.
+    id: "pos-configuracion",
+    label: "Configuración del POS",
+    links: [
       { href: "/dashboard/pos/formato", label: "Formato de pedido", icon: FileSpreadsheet, module: "posRestock" },
+      { href: "/dashboard/pos/lineas", label: "Líneas de líquidos", icon: Droplets, module: "posInventory" },
       { href: "/dashboard/pos/ticket", label: "Ticket de venta", icon: ReceiptText, module: "settings" },
     ],
   },
@@ -259,7 +266,13 @@ export function Sidebar({ mobileOpen = false, onNavigate }: SidebarProps) {
   const router = useRouter();
   const logout = useAuthStore((s) => s.logout);
   const { can } = usePermissions();
-  const visibleSections = filterSectionsByPermissions(can);
+  // Los permisos salen de la sesión en localStorage: en el servidor no hay
+  // sesión y el menú salía con otras secciones que en el navegador (React
+  // tiraba "Hydration failed" en cada carga). El primer render pinta el menú
+  // vacío en los dos lados y se llena al montar.
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
+  const visibleSections = mounted ? filterSectionsByPermissions(can) : [];
   const allNavLinks = getAllNavLinks(visibleSections);
   const activeHref = findActiveHref(pathname, allNavLinks);
   // Inbox a 3 columnas: colapsar al entrar da mas ancho util.

@@ -15,7 +15,8 @@ export function FactoryDisabledNotice() {
       <h2>El módulo de fábrica está desactivado</h2>
       <p className="page-kicker">
         Por ahora el producto que sale de fábrica se registra en cada sucursal: entra a Sucursales,
-        abre la sucursal y en la pestaña Pedidos a fábrica usa &quot;Registrar entrada de surtido&quot;.
+        abre la sucursal y en la pestaña Pedidos a fábrica usa &quot;Registrar llegada&quot; en el pedido
+        que llegó.
       </p>
       <Link href="/dashboard/pos/sucursales" className="button secondary">
         Ir a Sucursales

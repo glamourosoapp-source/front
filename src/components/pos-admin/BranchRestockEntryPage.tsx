@@ -158,7 +158,7 @@ export function BranchRestockEntryPage() {
         publicityQty: charges.publicityQty,
       });
       toast.success(
-        `Entrada registrada: ${captured.length} ${captured.length === 1 ? "renglón" : "renglones"} al inventario`
+        `Llegada registrada: ${captured.length} ${captured.length === 1 ? "renglón" : "renglones"} al inventario`
       );
       setConfirmOpen(false);
       router.push(`/dashboard/pos/sucursales/${branchId}?tab=pedidos`);
@@ -192,7 +192,7 @@ export function BranchRestockEntryPage() {
           <div>
             <h2 style={{ margin: 0 }}>Sin acceso</h2>
             <p className="page-kicker" style={{ margin: 0 }}>
-              La entrada de surtido necesita el permiso de Faltantes y surtido del punto de venta.
+              La llegada de surtido necesita el permiso de Faltantes y surtido del punto de venta.
             </p>
           </div>
         </div>
@@ -214,9 +214,11 @@ export function BranchRestockEntryPage() {
             <ArrowLeft size={16} />
             Volver a pedidos a fábrica
           </Link>
-          <h1 className="page-title" style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
-            <Truck size={22} style={{ color: "var(--glam-blue)" }} />
-            Entrada de surtido{form ? ` · ${form.code ? `${form.code} · ` : ""}${form.name}` : ""}
+          <h1 className="page-title" style={{ display: "flex", alignItems: "center", gap: 10 }}>
+            <Truck size={22} style={{ color: "var(--glam-blue)", flex: "0 0 auto" }} />
+            <span>
+              Llegada de surtido{form ? ` · ${form.code ? `${form.code} · ` : ""}${form.name}` : ""}
+            </span>
           </h1>
           <p className="page-kicker">
             La hoja viene precargada; corrige o llena lo que de verdad llegó. Se captura en empaques, como en
@@ -251,7 +253,7 @@ export function BranchRestockEntryPage() {
             onClick={() => void exportPdf()}
             disabled={!form || exporting}
           >
-            {exporting ? "Generando…" : "Descargar PDF"}
+            {exporting ? "Generando…" : "Descargar formato"}
           </Button>
         </div>
       </div>
@@ -307,18 +309,18 @@ export function BranchRestockEntryPage() {
               disabled={!captured.length || saving}
               onClick={() => setConfirmOpen(true)}
             >
-              Registrar entrada
+              Registrar llegada
             </Button>
           </div>
         </div>
       ) : (
         <p className="page-kicker">
-          Registrar la entrada pide los permisos de Faltantes y surtido y de Inventario (editar).
+          Registrar la llegada pide los permisos de Faltantes y surtido y de Inventario (editar).
         </p>
       )}
 
       <Dialog open={confirmOpen} onClose={() => (saving ? null : setConfirmOpen(false))} fullWidth maxWidth="md">
-        <DialogTitle>Registrar entrada de surtido</DialogTitle>
+        <DialogTitle>Registrar llegada de surtido</DialogTitle>
         <DialogContent dividers>
           <p className="page-kicker" style={{ marginTop: 0 }}>
             Sube el inventario de {form?.name} con {captured.length} {captured.length === 1 ? "renglón" : "renglones"}:{" "}
@@ -402,7 +404,7 @@ export function BranchRestockEntryPage() {
             Seguir capturando
           </Button>
           <Button variant="contained" onClick={() => void register()} disabled={saving}>
-            {saving ? "Registrando…" : "Registrar entrada"}
+            {saving ? "Registrando…" : "Registrar llegada"}
           </Button>
         </DialogActions>
       </Dialog>

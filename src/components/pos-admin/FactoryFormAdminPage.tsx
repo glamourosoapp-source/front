@@ -26,7 +26,10 @@ import { useDebounce } from "@/hooks/useDebounce";
 import { formatMoney, formatQuantity } from "@/lib/format-money";
 import { exportFactoryFormXlsx } from "@/lib/export-factory-form-xlsx";
 import { toast } from "sonner";
+import { useRouter, useSearchParams } from "next/navigation";
+import type { Branch, ListResponse } from "@/types";
 import { PAGE_HINTS } from "./FactoryFormSheet";
+import { UnlinkedProductsTab } from "./UnlinkedProductsTab";
 
 type Kind = "product" | "section" | "blank";
 
@@ -69,6 +72,24 @@ export function FactoryFormAdminPage() {
   const [search, setSearch] = useState("");
   const [targets, setTargets] = useState<FactoryFormTarget[]>([]);
   const debouncedSearch = useDebounce(search, 250);
+  // "Productos no ligados" vivía en Faltantes y surtido, pero ligar un producto
+  // es editar el formato: ahora es una vista de esta pantalla (`?vista=no-ligados`).
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const view = searchParams.get("vista") === "no-ligados" ? "no-ligados" : "renglones";
+  const [branches, setBranches] = useState<Branch[]>([]);
+
+  useEffect(() => {
+    if (!canView || view !== "no-ligados" || branches.length) return;
+    httpClient
+      .get<ListResponse<Branch>>("/pos/branches", { limit: 200, isActive: "true" })
+      .then((res) => setBranches(res.items))
+      .catch(() => setBranches([]));
+  }, [canView, view, branches.length]);
+
+  function selectView(next: string) {
+    router.replace(next === "no-ligados" ? "/dashboard/pos/formato?vista=no-ligados" : "/dashboard/pos/formato");
+  }
 
   const load = useCallback(async () => {
     if (!canView) return;
@@ -242,6 +263,15 @@ export function FactoryFormAdminPage() {
         </p>
       ) : null}
 
+      <Tabs value={view} onChange={(_e, value) => selectView(value as string)} sx={{ borderBottom: "1px solid var(--border)" }}>
+        <Tab value="renglones" label="Renglones del formato" />
+        <Tab value="no-ligados" label="Productos no ligados" />
+      </Tabs>
+
+      {view === "no-ligados" ? <UnlinkedProductsTab branches={branches} /> : null}
+
+      {view === "renglones" ? (
+      <>
       <Tabs value={pages.includes(page) ? page : (pages[0] ?? 1)} onChange={(_e, value) => setPage(value as number)} variant="scrollable" allowScrollButtonsMobile>
         {pages.map((p) => (
           <Tab
@@ -310,6 +340,8 @@ export function FactoryFormAdminPage() {
           </div>
         ))}
       </div>
+      </>
+      ) : null}
 
       <Dialog open={Boolean(editing)} onClose={() => (saving ? null : setEditing(null))} fullWidth maxWidth="sm">
         <DialogTitle>{editing?.mode === "create" ? "Agregar renglón" : "Editar renglón"}</DialogTitle>

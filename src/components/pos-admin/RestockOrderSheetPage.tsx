@@ -1,7 +1,6 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import Link from "next/link";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import {
   Alert,
@@ -13,12 +12,15 @@ import {
   DialogTitle,
   FormControlLabel,
   Switch,
+  Tab,
+  Tabs,
   TextField,
 } from "@mui/material";
-import { ArrowLeft, Download, Pencil, RotateCcw, Save, Send, ShieldAlert, Truck } from "lucide-react";
+import { ArrowLeft, Download, RotateCcw, Save, ShieldAlert, Truck } from "lucide-react";
 import { toast } from "sonner";
 import type { FactoryForm, FactoryFormRow } from "@glamouroso/shared";
 import { BRANCH_TYPES, RESTOCK_ORDER_STATUS, RESTOCK_ORIGIN } from "@glamouroso/shared/constants";
+import { config } from "@/config";
 import { httpClient, getApiErrorMessage } from "@/services/http-client";
 import { usePermissions } from "@/lib/permissions";
 import { formatMoney, formatQuantity } from "@/lib/format-money";
@@ -27,6 +29,7 @@ import type { RestockOrder, RestockOrderItem } from "@/types";
 import {
   FactoryFormSheet,
   allRows,
+  filledCount,
   packsOf,
   round2,
   sameValue,
@@ -45,7 +48,8 @@ import {
   restockOrderSheetHref,
   unitLabel,
 } from "./pos-labels";
-import { RestockSendDialog } from "./RestockSendDialog";
+import { RestockOrderDetail } from "./RestockOrderCard";
+import { RestockOrderActions } from "./RestockOrderActions";
 
 function itemKey(item: RestockOrderItem): string {
   return item.lineId ? `line:${item.lineId}` : `product:${item.productId}`;
@@ -85,7 +89,8 @@ export function RestockOrderSheetPage() {
   const [loading, setLoading] = useState(true);
   const [exporting, setExporting] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
-  const [sendOpen, setSendOpen] = useState(false);
+  /** Fuera de edición: la hoja del formato o las partidas (pedido contra enviado, devoluciones). */
+  const [view, setView] = useState<"formato" | "partidas">("formato");
   const [saving, setSaving] = useState(false);
   const [reasons, setReasons] = useState<Record<string, string>>({});
   const [dispatchNote, setDispatchNote] = useState("");
@@ -103,6 +108,10 @@ export function RestockOrderSheetPage() {
       setForm(formData);
       setValues(initial);
       setBaseline(initial);
+      // Abrir en la primera hoja que trae cantidades: un pedido de fibras abría
+      // en la Hoja 1 (líquidos) diciendo "Esta hoja no trae cantidades".
+      const firstFilled = sheetPages(formData).find((p) => filledCount(p, initial) > 0);
+      if (firstFilled) setPage(firstFilled.page);
       setReasons({});
       setDispatchNote(orderData.dispatchNotes ?? "");
     } catch (error) {
@@ -253,10 +262,12 @@ export function RestockOrderSheetPage() {
             <ArrowLeft size={16} />
             Volver a los pedidos
           </button>
-          <h1 className="page-title" style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
-            <Truck size={22} style={{ color: "var(--glam-blue)" }} />
-            {canEdit ? "Editar envío" : "Pedido a fábrica"}
-            {order?.branch ? ` · ${order.branch.code} · ${order.branch.name}` : ""}
+          <h1 className="page-title" style={{ display: "flex", alignItems: "center", gap: 10 }}>
+            <Truck size={22} style={{ color: "var(--glam-blue)", flex: "0 0 auto" }} />
+            <span>
+              {canEdit ? "Corregir envío" : "Pedido a fábrica"}
+              {order?.branch ? ` · ${order.branch.code} · ${order.branch.name}` : ""}
+            </span>
           </h1>
           {order ? (
             <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
@@ -294,22 +305,17 @@ export function RestockOrderSheetPage() {
             onClick={() => void exportPdf()}
             disabled={!form || exporting}
           >
-            {exporting ? "Generando…" : "Descargar PDF"}
+            {exporting ? "Generando…" : "Descargar formato"}
           </Button>
-          {!editing && canDispatch ? (
-            <Button
-              variant="outlined"
-              startIcon={<Pencil size={16} />}
-              component={Link}
-              href={restockOrderSheetHref(orderId, true)}
-            >
-              Editar envío
-            </Button>
-          ) : null}
-          {!editing && canDispatch && isOpen ? (
-            <Button variant="contained" startIcon={<Send size={16} />} onClick={() => setSendOpen(true)}>
-              Enviado a sucursal
-            </Button>
+          {!editing && order ? (
+            <RestockOrderActions
+              order={order}
+              canUpdate={can("posRestock", "update")}
+              canDispatch={canDispatch}
+              onChanged={() => void load()}
+              inSheet
+              size="medium"
+            />
           ) : null}
         </div>
       </div>
@@ -319,7 +325,9 @@ export function RestockOrderSheetPage() {
           <Alert severity={alreadySent ? "warning" : "info"}>
             {alreadySent
               ? "Este pedido ya se envió: al guardar, lo que bajes sale del inventario de la sucursal y lo que subas o agregues entra."
-              : "Todavía no se envía: corrige lo que de verdad sale de fábrica (lo que no hay, déjalo vacío). El inventario sube cuando lo marques como enviado."}{" "}
+              : config.factoryModuleEnabled
+                ? "Todavía no se envía: corrige lo que de verdad sale de fábrica (lo que no hay, déjalo vacío). El inventario sube cuando lo marques como enviado."
+                : "Todavía no llega: corrige lo que de verdad va a salir de fábrica (lo que no hay, déjalo vacío). El inventario sube al registrar la llegada."}{" "}
             Se captura en empaques, como en el papel: <strong>2</strong> en un bidón son 40 L. Enter baja al siguiente
             renglón.
           </Alert>
@@ -329,7 +337,9 @@ export function RestockOrderSheetPage() {
               ? "Cómo salió de fábrica: lo que se envió a la sucursal."
               : isCancelled
                 ? "Pedido cancelado: así estaba cuando se canceló."
-                : "Cómo va el pedido: lo que se va a enviar (lo pedido, o lo que ya se corrigió)."}
+                : config.factoryModuleEnabled
+                  ? "Cómo va el pedido: lo que se va a enviar (lo pedido, o lo que ya se corrigió)."
+                  : "Lo que se pidió. Cuando llegue, \"Registrar llegada\" abre esta hoja para capturar lo que de verdad llegó."}
             {order.dispatchNotes ? ` Nota del envío: ${order.dispatchNotes}` : ""}
           </p>
         )
@@ -347,29 +357,51 @@ export function RestockOrderSheetPage() {
 
       {loading && !form ? <p className="page-kicker">Cargando hoja...</p> : null}
 
-      {form ? (
-        <FormControlLabel
-          control={<Switch checked={onlyFilled} onChange={(event) => setOnlyFilled(event.target.checked)} />}
-          label="Solo renglones con cantidad"
-          sx={{ m: 0 }}
-        />
+      {!canEdit && order ? (
+        <Tabs value={view} onChange={(_e, value) => setView(value)} sx={{ borderBottom: "1px solid var(--border)" }}>
+          <Tab value="formato" label="Formato" />
+          <Tab
+            value="partidas"
+            label={
+              order.returns?.length
+                ? `Partidas · ${order.items?.length ?? 0} · con devolución`
+                : `Partidas · ${order.items?.length ?? 0}`
+            }
+          />
+        </Tabs>
       ) : null}
 
-      <FactoryFormSheet
-        pages={pages}
-        page={page}
-        onPageChange={setPage}
-        values={values}
-        baseline={baseline}
-        onChange={(key, value) => setValues((prev) => ({ ...prev, [key]: value }))}
-        disabled={!canEdit || saving}
-        readOnly={!canEdit}
-        onlyFilled={onlyFilled}
-        qtyHeader="Cant"
-        inputLabel="Cantidad de"
-      />
+      {view === "partidas" && !canEdit && order ? (
+        <section className="panel p-5">
+          <RestockOrderDetail order={order} />
+        </section>
+      ) : (
+        <>
+          {form ? (
+            <FormControlLabel
+              control={<Switch checked={onlyFilled} onChange={(event) => setOnlyFilled(event.target.checked)} />}
+              label="Solo renglones con cantidad"
+              sx={{ m: 0 }}
+            />
+          ) : null}
 
-      {form ? (
+          <FactoryFormSheet
+            pages={pages}
+            page={page}
+            onPageChange={setPage}
+            values={values}
+            baseline={baseline}
+            onChange={(key, value) => setValues((prev) => ({ ...prev, [key]: value }))}
+            disabled={!canEdit || saving}
+            readOnly={!canEdit}
+            onlyFilled={onlyFilled}
+            qtyHeader="Cant"
+            inputLabel="Cantidad de"
+          />
+        </>
+      )}
+
+      {form && (canEdit || view === "formato") ? (
         <div className={`msf-savebar${canEdit && changes.length ? " msf-savebar--active" : ""}`}>
           <span>
             {captured.length} {captured.length === 1 ? "renglón" : "renglones"} · {formatQuantity(totals.liters)} L ·{" "}
@@ -483,7 +515,7 @@ export function RestockOrderSheetPage() {
           <Button onClick={() => setConfirmOpen(false)} disabled={saving}>
             Seguir editando
           </Button>
-          {isOpen ? (
+          {isOpen && config.factoryModuleEnabled ? (
             <Button variant="outlined" onClick={() => void save(true)} disabled={saving}>
               Guardar y marcar enviado
             </Button>
@@ -493,18 +525,6 @@ export function RestockOrderSheetPage() {
           </Button>
         </DialogActions>
       </Dialog>
-
-      {sendOpen && order ? (
-        <RestockSendDialog
-          order={order}
-          editHref={restockOrderSheetHref(order.id, true)}
-          onClose={() => setSendOpen(false)}
-          onSent={() => {
-            setSendOpen(false);
-            void load();
-          }}
-        />
-      ) : null}
     </div>
   );
 }

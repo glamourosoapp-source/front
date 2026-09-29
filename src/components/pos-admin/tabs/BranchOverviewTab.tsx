@@ -1,16 +1,40 @@
 "use client";
 
-import { Calculator, Receipt, Truck, Users, Wallet } from "lucide-react";
+import Link from "next/link";
+import { ArrowRight, Calculator, Receipt, Truck, Users, Wallet } from "lucide-react";
+import type { BranchHealthSignal } from "@glamouroso/shared";
 import { BRANCH_TYPES } from "@glamouroso/shared/constants";
 import { DetailField } from "@/components/ui/DetailField";
 import { formatMoney } from "@/lib/format-money";
 import type { Branch, BranchStats } from "@/types";
 import { BranchHealthSignals } from "../BranchHealthChip";
-import { WEEKDAY_LABELS, formatDateTime, relativeDays, salesPeriodLabels } from "../pos-labels";
+import { BRANCH_TYPE_COPY, WEEKDAY_LABELS, formatDateTime, relativeDays, salesPeriodLabels } from "../pos-labels";
 
 interface BranchOverviewTabProps {
   branch: Branch;
   stats: BranchStats;
+}
+
+/** La pestaña del detalle donde se resuelve cada señal de salud. */
+function signalHref(branchId: string, code: BranchHealthSignal["code"]): string | null {
+  const base = `${BRANCH_TYPE_COPY.branch.listHref}/${branchId}`;
+  switch (code) {
+    case "below_min":
+      return `${base}?tab=inventario&bajo=1`;
+    case "stale_restock":
+    case "no_recent_orders":
+      return `${base}?tab=pedidos`;
+    case "sales_drop":
+    case "no_recent_sales":
+      return `${base}?tab=ventas`;
+    case "sync_pending":
+    case "sync_offline":
+    case "sync_rejected":
+    case "clock_skew":
+      return `${base}?tab=caja`;
+    default:
+      return null;
+  }
 }
 
 function Delta({ current, previous }: { current: number; previous: number }) {
@@ -114,7 +138,10 @@ export function BranchOverviewTab({ branch, stats }: BranchOverviewTabProps) {
       <div className="grid-2">
         <section className="panel p-5">
           <h2 style={{ marginTop: 0 }}>Salud de la {isFranchise ? "franquicia" : "sucursal"}</h2>
-          <BranchHealthSignals health={stats.health} />
+          <BranchHealthSignals
+            health={stats.health}
+            hrefFor={isFranchise ? undefined : (code) => signalHref(branch.id, code)}
+          />
           <div className="grid gap-4 sm:grid-cols-2" style={{ marginTop: 16 }}>
             {!isFranchise && sales ? (
               <>
@@ -143,12 +170,23 @@ export function BranchOverviewTab({ branch, stats }: BranchOverviewTabProps) {
         </section>
 
         <section className="panel p-5">
-          <h2 style={{ marginTop: 0, display: "flex", alignItems: "center", gap: 8 }}>
-            <Truck size={18} style={{ color: "var(--glam-blue)" }} /> Surtido a fábrica
-          </h2>
+          <div className="toolbar" style={{ marginBottom: 12 }}>
+            <h2 style={{ margin: 0, display: "flex", alignItems: "center", gap: 8 }}>
+              <Truck size={18} style={{ color: "var(--glam-blue)" }} /> Surtido a fábrica
+            </h2>
+            {!isFranchise ? (
+              <Link
+                href={`${BRANCH_TYPE_COPY.branch.listHref}/${branch.id}?tab=pedidos`}
+                className="inline-flex items-center gap-1 text-sm"
+                style={{ color: "var(--glam-blue)", fontWeight: 600 }}
+              >
+                Ver pedidos a fábrica <ArrowRight size={14} />
+              </Link>
+            ) : null}
+          </div>
           <div className="grid gap-4 sm:grid-cols-2">
             <DetailField
-              label="Por enviar"
+              label={isFranchise ? "Por enviar" : "Por recibir"}
               value={
                 stats.restock.openCount ? (
                   <span style={{ color: "var(--glam-navy)" }}>

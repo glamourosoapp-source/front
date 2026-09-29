@@ -1,8 +1,9 @@
 "use client";
 
+import Link from "next/link";
 import { Tooltip } from "@mui/material";
-import { AlertTriangle, CheckCircle2, OctagonAlert } from "lucide-react";
-import { BRANCH_HEALTH_LABELS, type BranchHealth } from "@glamouroso/shared";
+import { AlertTriangle, CheckCircle2, ChevronRight, OctagonAlert } from "lucide-react";
+import { BRANCH_HEALTH_LABELS, type BranchHealth, type BranchHealthSignal } from "@glamouroso/shared";
 import { HEALTH_BG, HEALTH_COLORS } from "./pos-labels";
 
 const ICONS = {
@@ -53,7 +54,18 @@ export function BranchHealthChip({ health, size = "small" }: { health: BranchHea
   );
 }
 
-export function BranchHealthSignals({ health }: { health: BranchHealth }) {
+/**
+ * Las señales en el detalle. Con `hrefFor`, cada señal que tiene dónde
+ * resolverse es un link a esa pestaña ("2 productos bajo mínimo" → Inventario
+ * filtrado): el resumen avisaba del problema pero no llevaba a ningún lado.
+ */
+export function BranchHealthSignals({
+  health,
+  hrefFor,
+}: {
+  health: BranchHealth;
+  hrefFor?: (code: BranchHealthSignal["code"]) => string | null;
+}) {
   if (!health.signals.length) {
     return (
       <p className="page-kicker" style={{ margin: 0 }}>
@@ -65,22 +77,33 @@ export function BranchHealthSignals({ health }: { health: BranchHealth }) {
     <ul style={{ margin: 0, paddingLeft: 0, listStyle: "none", display: "grid", gap: 8 }}>
       {health.signals.map((signal) => {
         const Icon = ICONS[signal.level];
+        const href = hrefFor?.(signal.code) ?? null;
+        const style = {
+          display: "flex",
+          alignItems: "center",
+          gap: 8,
+          padding: "8px 12px",
+          borderRadius: 10,
+          background: HEALTH_BG[signal.level],
+          color: HEALTH_COLORS[signal.level],
+          fontWeight: 600,
+        } as const;
         return (
-          <li
-            key={signal.code}
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: 8,
-              padding: "8px 12px",
-              borderRadius: 10,
-              background: HEALTH_BG[signal.level],
-              color: HEALTH_COLORS[signal.level],
-              fontWeight: 600,
-            }}
-          >
-            <Icon size={16} style={{ flex: "0 0 auto" }} />
-            {signal.message}
+          <li key={signal.code}>
+            {href ? (
+              <Link href={href} className="health-signal-link" style={style}>
+                <Icon size={16} style={{ flex: "0 0 auto" }} />
+                <span style={{ flex: 1 }}>{signal.message}</span>
+                <span style={{ display: "inline-flex", alignItems: "center", gap: 2, fontSize: 13 }}>
+                  Revisar <ChevronRight size={15} />
+                </span>
+              </Link>
+            ) : (
+              <div style={style}>
+                <Icon size={16} style={{ flex: "0 0 auto" }} />
+                {signal.message}
+              </div>
+            )}
           </li>
         );
       })}

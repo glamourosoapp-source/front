@@ -58,7 +58,14 @@ const MOVEMENT_LABELS: Record<string, string> = {
  * es el único parámetro del faltante y es distinto por sucursal, así que
  * cambiarlo no debería costar abrir un diálogo por producto.
  */
-export function BranchInventoryTab({ branchId }: { branchId: string }) {
+export function BranchInventoryTab({
+  branchId,
+  initialBelowMin = false,
+}: {
+  branchId: string;
+  /** Abre ya filtrada a lo que está bajo mínimo (el link de la señal de salud). */
+  initialBelowMin?: boolean;
+}) {
   const { can } = usePermissions();
   const { subscribe } = useRealtime();
   const canView = can("posInventory", "view");
@@ -67,7 +74,7 @@ export function BranchInventoryTab({ branchId }: { branchId: string }) {
   const [tab, setTab] = useState(0);
   const [data, setData] = useState<InventoryResponse>({ lines: [], products: [] });
   const [search, setSearch] = useState("");
-  const [belowMin, setBelowMin] = useState(false);
+  const [belowMin, setBelowMin] = useState(initialBelowMin);
   const [loading, setLoading] = useState(false);
   const [editingMin, setEditingMin] = useState<{ target: Target; value: string } | null>(null);
   const [adjust, setAdjust] = useState<Target | null>(null);

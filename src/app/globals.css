@@ -689,6 +689,16 @@ textarea.input {
   text-transform: uppercase;
 }
 
+/* Fila que abre un detalle (tabla → detalle): hover y foco de teclado. */
+.table tr.clickable-row:hover td {
+  background: #f5f8fe;
+}
+
+.table tr.clickable-row:focus-visible {
+  outline: 2px solid var(--glam-blue);
+  outline-offset: -2px;
+}
+
 .pill {
   display: inline-flex;
   align-items: center;
@@ -865,6 +875,13 @@ textarea.input {
   background-color: rgba(38, 45, 96, 0.4) !important;
   backdrop-filter: blur(8px) !important;
   transition: backdrop-filter 0.3s ease, background-color 0.3s ease !important;
+}
+
+/* Menús y selects usan un backdrop invisible: sin esto, abrir un "⋯" o un
+   select difuminaba y oscurecía toda la pantalla como si fuera un diálogo. */
+.MuiBackdrop-root.MuiBackdrop-invisible {
+  background-color: transparent !important;
+  backdrop-filter: none !important;
 }
 
 .MuiDialog-paper {
@@ -1365,4 +1382,15 @@ textarea.input {
 .ffa-actions button:hover {
   background: var(--bg);
   color: var(--glam-navy);
+}
+
+/* Señal de salud que lleva a su pestaña (Resumen de la sucursal). */
+.health-signal-link {
+  text-decoration: none;
+  transition: filter 0.15s ease;
+}
+
+.health-signal-link:hover {
+  filter: brightness(0.97);
+  text-decoration: underline;
 }

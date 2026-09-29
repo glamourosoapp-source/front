@@ -129,7 +129,7 @@ interface FactoryFormSheetProps {
 }
 
 /** Cuántos renglones con cantidad trae una hoja (uno por línea o producto). */
-function filledCount(page: SheetPage, values: SheetValues): number {
+export function filledCount(page: SheetPage, values: SheetValues): number {
   const seen = new Set<string>();
   for (const row of page.blocks.flat()) {
     if (!isLinked(row)) continue;

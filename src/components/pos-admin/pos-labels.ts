@@ -7,8 +7,12 @@ import { formatQuantity } from "@/lib/format-money";
 
 export const WEEKDAY_LABELS = ["Domingo", "Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado"];
 
+/**
+ * Con fábrica apagada nadie aprueba: un pedido pendiente es simplemente "Pedido"
+ * (espera a que llegue), no "Pendiente de aprobar".
+ */
 export const RESTOCK_STATUS_LABELS: Record<string, string> = {
-  [RESTOCK_ORDER_STATUS.PENDING]: "Pendiente de aprobar",
+  [RESTOCK_ORDER_STATUS.PENDING]: config.factoryModuleEnabled ? "Pendiente de aprobar" : "Pedido",
   [RESTOCK_ORDER_STATUS.APPROVED]: "Aprobado",
   [RESTOCK_ORDER_STATUS.PREPARING]: "En preparación",
   [RESTOCK_ORDER_STATUS.SENT]: "Enviado",
@@ -23,7 +27,8 @@ export const RESTOCK_STATUS_COLORS: Record<
   [RESTOCK_ORDER_STATUS.PENDING]: "warning",
   [RESTOCK_ORDER_STATUS.APPROVED]: "primary",
   [RESTOCK_ORDER_STATUS.PREPARING]: "primary",
-  [RESTOCK_ORDER_STATUS.SENT]: "success",
+  // Enviado todavía espera la llegada: azul, no el verde de "Recibido".
+  [RESTOCK_ORDER_STATUS.SENT]: "primary",
   [RESTOCK_ORDER_STATUS.RECEIVED]: "success",
   [RESTOCK_ORDER_STATUS.CANCELLED]: "error",
 };
