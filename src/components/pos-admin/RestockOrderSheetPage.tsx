@@ -30,12 +30,10 @@ import {
   FactoryFormSheet,
   allRows,
   filledCount,
-  packsOf,
   round2,
-  sameValue,
   sheetPages,
-  targetKey,
-  uniqueTargets,
+  targetLabel,
+  targetTotals,
   unitOf,
   type SheetValues,
 } from "./FactoryFormSheet";
@@ -55,9 +53,15 @@ function itemKey(item: RestockOrderItem): string {
   return item.lineId ? `line:${item.lineId}` : `product:${item.productId}`;
 }
 
-/** Un renglón cambiado contra cómo estaba el pedido. */
+/**
+ * Una línea o producto cambiado contra cómo estaba el pedido. Si el formato lo
+ * reparte en varios renglones, se compara la suma: es una sola partida.
+ */
 interface Change {
+  key: string;
+  /** Primer renglón: empaque, etiqueta y línea/producto. */
   row: FactoryFormRow;
+  label: string;
   before: number;
   after: number;
   item: RestockOrderItem | null;
@@ -138,7 +142,7 @@ export function RestockOrderSheetPage() {
     can("posRestock", "update") && can("posInventory", "update") && !isFranchise && !isCancelled;
   const canEdit = editing && canDispatch;
 
-  const rows = useMemo(() => (form ? uniqueTargets(allRows(form)) : []), [form]);
+  const rows = useMemo(() => (form ? allRows(form) : []), [form]);
   const pages = useMemo(() => (form ? sheetPages(form) : []), [form]);
   const captured = useMemo(() => capturedRows(rows, values), [rows, values]);
   const totals = useMemo(() => capturedTotals(captured), [captured]);
@@ -154,18 +158,19 @@ export function RestockOrderSheetPage() {
     return map;
   }, [order?.items]);
 
-  const changes: Change[] = useMemo(
-    () =>
-      rows
-        .filter((row) => !sameValue(values[targetKey(row)], baseline[targetKey(row)]))
-        .map((row) => ({
-          row,
-          before: packsOf(baseline[targetKey(row)]),
-          after: packsOf(values[targetKey(row)]),
-          item: itemsByKey.get(targetKey(row)) ?? null,
-        })),
-    [rows, values, baseline, itemsByKey]
-  );
+  const changes: Change[] = useMemo(() => {
+    const before = targetTotals(rows, baseline);
+    return [...targetTotals(rows, values).values()]
+      .filter((total) => total.packs !== (before.get(total.key)?.packs ?? 0))
+      .map((total) => ({
+        key: total.key,
+        row: total.rows[0]!,
+        label: targetLabel(total),
+        before: before.get(total.key)?.packs ?? 0,
+        after: total.packs,
+        item: itemsByKey.get(total.key) ?? null,
+      }));
+  }, [rows, values, baseline, itemsByKey]);
 
   // Con cambios sin guardar, salir de la pestaña pide confirmación.
   useEffect(() => {
@@ -181,14 +186,14 @@ export function RestockOrderSheetPage() {
     try {
       if (changes.length) {
         await httpClient.put<RestockOrder>(`/pos/restock/orders/${order.id}/dispatch`, {
-          items: changes.map(({ row, after, item }) => ({
+          items: changes.map(({ key, row, after, item }) => ({
             ...(item
               ? { itemId: item.id }
               : row.lineId
                 ? { lineId: row.lineId }
                 : { productId: row.productId }),
             dispatchedQty: after,
-            ...(reasons[targetKey(row)]?.trim() ? { notes: reasons[targetKey(row)]!.trim() } : {}),
+            ...(reasons[key]?.trim() ? { notes: reasons[key]!.trim() } : {}),
           })),
           notes: dispatchNote.trim() || null,
         });
@@ -456,14 +461,14 @@ export function RestockOrderSheetPage() {
                 </tr>
               </thead>
               <tbody>
-                {changes.map(({ row, before, after, item }) => {
+                {changes.map(({ key, row, label, before, after, item }) => {
                   const delta = round2((after - before) * Math.max(1, row.packSize));
                   const pack = (qty: number) =>
                     `${formatQuantity(qty)} ${unitLabel(qty, row.lineId ? "bidon" : "pieza", row.packLabel)}`;
                   return (
-                    <tr key={targetKey(row)}>
+                    <tr key={key}>
                       <td>
-                        {row.label}
+                        {label}
                         {!item ? (
                           <div className="page-kicker" style={{ margin: 0 }}>
                             no venía en el pedido: se agrega
@@ -482,11 +487,11 @@ export function RestockOrderSheetPage() {
                         <TextField
                           size="small"
                           placeholder={after < before ? "No hay en fábrica" : "Motivo"}
-                          value={reasons[targetKey(row)] ?? ""}
+                          value={reasons[key] ?? ""}
                           onChange={(event) =>
-                            setReasons((prev) => ({ ...prev, [targetKey(row)]: event.target.value }))
+                            setReasons((prev) => ({ ...prev, [key]: event.target.value }))
                           }
-                          inputProps={{ maxLength: 500, "aria-label": `Motivo de ${row.label}` }}
+                          inputProps={{ maxLength: 500, "aria-label": `Motivo de ${label}` }}
                         />
                       </td>
                     </tr>

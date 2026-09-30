@@ -5,9 +5,8 @@ import {
   packsOf,
   round2,
   rowKey,
-  targetKey,
+  targetTotals,
   toBase,
-  uniqueTargets,
   type SheetValues,
 } from "./FactoryFormSheet";
 
@@ -37,16 +36,26 @@ export interface SheetCharges {
   total: number;
 }
 
-/** Una entrada por línea o producto con cantidad (el formato puede repetir un producto). */
+/**
+ * Una entrada por renglón con cantidad. Un producto repartido en varios
+ * renglones (uno por color/aroma) sale una vez por renglón; para mandarlo al
+ * Back se suma por producto con `capturedTargets`.
+ */
 export function capturedRows(rows: FactoryFormRow[], values: SheetValues): CapturedRow[] {
   const list: CapturedRow[] = [];
   for (const row of rows) {
-    const packs = packsOf(values[targetKey(row)]);
+    if (!isLinked(row)) continue;
+    const packs = packsOf(values[rowKey(row)]);
     if (packs <= 0) continue;
-    const base = toBase(values[targetKey(row)], row.packSize);
+    const base = toBase(values[rowKey(row)], row.packSize);
     list.push({ row, packs, base, amount: round2(base * (row.unitCost ?? 0)) });
   }
   return list;
+}
+
+/** Lo capturado sumado por línea/producto (una partida por cada uno), solo lo que trae cantidad. */
+export function capturedTargets(rows: FactoryFormRow[], values: SheetValues) {
+  return [...targetTotals(rows, values).values()].filter((total) => total.packs > 0);
 }
 
 export function capturedTotals(captured: CapturedRow[]) {
@@ -100,12 +109,10 @@ export function formWithValues(
   charges: SheetCharges,
   canSeeCosts: boolean
 ): FactoryForm {
-  // Un producto repetido en el formato lleva su cantidad solo en el primer renglón.
-  const firstRows = new Set(uniqueTargets(allRows(form)).map(rowKey));
+  // Cada renglón con su propio número (un producto repartido sale en todos sus renglones).
   const withValues = (row: FactoryFormRow): FactoryFormRow => {
     if (!isLinked(row)) return row;
-    if (!firstRows.has(rowKey(row))) return { ...row, qty: null, amount: null };
-    const packs = packsOf(values[targetKey(row)]);
+    const packs = packsOf(values[rowKey(row)]);
     const amount = packs > 0 && canSeeCosts ? round2(packs * row.packSize * (row.unitCost ?? 0)) : null;
     return { ...row, qty: packs > 0 ? round2(packs) : null, amount, unitCost: canSeeCosts ? row.unitCost : null };
   };
@@ -143,11 +150,11 @@ export function formWithValues(
   };
 }
 
-/** Valores iniciales de la hoja: la cantidad de cada línea o producto (solo el primer renglón la trae). */
+/** Valores iniciales de la hoja: la cantidad de cada renglón (ya repartida por el Back). */
 export function initialValues(form: FactoryForm): SheetValues {
   const initial: SheetValues = {};
-  for (const row of uniqueTargets(allRows(form))) {
-    initial[targetKey(row)] = row.qty ? String(round2(row.qty)) : "";
+  for (const row of allRows(form)) {
+    if (isLinked(row)) initial[rowKey(row)] = row.qty ? String(round2(row.qty)) : "";
   }
   return initial;
 }

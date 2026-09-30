@@ -22,8 +22,7 @@ import {
   sameValue,
   sheetPages,
   targetKey,
-  toBase,
-  uniqueTargets,
+  targetTotals,
   unlinkedCount,
   type SheetValues,
 } from "./FactoryFormSheet";
@@ -41,7 +40,10 @@ function packsText(minStock: number | null | undefined, packSize: number): strin
  * buscar producto por producto. Se captura en empaques, como en el papel (2 =
  * dos bidones = 40 L; 1 = una caja de 24 pz), y se guarda en litros o piezas.
  *
- * Solo se manda lo que cambió, en un solo PUT todo-o-nada.
+ * Solo se manda lo que cambió, en un solo PUT todo-o-nada. Cada renglón se
+ * captura aparte aunque varios lleven el mismo producto (un renglón por
+ * color/aroma); el mínimo se guarda una vez por producto: la suma de sus
+ * renglones.
  */
 export function BranchMinStockFormPage() {
   const params = useParams<{ id: string }>();
@@ -60,10 +62,10 @@ export function BranchMinStockFormPage() {
   const [copying, setCopying] = useState(false);
   const [exporting, setExporting] = useState(false);
 
-  /** Un renglón por línea o producto: los valores se capturan por producto, no por posición. */
+  /** Renglones capturables por posición: cada uno con su propio valor. */
   const rowsByKey = useMemo(() => {
     const map = new Map<string, FactoryFormRow>();
-    if (form) for (const row of uniqueTargets(allRows(form))) map.set(targetKey(row), row);
+    if (form) for (const row of allRows(form)) if (isLinked(row)) map.set(rowKey(row), row);
     return map;
   }, [form]);
 
@@ -73,8 +75,9 @@ export function BranchMinStockFormPage() {
     try {
       const data = await httpClient.get<FactoryForm>(`/pos/branches/${branchId}/min-stock-form`);
       const initial: SheetValues = {};
-      for (const row of uniqueTargets(allRows(data))) {
-        initial[targetKey(row)] = packsText(row.minStock, row.packSize);
+      // El Back ya reparte el mínimo entre los renglones de un mismo producto.
+      for (const row of allRows(data)) {
+        if (isLinked(row)) initial[rowKey(row)] = packsText(row.minStock, row.packSize);
       }
       setForm(data);
       setValues(initial);
@@ -118,16 +121,18 @@ export function BranchMinStockFormPage() {
 
   async function save() {
     if (!form || !dirtyKeys.length) return;
-    const rows = dirtyKeys
-      .map((key) => {
-        const row = rowsByKey.get(key);
-        if (!row) return null;
-        return {
-          ...(row.lineId ? { lineId: row.lineId } : { productId: row.productId }),
-          minStock: toBase(values[key], row.packSize),
-        };
-      })
-      .filter((row): row is NonNullable<typeof row> => row !== null);
+    // Un producto repartido en varios renglones guarda la suma de todos ellos.
+    const touched = new Set<string>();
+    for (const key of dirtyKeys) {
+      const row = rowsByKey.get(key);
+      if (row) touched.add(targetKey(row));
+    }
+    const totals = targetTotals([...rowsByKey.values()], values);
+    const rows = [...touched].flatMap((target) => {
+      const total = totals.get(target);
+      if (!total) return [];
+      return [{ ...(total.lineId ? { lineId: total.lineId } : { productId: total.productId }), minStock: total.base }];
+    });
     setSaving(true);
     try {
       await httpClient.put(`/pos/branches/${branchId}/min-stock`, { rows });
@@ -146,18 +151,38 @@ export function BranchMinStockFormPage() {
     setCopying(true);
     try {
       const other = await httpClient.get<FactoryForm>(`/pos/branches/${otherId}/min-stock-form`);
+      // Las dos hojas tienen los mismos renglones: se copia renglón por renglón
+      // (así se conserva el reparto entre colores). OTROS cambia de sucursal a
+      // sucursal, así que ahí se cae al total por producto en su primer renglón.
+      const byRow = new Map<string, FactoryFormRow>();
       const byTarget = new Map<string, number>();
       for (const row of allRows(other)) {
-        if (isLinked(row) && row.minStock) byTarget.set(targetKey(row), row.minStock);
+        if (!isLinked(row)) continue;
+        byRow.set(rowKey(row), row);
+        byTarget.set(targetKey(row), round2((byTarget.get(targetKey(row)) ?? 0) + (row.minStock ?? 0)));
       }
-      let copied = 0;
+      const copiedTargets = new Set<string>();
       const next = { ...values };
+      const pending = new Map<string, FactoryFormRow[]>();
       for (const [key, row] of rowsByKey) {
-        const minStock = byTarget.get(key);
-        if (minStock == null) continue;
-        next[key] = packsText(minStock, row.packSize);
-        copied += 1;
+        const target = targetKey(row);
+        if (!byTarget.get(target)) continue;
+        const twin = byRow.get(key);
+        if (twin && targetKey(twin) === target) {
+          next[key] = packsText(twin.minStock, row.packSize);
+          copiedTargets.add(target);
+        } else {
+          pending.set(target, [...(pending.get(target) ?? []), row]);
+        }
       }
+      for (const [target, rows] of pending) {
+        if (copiedTargets.has(target)) continue;
+        rows.forEach((row, index) => {
+          next[rowKey(row)] = index === 0 ? packsText(byTarget.get(target), row.packSize) : "";
+        });
+        copiedTargets.add(target);
+      }
+      const copied = copiedTargets.size;
       setValues(next);
       const name = branches.find((b) => b.id === otherId)?.name ?? "la otra sucursal";
       toast.success(`Se copiaron ${copied} mínimos de ${name}. Revísalos y guarda.`);
@@ -173,12 +198,10 @@ export function BranchMinStockFormPage() {
     if (!form) return;
     setExporting(true);
     try {
-      // Un producto repetido en el formato lleva su cantidad solo en el primer renglón.
-      const firstRows = new Set(uniqueTargets(allRows(form)).map(rowKey));
+      // Cada renglón con su propio número (un producto repartido sale en todos sus renglones).
       const withValues = (row: FactoryFormRow): FactoryFormRow => {
         if (!isLinked(row)) return row;
-        if (!firstRows.has(rowKey(row))) return { ...row, qty: null, amount: null };
-        const packs = packsOf(values[targetKey(row)]);
+        const packs = packsOf(values[rowKey(row)]);
         return { ...row, qty: packs > 0 ? round2(packs) : null, amount: null, unitCost: null };
       };
       await exportFactoryFormPdf(

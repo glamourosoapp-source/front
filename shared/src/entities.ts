@@ -735,7 +735,9 @@ export type FactoryFormRowKind = "product" | "section" | "blank";
 /**
  * Un renglón del formato de pedido a fábrica (4 hojas, 4 bloques por hoja),
  * ya resuelto para una sucursal o un pedido. `qty` en empaques; `null` cuando
- * el renglón no lleva cantidad (se imprime en blanco para llenar a mano).
+ * el renglón no lleva cantidad (se imprime en blanco para llenar a mano). Una
+ * línea o producto ligado a varios renglones (uno por color/aroma) trae en cada
+ * uno su parte del reparto, en empaques enteros y el sobrante a los primeros.
  */
 export interface FactoryFormRow {
   page: number;
@@ -761,7 +763,8 @@ export interface FactoryFormRow {
   /**
    * Solo en el formato de stock mínimo (`source.kind = "min_stock"`): el mínimo
    * de la sucursal en su unidad base (litros para líneas, piezas para
-   * productos). `qty` es ese mismo mínimo expresado en empaques.
+   * productos). `qty` es ese mismo mínimo expresado en empaques. Repartido
+   * entre renglones, cada uno trae su parte (0 = ligado pero sin parte).
    */
   minStock?: number | null;
 }

@@ -116,6 +116,30 @@ export function FactoryFormAdminPage() {
   }, [debouncedSearch, editing, draft.kind, canEdit]);
 
   const pages = useMemo(() => [...new Set((form?.rows ?? []).map((row) => row.page))].sort((a, b) => a - b), [form]);
+  /**
+   * Renglones que comparten línea o producto (un renglón por color/aroma): el
+   * pedido reparte la cantidad entre ellos. Para marcar "reparte con …".
+   */
+  const sharing = useMemo(() => {
+    const byTarget = new Map<string, FactoryFormAdminRow[]>();
+    for (const row of form?.rows ?? []) {
+      const target = row.lineId ? `line:${row.lineId}` : row.productId ? `product:${row.productId}` : null;
+      if (row.kind !== "product" || !target) continue;
+      byTarget.set(target, [...(byTarget.get(target) ?? []), row]);
+    }
+    const result = new Map<string, string>();
+    for (const rows of byTarget.values()) {
+      if (rows.length < 2) continue;
+      for (const row of rows) {
+        const others = rows.filter((other) => other.id !== row.id);
+        result.set(
+          row.id,
+          others.map((other) => (other.page === row.page ? other.label : `${other.label} (hoja ${other.page})`)).join(", ")
+        );
+      }
+    }
+    return result;
+  }, [form]);
   const blocks = useMemo(() => {
     const rows = (form?.rows ?? []).filter((row) => row.page === page);
     const ids = [...new Set(rows.map((row) => row.block))].sort((a, b) => a - b);
@@ -317,6 +341,11 @@ export function FactoryFormAdminPage() {
                         <Chip size="small" label={row.bidon === "color" ? "bidón color" : "bidón"} sx={{ ml: 0.5, height: 16, fontSize: 10 }} />
                       ) : null}
                       {row.blueBox ? <Chip size="small" color="info" label="caja azul" sx={{ ml: 0.5, height: 16, fontSize: 10 }} /> : null}
+                      {sharing.has(row.id) ? (
+                        <span title="El pedido reparte la cantidad entre estos renglones, en el orden de la hoja">
+                          {" "}· reparte con {sharing.get(row.id)}
+                        </span>
+                      ) : null}
                     </span>
                   ) : null}
                 </div>
@@ -383,7 +412,6 @@ export function FactoryFormAdminPage() {
                 }
                 onInputChange={(_e, value, reason) => reason === "input" && setSearch(value)}
                 getOptionLabel={(option) => `${option.name}${option.type === "line" ? " (línea)" : ""}`}
-                getOptionDisabled={(option) => option.inForm && option.id !== (editing?.mode === "edit" ? editing.row.lineId ?? editing.row.productId : "")}
                 isOptionEqualToValue={(a, b) => a.id === b.id}
                 filterOptions={(options) => options}
                 renderOption={(props, option) => (
@@ -395,7 +423,7 @@ export function FactoryFormAdminPage() {
                       </span>
                       <span style={{ fontSize: 11, color: "var(--muted)" }}>
                         {option.type === "line" ? `bidón de ${option.packSize} L` : option.packSize > 1 ? `empaque de ${option.packSize}` : "pieza"}
-                        {option.inForm ? " · ya está en el formato" : ""}
+                        {option.inForm ? " · ya está en el formato: se reparte entre sus renglones (mismo empaque)" : ""}
                       </span>
                     </span>
                   </li>

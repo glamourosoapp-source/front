@@ -18,12 +18,18 @@ import {
   rowKey,
   sameValue,
   sheetPages,
-  uniqueTargets,
   unitOf,
   unlinkedCount,
   type SheetValues,
 } from "./FactoryFormSheet";
-import { capturedRows, capturedTotals, formWithValues, initialValues, sheetCharges } from "./factory-form-values";
+import {
+  capturedRows,
+  capturedTargets,
+  capturedTotals,
+  formWithValues,
+  initialValues,
+  sheetCharges,
+} from "./factory-form-values";
 import { RESTOCK_ORIGIN_LABELS, RESTOCK_STATUS_LABELS, formatDate, unitLabel } from "./pos-labels";
 
 /** `order:<id>` | `shortages` | `blank`: con qué se precarga la hoja. */
@@ -82,7 +88,7 @@ export function BranchRestockEntryPage() {
           `/pos/restock/branches/${branchId}/entry-form`,
           basisParams(key)
         );
-        // El Back pone la cantidad solo en el primer renglón de cada producto.
+        // El Back ya reparte la cantidad entre los renglones de un mismo producto.
         const initial = initialValues(data);
         setForm(data);
         setValues(initial);
@@ -110,12 +116,14 @@ export function BranchRestockEntryPage() {
     void load(key);
   }, [load, orderParam, basisParam]);
 
-  const rows = useMemo(() => (form ? uniqueTargets(allRows(form)) : []), [form]);
+  const rows = useMemo(() => (form ? allRows(form) : []), [form]);
   const pages = useMemo(() => (form ? sheetPages(form) : []), [form]);
   const unlinked = useMemo(() => (form ? unlinkedCount(form) : 0), [form]);
 
-  /** Lo capturado: una entrada por línea o producto con cantidad (el formato puede repetir un producto). */
+  /** Lo capturado, renglón por renglón (un producto repartido sale en cada renglón que lo lleva). */
   const captured = useMemo(() => capturedRows(rows, values), [rows, values]);
+  /** Lo que se registra: la suma por línea o producto. */
+  const targets = useMemo(() => capturedTargets(rows, values), [rows, values]);
   const totals = useMemo(() => capturedTotals(captured), [captured]);
 
   /** Cargos del pie con lo capturado: bidones vacíos, cajas azules y publicidad (reglas del formato de tiendas). */
@@ -151,8 +159,8 @@ export function BranchRestockEntryPage() {
     try {
       await httpClient.post(`/pos/restock/branches/${branchId}/entry`, {
         orderId: form.entry?.kind === "order" ? form.entry.orderId : null,
-        items: captured.map(({ row, packs }) =>
-          row.lineId ? { lineId: row.lineId, qty: packs } : { productId: row.productId, qty: packs }
+        items: targets.map(({ lineId, productId, packs }) =>
+          lineId ? { lineId, qty: packs } : { productId, qty: packs }
         ),
         notes: notes.trim() || null,
         publicityQty: charges.publicityQty,

@@ -29,33 +29,62 @@ export interface SheetPage {
   blocks: FactoryFormRow[][];
 }
 
-/** Posición del renglón en la hoja (llave de React). */
+/**
+ * Posición del renglón en la hoja: llave de React y de los valores capturados.
+ * Cada renglón lleva su propio número aunque varios apunten al mismo producto
+ * (un renglón por color/aroma: el Back reparte la cantidad entre ellos).
+ */
 export function rowKey(row: FactoryFormRow): string {
   return `${row.page}:${row.block}:${row.row}`;
 }
 
-/**
- * A qué línea o producto apunta el renglón. Los valores capturados se guardan
- * con esta llave. La importación del formato ya no deja ligar un producto a dos
- * renglones; si llegara a pasar, los dos mostrarían el mismo número en vez de
- * contarlo dos veces.
- */
+/** A qué línea o producto apunta el renglón: al guardar se suma por esta llave. */
 export function targetKey(row: FactoryFormRow): string {
   return row.lineId ? `line:${row.lineId}` : `product:${row.productId}`;
 }
 
-/** Un renglón por línea o producto (el primero del formato), para guardar sin duplicar. */
-export function uniqueTargets(rows: FactoryFormRow[]): FactoryFormRow[] {
-  const seen = new Set<string>();
-  const unique: FactoryFormRow[] = [];
+/** Lo capturado de una línea o producto, sumado entre los renglones que la reparten. */
+export interface TargetTotal {
+  key: string;
+  /** Sus renglones en el orden de la hoja; el primero da `lineId`/`productId`. */
+  rows: FactoryFormRow[];
+  lineId: string | null;
+  productId: string | null;
+  /** Empaques: todos los renglones de un producto llevan el mismo empaque. */
+  packs: number;
+  /** Litros o piezas (empaques × empaque de cada renglón). */
+  base: number;
+}
+
+/**
+ * Suma por línea/producto lo capturado renglón por renglón: es lo que se manda
+ * al Back (una entrada por línea o producto, como antes del reparto).
+ */
+export function targetTotals(rows: FactoryFormRow[], values: SheetValues): Map<string, TargetTotal> {
+  const totals = new Map<string, TargetTotal>();
   for (const row of rows) {
     if (!isLinked(row)) continue;
     const key = targetKey(row);
-    if (seen.has(key)) continue;
-    seen.add(key);
-    unique.push(row);
+    const value = values[rowKey(row)];
+    const total = totals.get(key) ?? {
+      key,
+      rows: [],
+      lineId: row.lineId ?? null,
+      productId: row.lineId ? null : (row.productId ?? null),
+      packs: 0,
+      base: 0,
+    };
+    total.rows.push(row);
+    total.packs = round2(total.packs + packsOf(value));
+    total.base = round2(total.base + toBase(value, row.packSize));
+    totals.set(key, total);
   }
-  return unique;
+  return totals;
+}
+
+/** "BLANCO MENTA / AMARILLO COCO": los renglones que reparten una línea o producto. */
+export function targetLabel(total: Pick<TargetTotal, "rows">): string {
+  return total.rows.map((row) => row.label).join(" / ");
 }
 
 export function round2(value: number): number {
@@ -128,15 +157,9 @@ interface FactoryFormSheetProps {
   onlyFilled?: boolean;
 }
 
-/** Cuántos renglones con cantidad trae una hoja (uno por línea o producto). */
+/** Cuántos renglones con cantidad trae una hoja. */
 export function filledCount(page: SheetPage, values: SheetValues): number {
-  const seen = new Set<string>();
-  for (const row of page.blocks.flat()) {
-    if (!isLinked(row)) continue;
-    const key = targetKey(row);
-    if (packsOf(values[key]) > 0) seen.add(key);
-  }
-  return seen.size;
+  return page.blocks.flat().filter((row) => isLinked(row) && packsOf(values[rowKey(row)]) > 0).length;
 }
 
 export function FactoryFormSheet({
@@ -203,7 +226,7 @@ export function FactoryFormSheet({
           ) : null}
           {current.blocks.map((block, blockIndex) => {
             const visible = onlyFilled
-              ? block.filter((row) => isLinked(row) && packsOf(values[targetKey(row)]) > 0)
+              ? block.filter((row) => isLinked(row) && packsOf(values[rowKey(row)]) > 0)
               : block;
             if (!visible.length) return null;
             return (
@@ -232,9 +255,8 @@ export function FactoryFormSheet({
                     </div>
                   );
                 }
-                const target = targetKey(row);
-                const value = values[target] ?? "";
-                const dirty = !sameValue(value, baseline[target]);
+                const value = values[key] ?? "";
+                const dirty = !sameValue(value, baseline[key]);
                 const base = toBase(value, row.packSize);
                 return (
                   <div className={`msf-row${dirty ? " msf-row--dirty" : ""}`} key={key}>
@@ -264,7 +286,7 @@ export function FactoryFormSheet({
                       value={value}
                       disabled={disabled}
                       aria-label={`${inputLabel} ${row.label}`}
-                      onChange={(event) => onChange(target, event.target.value)}
+                      onChange={(event) => onChange(key, event.target.value)}
                       onKeyDown={onKeyDown}
                       onFocus={(event) => event.currentTarget.select()}
                       // La rueda del mouse sobre un input numérico enfocado cambia el valor sin querer.
