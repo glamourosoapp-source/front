@@ -202,7 +202,7 @@ export function computeBranchHealth(input: BranchHealthInput): BranchHealth {
     signals.push({
       level: input.belowMinCount >= 10 ? "critical" : "warning",
       code: "below_min",
-      message: `${plural(input.belowMinCount, "producto", "productos")} bajo stock mínimo`,
+      message: `${plural(input.belowMinCount, "producto", "productos")} bajo su stock`,
     });
   }
 

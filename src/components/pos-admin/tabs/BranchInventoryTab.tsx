@@ -133,7 +133,7 @@ export function BranchInventoryTab({
     if (!editingMin) return;
     const value = Number(editingMin.value);
     if (!Number.isFinite(value) || value < 0) {
-      toast.error("El mínimo debe ser un número mayor o igual a cero");
+      toast.error("El stock debe ser un número mayor o igual a cero");
       return;
     }
     try {
@@ -142,13 +142,13 @@ export function BranchInventoryTab({
           ? { lineId: editingMin.target.id }
           : { productId: editingMin.target.id }),
         minStock: value,
-        reason: "Stock mínimo actualizado desde la sucursal",
+        reason: "Stock de la sucursal actualizado",
       });
-      toast.success(`Mínimo de ${editingMin.target.name} guardado`);
+      toast.success(`Stock de ${editingMin.target.name} guardado`);
       setEditingMin(null);
       await load();
     } catch (error) {
-      toast.error(getApiErrorMessage(error, "No se pudo guardar el mínimo"));
+      toast.error(getApiErrorMessage(error, "No se pudo guardar el stock"));
     }
   }
 
@@ -191,16 +191,16 @@ export function BranchInventoryTab({
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
         <p className="page-kicker" style={{ margin: 0 }}>
           Los líquidos se llevan en litros por línea; el resto por pieza.{" "}
-          {canEdit ? "Da clic en el lápiz para cambiar el mínimo de esta sucursal." : ""}
+          {canEdit ? "Stock = lo que esta sucursal debe tener siempre; da clic en el lápiz para cambiarlo." : ""}
         </p>
-        {/* Los mínimos se capturan de corrido en el orden de la hoja de pedido a fábrica. */}
+        {/* El stock se captura de corrido en el orden de la hoja de pedido a fábrica. */}
         <Button
           variant="outlined"
           startIcon={<ClipboardList size={16} />}
           component={Link}
           href={`/dashboard/pos/sucursales/${branchId}/minimos`}
         >
-          Capturar mínimos en el formato
+          Capturar stock en el formato
         </Button>
       </div>
 
@@ -217,7 +217,7 @@ export function BranchInventoryTab({
           onClick={() => setBelowMin((value) => !value)}
           sx={{ whiteSpace: "nowrap", height: 40 }}
         >
-          Bajo mínimo{belowMinCount ? ` (${belowMinCount})` : ""}
+          Bajo su stock{belowMinCount ? ` (${belowMinCount})` : ""}
         </Button>
         <FilterMeta>
           <strong>{rows.length}</strong> {isLine ? "líneas" : "productos"}
@@ -238,7 +238,7 @@ export function BranchInventoryTab({
               <th>Categoría</th>
               <th style={{ textAlign: "right" }}>Existencia</th>
               {isLine ? <th style={{ textAlign: "right" }}>≈ Bidones</th> : null}
-              <th style={{ textAlign: "right", minWidth: 190 }}>Stock mínimo</th>
+              <th style={{ textAlign: "right", minWidth: 190 }}>Stock</th>
               <th style={{ textAlign: "right" }}>Faltante</th>
               <th />
             </tr>
@@ -295,7 +295,7 @@ export function BranchInventoryTab({
                             if (event.key === "Escape") setEditingMin(null);
                           }}
                           style={{ width: 96, padding: "4px 8px", textAlign: "right" }}
-                          aria-label={`Stock mínimo de ${row.name}`}
+                          aria-label={`Stock de ${row.name}`}
                         />
                         <span>{unit}</span>
                         <Button
@@ -303,7 +303,7 @@ export function BranchInventoryTab({
                           variant="contained"
                           type="submit"
                           sx={{ minWidth: 0, px: 1 }}
-                          aria-label={`Guardar mínimo de ${row.name}`}
+                          aria-label={`Guardar stock de ${row.name}`}
                         >
                           <Check size={14} />
                         </Button>
@@ -312,21 +312,21 @@ export function BranchInventoryTab({
                           color="inherit"
                           onClick={() => setEditingMin(null)}
                           sx={{ minWidth: 0, px: 1 }}
-                          aria-label="Cancelar edición del mínimo"
+                          aria-label="Cancelar edición del stock"
                         >
                           <X size={14} />
                         </Button>
                       </form>
                     ) : (
                       <span style={{ display: "inline-flex", gap: 6, alignItems: "center" }}>
-                        {row.minStock ? `${formatQuantity(row.minStock)} ${unit}` : <span className="pill-muted">Sin mínimo</span>}
+                        {row.minStock ? `${formatQuantity(row.minStock)} ${unit}` : <span className="pill-muted">Sin stock definido</span>}
                         {canEdit ? (
                           <Button
                             size="small"
                             color="inherit"
                             sx={{ minWidth: 0, px: 0.5 }}
                             onClick={() => setEditingMin({ target, value: String(row.minStock ?? 0) })}
-                            aria-label={`Editar mínimo de ${row.name}`}
+                            aria-label={`Editar stock de ${row.name}`}
                           >
                             <Pencil size={14} />
                           </Button>

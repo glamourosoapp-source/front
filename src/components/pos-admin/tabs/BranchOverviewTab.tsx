@@ -153,14 +153,14 @@ export function BranchOverviewTab({ branch, stats }: BranchOverviewTabProps) {
             ) : null}
             {!isFranchise && stats.inventory ? (
               <DetailField
-                label="Bajo stock mínimo"
+                label="Bajo su stock"
                 value={
                   stats.inventory.belowMinCount ? (
                     <span style={{ color: "#d97706" }}>
-                      {stats.inventory.belowMinCount} de {stats.inventory.trackedCount} con mínimo
+                      {stats.inventory.belowMinCount} de {stats.inventory.trackedCount} con stock definido
                     </span>
                   ) : (
-                    `Ninguno de ${stats.inventory.trackedCount} con mínimo`
+                    `Ninguno de ${stats.inventory.trackedCount} con stock definido`
                   )
                 }
               />

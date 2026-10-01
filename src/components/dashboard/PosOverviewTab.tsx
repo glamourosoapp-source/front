@@ -378,7 +378,7 @@ export function PosOverviewTab() {
                   <th style={{ minWidth: 140 }}>Parte del total</th>
                   <th style={{ textAlign: "right" }}>vs 30 ant.</th>
                   <th>Última venta</th>
-                  {full ? <th style={{ textAlign: "right" }}>Bajo mínimo</th> : null}
+                  {full ? <th style={{ textAlign: "right" }}>Bajo su stock</th> : null}
                   <th>Salud</th>
                 </tr>
               </thead>
@@ -733,7 +733,7 @@ export function PosOverviewTab() {
         </div>
         <div className="card metric">
           <div className="metric-head">
-            <span>Bajo mínimo</span>
+            <span>Bajo su stock</span>
             <div className="metric-icon">
               <Boxes size={22} />
             </div>
@@ -741,7 +741,7 @@ export function PosOverviewTab() {
           <strong style={{ color: totals.belowMin ? "#c62828" : undefined }}>{totals.belowMin}</strong>
           <small>
             <Link href="/dashboard/pos/surtido" style={{ color: "var(--glam-blue)" }}>
-              Productos por debajo del mínimo, todas las sucursales
+              Productos por debajo del stock de su sucursal, todas las sucursales
             </Link>
           </small>
         </div>

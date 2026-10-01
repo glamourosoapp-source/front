@@ -273,7 +273,7 @@ export function BranchRestockEntryPage() {
                 RESTOCK_ORIGIN_LABELS[basedOn.origin] ?? basedOn.origin
               }). Al registrar, ese pedido queda como recibido con lo que captures; sus partidas que dejes vacías quedan en 0.`
             : form.entry?.kind === "shortages"
-              ? "La sucursal no tiene pedidos abiertos: la hoja trae el faltante calculado hoy contra su stock mínimo. Al registrar se crea una entrada manual."
+              ? "La sucursal no tiene pedidos abiertos: la hoja trae el faltante calculado hoy contra su stock. Al registrar se crea una entrada manual."
               : "Hoja en blanco. Al registrar se crea una entrada manual con lo que captures."}
           {unlinked ? ` ${unlinked} renglones sin ligar al catálogo se ven en gris y no se capturan.` : ""}
         </p>

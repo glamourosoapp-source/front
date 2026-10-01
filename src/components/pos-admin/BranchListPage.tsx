@@ -161,7 +161,7 @@ export function BranchListPage({ type }: { type: BranchType }) {
       ? [
           {
             key: "belowMin",
-            label: "Bajo mínimo",
+            label: "Bajo su stock",
             render: (row: BranchStats) =>
               row.inventory?.belowMinCount ? (
                 <strong style={{ color: "#d97706" }}>{row.inventory.belowMinCount}</strong>

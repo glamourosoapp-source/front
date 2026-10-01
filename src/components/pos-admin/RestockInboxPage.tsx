@@ -228,7 +228,7 @@ export function RestockInboxPage() {
           <h1 className="page-title">Faltantes y surtido</h1>
           <p className="page-kicker">
             Todas las sucursales de un vistazo: qué falta pedir y qué no ha llegado. El faltante sale del stock
-            mínimo de cada sucursal y se pide un empaque completo por cada empaque del que ya se vendió la mitad. Para ver
+            que cada sucursal debe tener siempre y se pide un empaque completo por cada empaque del que ya se vendió la mitad. Para ver
             el detalle o registrar una llegada, abre la sucursal.
           </p>
         </div>

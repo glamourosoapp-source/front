@@ -264,7 +264,7 @@ export function FactoryFormAdminPage() {
         <div>
           <h1 className="page-title">Formato de pedido</h1>
           <p className="page-kicker">
-            La hoja que usan las tiendas para pedir, capturar mínimos y registrar entradas. Aquí se agregan, cambian
+            La hoja que usan las tiendas para pedir, capturar el stock y registrar entradas. Aquí se agregan, cambian
             o quitan renglones. El Excel sale en blanco y con las reglas bloqueadas: solo se escriben fecha, nombre y
             cantidades.
           </p>

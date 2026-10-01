@@ -236,9 +236,9 @@ export function LinkToFormDialog({
         </section>
 
         <section style={{ display: "grid", gap: 8 }}>
-          <strong>2. Mínimo y existencia real por sucursal</strong>
+          <strong>2. Stock y existencia real por sucursal</strong>
           <p className="page-kicker" style={{ margin: 0 }}>
-            Sin mínimo el faltante nunca lo pide. El negativo salió de vender sin existencia registrada: captura
+            Sin stock definido el faltante nunca lo pide. El negativo salió de vender sin existencia registrada: captura
             lo que hay hoy en la tienda para que el primer pedido no reponga de más. Vacío deja la existencia
             como está. En {isLine ? "litros" : "piezas"}.
           </p>
@@ -248,7 +248,7 @@ export function LinkToFormDialog({
                 <th>Sucursal</th>
                 <th style={{ textAlign: "right" }}>En sistema</th>
                 <th>Conteo real hoy</th>
-                <th>Mínimo</th>
+                <th>Stock</th>
               </tr>
             </thead>
             <tbody>
@@ -277,7 +277,7 @@ export function LinkToFormDialog({
                       required
                       value={perBranch[item.branchId].minStock}
                       onChange={(event) => setBranch(item.branchId, "minStock", event.target.value)}
-                      inputProps={{ min: 0, step: "any", "aria-label": `Mínimo en ${item.branchCode}` }}
+                      inputProps={{ min: 0, step: "any", "aria-label": `Stock en ${item.branchCode}` }}
                     />
                   </td>
                 </tr>

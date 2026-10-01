@@ -119,7 +119,7 @@ interface RenderPage {
  * con un rótulo en el encabezado para no confundirlo con un pedido.
  */
 export interface FactoryFormDrawOptions {
-  /** Rótulo junto a la marca (p. ej. "STOCK MÍNIMO"). */
+  /** Rótulo junto a la marca (p. ej. "STOCK DE LA SUCURSAL"). */
   title?: string;
   /** Encabezado de la columna de cantidad; `Cant` por omisión. */
   qtyHeader?: string;
@@ -548,10 +548,10 @@ function drawBidonSheet(
   doc.text(`BIDONES: ${formatQty(transparent.qty + color.qty) || "0"}`, MARGIN, y + 12);
 }
 
-/** Opciones con las que se imprime el formato de stock mínimo. */
+/** Opciones con las que se imprime el formato del stock de la sucursal. */
 export const MIN_STOCK_FORM_OPTIONS: FactoryFormDrawOptions = {
-  title: "STOCK MÍNIMO",
-  qtyHeader: "Mín",
+  title: "STOCK DE LA SUCURSAL",
+  qtyHeader: "Stock",
   footers: false,
 };
 
@@ -575,7 +575,7 @@ export function factoryFormFileName(form: FactoryForm): string {
   const who = fileSlug(form.code || form.name || "sucursal") || "sucursal";
   const prefix =
     form.source.kind === "min_stock"
-      ? "stock-minimo"
+      ? "stock-sucursal"
       : form.source.kind === "entry"
         ? "entrada-surtido"
         : "pedido-fabrica";

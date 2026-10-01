@@ -202,7 +202,7 @@ export function BranchRestockTab({ branch }: { branch: Branch }) {
             <div>
               <h2 style={{ margin: 0 }}>1 · Faltante de hoy</h2>
               <p className="page-kicker" style={{ margin: 0 }}>
-                Contra el stock mínimo de esta sucursal: se pide un empaque completo por cada
+                Contra el stock que esta sucursal debe tener siempre: se pide un empaque completo por cada
                 empaque del que ya se vendió la mitad.
               </p>
             </div>
@@ -264,7 +264,7 @@ export function BranchRestockTab({ branch }: { branch: Branch }) {
                     <th>Producto</th>
                     <th style={{ textAlign: "right" }}>Pedir</th>
                     <th style={{ textAlign: "right" }}>Existencia</th>
-                    <th style={{ textAlign: "right" }}>Mínimo</th>
+                    <th style={{ textAlign: "right" }}>Stock</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -289,7 +289,7 @@ export function BranchRestockTab({ branch }: { branch: Branch }) {
             </div>
           ) : (
             <p className="page-kicker" style={{ margin: 0 }}>
-              {shortages === null ? "Calculando..." : "Está por encima de su stock mínimo: no hay nada que pedir."}
+              {shortages === null ? "Calculando..." : "Está completa en su stock: no hay nada que pedir."}
             </p>
           )}
         </section>

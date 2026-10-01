@@ -65,7 +65,7 @@ export function BranchDetailPage({ type }: { type: BranchType }) {
         { key: "ventas", label: "Ventas" },
         { key: "pedidos", label: "Pedidos a fábrica" },
         { key: "cortes", label: "Cortes" },
-        { key: "inventario", label: "Inventario y mínimos" },
+        { key: "inventario", label: "Inventario y stock" },
         { key: "usuarios", label: "Usuarios" },
         { key: "clientes", label: "Clientes" },
         // Solo una sucursal tiene caja; una franquicia no cobra en el sistema.
@@ -102,7 +102,7 @@ export function BranchDetailPage({ type }: { type: BranchType }) {
 
   function selectTab(next: TabKey) {
     const query = new URLSearchParams(searchParams.toString());
-    // `bajo=1` solo aplica al llegar desde la señal "bajo stock mínimo".
+    // `bajo=1` solo aplica al llegar desde la señal "bajo su stock".
     query.delete("bajo");
     if (next === "resumen") query.delete("tab");
     else query.set("tab", next);

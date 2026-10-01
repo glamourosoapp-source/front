@@ -147,9 +147,9 @@ interface FactoryFormSheetProps {
   baseline: SheetValues;
   onChange: (key: string, value: string) => void;
   disabled?: boolean;
-  /** Encabezado de la columna capturable ("Mín", "Cant"). */
+  /** Encabezado de la columna capturable ("Stock", "Cant"). */
   qtyHeader: string;
-  /** Prefijo del `aria-label` de cada campo ("Mínimo de", "Cantidad de"). */
+  /** Prefijo del `aria-label` de cada campo ("Stock de", "Cantidad de"). */
   inputLabel: string;
   /** Solo lectura: la cantidad se pinta como texto, no como campo. */
   readOnly?: boolean;

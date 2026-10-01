@@ -83,7 +83,7 @@ export function BranchMinStockFormPage() {
       setValues(initial);
       setBaseline(initial);
     } catch (error) {
-      toast.error(getApiErrorMessage(error, "No se pudo cargar el formato de mínimos"));
+      toast.error(getApiErrorMessage(error, "No se pudo cargar el formato de stock"));
     } finally {
       setLoading(false);
     }
@@ -136,10 +136,10 @@ export function BranchMinStockFormPage() {
     setSaving(true);
     try {
       await httpClient.put(`/pos/branches/${branchId}/min-stock`, { rows });
-      toast.success(`${rows.length} mínimo${rows.length === 1 ? "" : "s"} guardado${rows.length === 1 ? "" : "s"}`);
+      toast.success(`Stock de ${rows.length} renglón${rows.length === 1 ? "" : "es"} guardado`);
       await load();
     } catch (error) {
-      toast.error(getApiErrorMessage(error, "No se pudieron guardar los mínimos"));
+      toast.error(getApiErrorMessage(error, "No se pudo guardar el stock"));
     } finally {
       setSaving(false);
     }
@@ -185,9 +185,9 @@ export function BranchMinStockFormPage() {
       const copied = copiedTargets.size;
       setValues(next);
       const name = branches.find((b) => b.id === otherId)?.name ?? "la otra sucursal";
-      toast.success(`Se copiaron ${copied} mínimos de ${name}. Revísalos y guarda.`);
+      toast.success(`Se copió el stock de ${copied} renglones de ${name}. Revísalo y guarda.`);
     } catch (error) {
-      toast.error(getApiErrorMessage(error, "No se pudieron copiar los mínimos"));
+      toast.error(getApiErrorMessage(error, "No se pudo copiar el stock"));
     } finally {
       setCopying(false);
     }
@@ -227,7 +227,7 @@ export function BranchMinStockFormPage() {
           <div>
             <h2 style={{ margin: 0 }}>Sin acceso</h2>
             <p className="page-kicker" style={{ margin: 0 }}>
-              La captura de mínimos necesita el permiso de Inventario del punto de venta.
+              La captura del stock necesita el permiso de Inventario del punto de venta.
             </p>
           </div>
         </div>
@@ -250,12 +250,12 @@ export function BranchMinStockFormPage() {
           </Link>
           <h1 className="page-title" style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
             <ClipboardList size={22} style={{ color: "var(--glam-blue)" }} />
-            Stock mínimo{form ? ` · ${form.code ? `${form.code} · ` : ""}${form.name}` : ""}
+            Stock de la sucursal{form ? ` · ${form.code ? `${form.code} · ` : ""}${form.name}` : ""}
           </h1>
           <p className="page-kicker">
-            Mismo orden que la hoja de pedido a fábrica. Se captura en empaques, como en el papel:{" "}
+            Lo que la sucursal debe tener siempre, en el mismo orden que la hoja de pedido a fábrica. Se captura en empaques, como en el papel:{" "}
             <strong>2</strong> en un bidón son 40 L, <strong>1</strong> en una caja de 24 son 24 pz. Enter baja al
-            siguiente renglón. Vacío o 0 = sin mínimo.
+            siguiente renglón. Vacío o 0 = sin stock definido.
           </p>
         </div>
         <div style={{ display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap" }}>
@@ -263,7 +263,7 @@ export function BranchMinStockFormPage() {
             <TextField
               select
               size="small"
-              label="Copiar mínimos de"
+              label="Copiar stock de"
               value=""
               onChange={(event) => void copyFrom(event.target.value)}
               disabled={copying || loading}
@@ -295,7 +295,7 @@ export function BranchMinStockFormPage() {
       {unlinked ? (
         <p className="page-kicker" style={{ margin: 0 }}>
           {unlinked} renglones del formato no están ligados al catálogo y se muestran en gris; su
-          mínimo se captura desde <Link href={backHref}>Inventario y mínimos</Link>.
+          stock se captura desde <Link href={backHref}>Inventario y stock</Link>.
         </p>
       ) : null}
 
@@ -309,8 +309,8 @@ export function BranchMinStockFormPage() {
         baseline={baseline}
         onChange={(key, value) => setValues((prev) => ({ ...prev, [key]: value }))}
         disabled={!canEdit}
-        qtyHeader="Mín"
-        inputLabel="Mínimo de"
+        qtyHeader="Stock"
+        inputLabel="Stock de"
       />
 
       {canEdit ? (
@@ -335,7 +335,7 @@ export function BranchMinStockFormPage() {
               disabled={!dirtyKeys.length || saving}
               onClick={() => void save()}
             >
-              {saving ? "Guardando…" : "Guardar mínimos"}
+              {saving ? "Guardando…" : "Guardar stock"}
             </Button>
           </div>
         </div>

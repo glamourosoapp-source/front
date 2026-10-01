@@ -59,8 +59,8 @@ export default function PosInventarioPage() {
         <div>
           <h1 className="page-title">Inventario por sucursal</h1>
           <p className="page-kicker" style={{ margin: 0 }}>
-            Lo mismo que la pestaña Inventario y mínimos de cada sucursal: existencia, stock mínimo editable en la
-            fila, kardex y ajustes.
+            Lo mismo que la pestaña Inventario y stock de cada sucursal: existencia, stock (lo que la sucursal debe
+            tener siempre) editable en la fila, kardex y ajustes.
           </p>
         </div>
         <TextField
