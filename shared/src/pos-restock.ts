@@ -1,29 +1,27 @@
-import { BIDON_LITERS, RESTOCK_SHORTAGE_THRESHOLD } from "./constants";
+import { BIDON_LITERS } from "./constants";
 
 /**
  * Empaques a pedir a fábrica para cubrir un faltante.
  *
- * Regla del 30 % (2026-09-19): fábrica surte en **empaques completos** (bidón
- * de 20 L, garrafa de 5 L, caja de 24 latas, bolsa de 6,000 tapas…). Se pide
- * cuando el faltante alcanza el **30 % del stock mínimo** de la sucursal, y
- * entonces se piden los empaques necesarios para cubrirlo completo: siempre
- * sobra, nunca falta. Por debajo del umbral no se pide nada: la sucursal casi
- * está en su nivel ideal y mandarle un empaque cada corte le acumularía
- * producto que no vendió.
+ * Regla del medio empaque (2026-09-30, sustituye a la del 30 %): fábrica surte
+ * en **empaques completos** (bidón de 20 L, garrafa de 5 L, caja de 20 rollos,
+ * bolsa de 6,000 tapas…) y la sucursal vuelve a su mínimo pidiendo un empaque
+ * nuevo **por cada empaque del que ya se acabó la mitad**: el faltante en
+ * empaques se redondea por mitad (½ hacia arriba). Menos de medio empaque
+ * vendido no pide nada.
  *
- * Mínimo 40 pz en cajas de 20: faltan 12 → 1 caja; faltan 25 → 2; faltan 11 → 0.
- * Mínimo 20 L en bidón:        faltan 6 L → 1 bidón; faltan 5 L → 0.
+ * Mínimo 10 bidones (200 L): faltan ½ → 1; faltan 2¼ → 2; faltan 4¾ → 5.
+ * Mínimo 2 cajas de 20 (40 pz): faltan 5 → 0; faltan 10 → 1; faltan 13 → 1; faltan 30 → 2.
  */
 export function packagesToOrder(shortage: number, minStock: number, packSize: number): number {
   const missing = Number(shortage);
   const min = Number(minStock);
   if (!Number.isFinite(missing) || missing <= 0) return 0;
   if (!Number.isFinite(min) || min <= 0) return 0;
-  // 0.3 × 3 = 0.8999999999999999 en punto flotante: el epsilon evita que un
-  // faltante exactamente en el umbral se quede sin pedir.
-  if (missing + 1e-9 < min * RESTOCK_SHORTAGE_THRESHOLD) return 0;
   const size = Number(packSize) > 0 ? Number(packSize) : 1;
-  return Math.ceil(missing / size - 1e-9);
+  // El epsilon evita que medio empaque exacto (10 L / 20 = 0.5) se pierda por
+  // punto flotante en litros con decimales.
+  return Math.floor(missing / size + 0.5 + 1e-9);
 }
 
 /** Bidones (o garrafas) a pedir para una línea de líquido, en litros. */

@@ -698,7 +698,7 @@ export interface BranchShortage {
   minStock: number;
   /** Litros o piezas que faltan para el mínimo. */
   shortage: number;
-  /** Empaques (bidones, garrafas, cajas o piezas) a pedir, ya redondeados con la regla del 30 %. */
+  /** Empaques (bidones, garrafas, cajas o piezas) a pedir, ya redondeados por medio empaque. */
   requestedQty: number;
   litersPerUnit?: number | null;
   /** Piezas por empaque para productos por pieza (1 = pieza suelta). */

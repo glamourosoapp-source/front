@@ -202,8 +202,8 @@ export function BranchRestockTab({ branch }: { branch: Branch }) {
             <div>
               <h2 style={{ margin: 0 }}>1 · Faltante de hoy</h2>
               <p className="page-kicker" style={{ margin: 0 }}>
-                Contra el stock mínimo de esta sucursal: se pide en empaques completos cuando el
-                faltante alcanza el 30 % del mínimo.
+                Contra el stock mínimo de esta sucursal: se pide un empaque completo por cada
+                empaque del que ya se vendió la mitad.
               </p>
             </div>
             <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap", justifyContent: "flex-end" }}>
