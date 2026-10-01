@@ -136,8 +136,9 @@ export default function PosPrintSettingsPage() {
               luego en <strong>Ejecutar de todos modos</strong>.
             </li>
             <li>
-              Sigue el asistente. Al terminar se abre una ventana negra con el{" "}
-              <strong>token</strong>: cópialo y pégalo aquí abajo.
+              Sigue el asistente. Al terminar se abre el Bloc de notas con el{" "}
+              <strong>token</strong>: cópialo y pégalo aquí abajo. El conector no deja ninguna
+              ventana abierta: trabaja en segundo plano.
             </li>
           </ol>
           <Button
@@ -173,7 +174,7 @@ export default function PosPrintSettingsPage() {
             value={config.token}
             onChange={(event) => update({ token: event.target.value })}
             fullWidth
-            helperText="Lo muestra la ventana del conector la primera vez que corre."
+            helperText="En el menú Inicio de Windows: «Ver token del Conector de impresión»."
           />
           <TextField
             select
