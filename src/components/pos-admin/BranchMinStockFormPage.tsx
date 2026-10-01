@@ -4,13 +4,15 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { Button, MenuItem, TextField } from "@mui/material";
-import { ArrowLeft, ClipboardList, Download, RotateCcw, Save, ShieldAlert } from "lucide-react";
+import { ArrowLeft, ClipboardList, Download, FileSpreadsheet, RotateCcw, Save, ShieldAlert } from "lucide-react";
 import type { FactoryForm, FactoryFormRow } from "@glamouroso/shared";
 import { BRANCH_TYPES } from "@glamouroso/shared/constants";
 import { httpClient, getApiErrorMessage } from "@/services/http-client";
 import { usePermissions } from "@/lib/permissions";
 import { exportFactoryFormPdf, MIN_STOCK_FORM_OPTIONS } from "@/lib/export-factory-form";
 import type { Branch, ListResponse } from "@/types";
+import type { StockSheetResult } from "@/lib/stock-sheet";
+import { StockSheetImportDialog, StockSheetResultDialog } from "./StockSheetUpload";
 import { toast } from "sonner";
 import {
   FactoryFormSheet,
@@ -61,6 +63,8 @@ export function BranchMinStockFormPage() {
   const [branches, setBranches] = useState<Branch[]>([]);
   const [copying, setCopying] = useState(false);
   const [exporting, setExporting] = useState(false);
+  const [importOpen, setImportOpen] = useState(false);
+  const [importResult, setImportResult] = useState<StockSheetResult | null>(null);
 
   /** Renglones capturables por posición: cada uno con su propio valor. */
   const rowsByKey = useMemo(() => {
@@ -281,6 +285,17 @@ export function BranchMinStockFormPage() {
               ))}
             </TextField>
           ) : null}
+          {canEdit ? (
+            <Button
+              variant="outlined"
+              startIcon={<FileSpreadsheet size={16} />}
+              onClick={() => setImportOpen(true)}
+              disabled={!form || dirtyKeys.length > 0}
+              title={dirtyKeys.length ? "Guarda o descarta los cambios antes de cargar un Excel" : undefined}
+            >
+              Cargar Excel
+            </Button>
+          ) : null}
           <Button
             variant="outlined"
             startIcon={<Download size={16} />}
@@ -340,6 +355,18 @@ export function BranchMinStockFormPage() {
           </div>
         </div>
       ) : null}
+
+      <StockSheetImportDialog
+        open={importOpen}
+        branchId={branchId}
+        onClose={() => setImportOpen(false)}
+        onDone={(result) => {
+          setImportOpen(false);
+          setImportResult(result);
+          void load();
+        }}
+      />
+      <StockSheetResultDialog result={importResult} onClose={() => setImportResult(null)} />
     </div>
   );
 }

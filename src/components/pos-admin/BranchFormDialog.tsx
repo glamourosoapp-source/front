@@ -19,7 +19,15 @@ import { BRANCH_TYPES, type BranchType } from "@glamouroso/shared/constants";
 import { httpClient, getApiErrorMessage } from "@/services/http-client";
 import { config } from "@/config";
 import { Branch } from "@/types";
+import { usePermissions } from "@/lib/permissions";
+import type { StockSheetResult } from "@/lib/stock-sheet";
 import { toast } from "sonner";
+import {
+  StockSheetPicker,
+  StockSheetResultDialog,
+  applyStockChoice,
+  type StockSheetChoice,
+} from "./StockSheetUpload";
 
 interface BranchFormDialogProps {
   open: boolean;
@@ -58,10 +66,19 @@ export function BranchFormDialog({
   const isEdit = Boolean(branch);
   const [isActive, setIsActive] = useState(branch?.isActive ?? true);
   const [saving, setSaving] = useState(false);
+  const [type, setType] = useState<string>(branch?.type || defaultType);
+  const [stockChoice, setStockChoice] = useState<StockSheetChoice | null>(null);
+  const [stockResult, setStockResult] = useState<StockSheetResult | null>(null);
+  const { can } = usePermissions();
+  // El Excel de stock solo al dar de alta una sucursal con caja: una franquicia no lleva inventario.
+  const canAttachStock = !isEdit && type === BRANCH_TYPES.BRANCH && can("posInventory", "update");
 
   useEffect(() => {
-    if (open) setIsActive(branch?.isActive ?? true);
-  }, [open, branch]);
+    if (!open) return;
+    setIsActive(branch?.isActive ?? true);
+    setType(branch?.type || defaultType);
+    setStockChoice(null);
+  }, [open, branch, defaultType]);
 
   async function save(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -81,14 +98,31 @@ export function BranchFormDialog({
       notes: String(form.get("notes") || "").trim() || null,
     };
 
+    const stock = canAttachStock ? stockChoice : null;
+    if (stock && stock.asInventory === null) {
+      toast.error("Contesta si las cantidades del Excel son también el inventario de hoy");
+      return;
+    }
+
     setSaving(true);
     try {
       if (isEdit && branch) {
         await httpClient.put(`/pos/branches/${branch.id}`, { ...payload, isActive });
         toast.success("Sucursal actualizada");
       } else {
-        await httpClient.post("/pos/branches", payload);
+        const created = await httpClient.post<Branch>("/pos/branches", payload);
         toast.success("Sucursal creada");
+        if (stock) {
+          // La sucursal ya existe: si el Excel falla no se deshace el alta, se avisa
+          // para cargarlo después desde su Stock.
+          try {
+            setStockResult(await applyStockChoice(created.id, stock));
+          } catch (error) {
+            toast.error(
+              `La sucursal se creó, pero el Excel no se cargó: ${getApiErrorMessage(error, "error desconocido")}. Cárgalo desde Inventario → Stock de la sucursal.`
+            );
+          }
+        }
       }
       onSaved();
       onClose();
@@ -100,6 +134,8 @@ export function BranchFormDialog({
   }
 
   return (
+    <>
+    <StockSheetResultDialog result={stockResult} onClose={() => setStockResult(null)} />
     <Dialog open={open} onClose={onClose} fullWidth maxWidth="md" key={branch?.id ?? "new"}>
       <form onSubmit={save}>
         <DialogTitle>
@@ -126,7 +162,8 @@ export function BranchFormDialog({
             select
             name="type"
             label="Tipo"
-            defaultValue={branch?.type || defaultType}
+            value={type}
+            onChange={(event) => setType(event.target.value)}
             fullWidth
             helperText="Una franquicia solo levanta pedidos a fábrica, sin caja ni inventario."
           >
@@ -190,14 +227,25 @@ export function BranchFormDialog({
               sx={{ gridColumn: "1 / -1" }}
             />
           ) : null}
+          {canAttachStock ? (
+            <div style={{ gridColumn: "1 / -1", display: "grid", gap: 8 }}>
+              <Typography variant="subtitle2">Stock de la sucursal (opcional)</Typography>
+              <Typography variant="body2" sx={{ color: "var(--muted)" }}>
+                El formato de pedido a tiendas en Excel con la columna Cant llena: lo que la sucursal debe tener siempre,
+                en empaques como en el papel.
+              </Typography>
+              <StockSheetPicker value={stockChoice} onChange={setStockChoice} disabled={saving} />
+            </div>
+          ) : null}
         </DialogContent>
         <DialogActions>
           <Button onClick={onClose}>Cancelar</Button>
           <Button type="submit" variant="contained" disabled={saving}>
-            {saving ? "Guardando..." : "Guardar"}
+            {saving ? (stockChoice && canAttachStock ? "Creando y cargando stock..." : "Guardando...") : "Guardar"}
           </Button>
         </DialogActions>
       </form>
     </Dialog>
+    </>
   );
 }
