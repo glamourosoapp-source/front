@@ -5,8 +5,11 @@ import { POS_CLOCK_SKEW_WARN_MS, type BranchSyncState } from "./pos-sync";
  * Salud de una sucursal o franquicia, para la tabla y el detalle del panel.
  *
  * No es un score: son señales concretas que el administrador puede actuar. Cada
- * señal dice qué pasa ("3 productos bajo mínimo") y el nivel global es el peor
- * de todos. Sin señales, la sucursal está bien.
+ * señal dice qué pasa ("ventas 40% abajo") y el nivel global es el peor de
+ * todos. Sin señales, la sucursal está bien.
+ *
+ * El inventario bajo su stock NO es señal: se vacía vendiendo y se repone con
+ * el pedido semanal a fábrica, así que alarmar por eso es alarmar por vender.
  */
 export type BranchHealthLevel = "good" | "warning" | "critical";
 
@@ -20,8 +23,6 @@ export interface BranchHealthInput {
   lifetimeTickets: number;
   /** Última venta cobrada (ISO) o null. */
   lastSaleAt: string | null;
-  /** Líneas y productos con existencia por debajo de su mínimo. */
-  belowMinCount: number;
   /** Pedidos a fábrica sin enviar (pending/approved/preparing) y el más viejo. */
   openRestockCount: number;
   oldestOpenRestockAt: string | null;
@@ -42,7 +43,6 @@ export interface BranchHealthSignal {
     | "inactive"
     | "sales_drop"
     | "no_recent_sales"
-    | "below_min"
     | "stale_restock"
     | "no_recent_orders"
     | "sync_pending"
@@ -195,15 +195,6 @@ export function computeBranchHealth(input: BranchHealthInput): BranchHealth {
         });
       }
     }
-  }
-
-  // Inventario: solo sucursales; la franquicia lleva el suyo fuera del sistema.
-  if (!isFranchise && input.belowMinCount > 0) {
-    signals.push({
-      level: input.belowMinCount >= 10 ? "critical" : "warning",
-      code: "below_min",
-      message: `${plural(input.belowMinCount, "producto", "productos")} bajo su stock`,
-    });
   }
 
   // Surtido atorado: un pedido sin enviar en más de 3 días es un faltante que sigue.

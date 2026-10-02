@@ -336,7 +336,7 @@ export function BranchInventoryTab({
                   </td>
                   <td style={{ textAlign: "right" }}>
                     {shortage > 0 ? (
-                      <strong style={{ color: "#d97706" }}>
+                      <strong style={{ color: "var(--glam-navy)" }}>
                         {formatQuantity(shortage)} {unit}
                       </strong>
                     ) : (

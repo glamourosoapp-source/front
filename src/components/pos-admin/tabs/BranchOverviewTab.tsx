@@ -19,8 +19,6 @@ interface BranchOverviewTabProps {
 function signalHref(branchId: string, code: BranchHealthSignal["code"]): string | null {
   const base = `${BRANCH_TYPE_COPY.branch.listHref}/${branchId}`;
   switch (code) {
-    case "below_min":
-      return `${base}?tab=inventario&bajo=1`;
     case "stale_restock":
     case "no_recent_orders":
       return `${base}?tab=pedidos`;
@@ -156,9 +154,12 @@ export function BranchOverviewTab({ branch, stats }: BranchOverviewTabProps) {
                 label="Bajo su stock"
                 value={
                   stats.inventory.belowMinCount ? (
-                    <span style={{ color: "#d97706" }}>
+                    <Link
+                      href={`${BRANCH_TYPE_COPY.branch.listHref}/${branch.id}?tab=inventario&bajo=1`}
+                      style={{ color: "var(--glam-blue)" }}
+                    >
                       {stats.inventory.belowMinCount} de {stats.inventory.trackedCount} con stock definido
-                    </span>
+                    </Link>
                   ) : (
                     `Ninguno de ${stats.inventory.trackedCount} con stock definido`
                   )

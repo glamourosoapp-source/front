@@ -102,7 +102,7 @@ export function BranchDetailPage({ type }: { type: BranchType }) {
 
   function selectTab(next: TabKey) {
     const query = new URLSearchParams(searchParams.toString());
-    // `bajo=1` solo aplica al llegar desde la señal "bajo su stock".
+    // `bajo=1` solo aplica al llegar desde el dato "Bajo su stock" del Resumen.
     query.delete("bajo");
     if (next === "resumen") query.delete("tab");
     else query.set("tab", next);

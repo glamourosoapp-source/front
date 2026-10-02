@@ -425,7 +425,7 @@ export function PosOverviewTab() {
                     </td>
                     <td style={{ color: "var(--muted)", whiteSpace: "nowrap" }}>{relativeDays(row.lastSaleAt)}</td>
                     {full ? (
-                      <td style={{ textAlign: "right", fontWeight: 700, color: row.belowMin ? "#c62828" : undefined }}>
+                      <td style={{ textAlign: "right" }}>
                         {row.belowMin == null ? "—" : row.belowMin}
                       </td>
                     ) : null}
@@ -721,7 +721,7 @@ export function PosOverviewTab() {
               <Truck size={22} />
             </div>
           </div>
-          <strong style={{ color: totals.openRestock ? "#d97706" : undefined }}>{totals.openRestock}</strong>
+          <strong>{totals.openRestock}</strong>
           <small>
             <Link
               href={config.factoryModuleEnabled ? "/dashboard/fabrica" : "/dashboard/pos/surtido"}
@@ -738,7 +738,7 @@ export function PosOverviewTab() {
               <Boxes size={22} />
             </div>
           </div>
-          <strong style={{ color: totals.belowMin ? "#c62828" : undefined }}>{totals.belowMin}</strong>
+          <strong>{totals.belowMin}</strong>
           <small>
             <Link href="/dashboard/pos/surtido" style={{ color: "var(--glam-blue)" }}>
               Productos por debajo del stock de su sucursal, todas las sucursales
