@@ -1,14 +1,42 @@
 "use client";
 
 import Link from "next/link";
-import { ArrowRight, Calculator, Receipt, Truck, Users, Wallet } from "lucide-react";
+import {
+  ArrowRight,
+  Calculator,
+  CalendarClock,
+  CalendarDays,
+  ChevronRight,
+  ClipboardList,
+  Clock,
+  Inbox,
+  MapPin,
+  Package,
+  Phone,
+  Printer,
+  Receipt,
+  Store,
+  StickyNote,
+  Truck,
+  UserCog,
+  Users,
+  Wallet,
+  type LucideIcon,
+} from "lucide-react";
 import type { BranchHealthSignal } from "@glamouroso/shared";
 import { BRANCH_TYPES } from "@glamouroso/shared/constants";
-import { DetailField } from "@/components/ui/DetailField";
 import { formatMoney } from "@/lib/format-money";
 import type { Branch, BranchStats } from "@/types";
 import { BranchHealthSignals } from "../BranchHealthChip";
-import { BRANCH_TYPE_COPY, WEEKDAY_LABELS, formatDateTime, relativeDays, salesPeriodLabels } from "../pos-labels";
+import {
+  BRANCH_TYPE_COPY,
+  HEALTH_BG,
+  HEALTH_COLORS,
+  WEEKDAY_LABELS,
+  formatDateTime,
+  relativeDays,
+  salesPeriodLabels,
+} from "../pos-labels";
 
 interface BranchOverviewTabProps {
   branch: Branch;
@@ -51,6 +79,82 @@ function Delta({ current, previous }: { current: number; previous: number }) {
 function Period({ children }: { children: string }) {
   return (
     <div style={{ marginTop: 4, color: "var(--muted)", fontSize: 13, fontWeight: 400 }}>{children}</div>
+  );
+}
+
+function capitalize(text: string): string {
+  return text ? text[0].toUpperCase() + text.slice(1) : text;
+}
+
+/**
+ * Métrica compacta: ícono, etiqueta, valor y una línea de contexto. Con `href`
+ * toda la tarjeta lleva a donde se resuelve (p. ej. inventario bajo su stock).
+ */
+function StatTile({
+  icon: Icon,
+  label,
+  value,
+  hint,
+  tone,
+  muted,
+  href,
+}: {
+  icon: LucideIcon;
+  label: string;
+  value: string;
+  hint?: string;
+  tone?: "warning";
+  muted?: boolean;
+  href?: string;
+}) {
+  const accent = tone === "warning" ? HEALTH_COLORS.warning : undefined;
+  const body = (
+    <>
+      <div
+        className="stat-tile-icon"
+        style={accent ? { background: HEALTH_BG.warning, color: accent } : undefined}
+      >
+        <Icon size={18} />
+      </div>
+      <div style={{ minWidth: 0, flex: 1 }}>
+        <div className="stat-tile-label">{label}</div>
+        <div className="stat-tile-value" style={{ color: accent ?? (muted ? "var(--muted)" : undefined) }}>
+          {value}
+        </div>
+        {hint ? <div className="stat-tile-hint">{hint}</div> : null}
+      </div>
+      {href ? <ChevronRight size={16} style={{ color: "var(--muted)", alignSelf: "center" }} /> : null}
+    </>
+  );
+  return href ? (
+    <Link href={href} className="stat-tile stat-tile-link">
+      {body}
+    </Link>
+  ) : (
+    <div className="stat-tile">{body}</div>
+  );
+}
+
+/** Renglón de ficha: ícono + etiqueta arriba + valor; sin valor, un texto gris. */
+function InfoRow({
+  icon: Icon,
+  label,
+  value,
+  empty = "—",
+}: {
+  icon: LucideIcon;
+  label: string;
+  value: string | null;
+  empty?: string;
+}) {
+  return (
+    <div className="info-row">
+      <Icon size={16} className="info-row-icon" />
+      <div style={{ minWidth: 0 }}>
+        <div className="stat-tile-label">{label}</div>
+        <div className={value ? "info-row-value" : "info-row-value is-empty"}>{value ?? empty}</div>
+      </div>
+    </div>
   );
 }
 
@@ -133,104 +237,132 @@ export function BranchOverviewTab({ branch, stats }: BranchOverviewTabProps) {
         </section>
       ) : null}
 
-      <div className="grid-2">
-        <section className="panel p-5">
-          <h2 style={{ marginTop: 0 }}>Salud de la {isFranchise ? "franquicia" : "sucursal"}</h2>
+      <section className="panel p-5">
+        <h2>Salud de la {isFranchise ? "franquicia" : "sucursal"}</h2>
+        <div style={{ marginTop: 12 }}>
           <BranchHealthSignals
             health={stats.health}
             hrefFor={isFranchise ? undefined : (code) => signalHref(branch.id, code)}
           />
-          <div className="grid gap-4 sm:grid-cols-2" style={{ marginTop: 16 }}>
-            {!isFranchise && sales ? (
-              <>
-                <DetailField label="Ticket promedio del mes" value={formatMoney(sales.month.avgTicket)} />
-                <DetailField label="Última venta" value={`${relativeDays(sales.lastSaleAt)} · ${formatDateTime(sales.lastSaleAt)}`} />
-                <DetailField label="Clientes registrados" value={String(sales.customersCount)} />
-                <DetailField label="Tickets históricos" value={String(sales.lifetimeTickets)} />
-              </>
-            ) : null}
-            {!isFranchise && stats.inventory ? (
-              <DetailField
-                label="Bajo su stock"
-                value={
-                  stats.inventory.belowMinCount ? (
-                    <Link
-                      href={`${BRANCH_TYPE_COPY.branch.listHref}/${branch.id}?tab=inventario&bajo=1`}
-                      style={{ color: "var(--glam-blue)" }}
-                    >
-                      {stats.inventory.belowMinCount} de {stats.inventory.trackedCount} con stock definido
-                    </Link>
-                  ) : (
-                    `Ninguno de ${stats.inventory.trackedCount} con stock definido`
-                  )
-                }
+        </div>
+        <div className={`stat-tiles ${isFranchise ? "cols-2" : "cols-3"}`} style={{ marginTop: 16 }}>
+          {!isFranchise && sales ? (
+            <>
+              <StatTile
+                icon={Wallet}
+                label="Ticket promedio del mes"
+                value={formatMoney(sales.month.avgTicket)}
+                hint={`${sales.month.tickets} tickets este mes`}
               />
-            ) : null}
-            <DetailField label="Usuarios asignados" value={String(stats.usersCount)} />
-          </div>
-        </section>
-
-        <section className="panel p-5">
-          <div className="toolbar" style={{ marginBottom: 12 }}>
-            <h2 style={{ margin: 0, display: "flex", alignItems: "center", gap: 8 }}>
-              <Truck size={18} style={{ color: "var(--glam-blue)" }} /> Surtido a fábrica
-            </h2>
-            {!isFranchise ? (
-              <Link
-                href={`${BRANCH_TYPE_COPY.branch.listHref}/${branch.id}?tab=pedidos`}
-                className="inline-flex items-center gap-1 text-sm"
-                style={{ color: "var(--glam-blue)", fontWeight: 600 }}
-              >
-                Ver pedidos a fábrica <ArrowRight size={14} />
-              </Link>
-            ) : null}
-          </div>
-          <div className="grid gap-4 sm:grid-cols-2">
-            <DetailField
-              label={isFranchise ? "Por enviar" : "Por recibir"}
-              value={
-                stats.restock.openCount ? (
-                  <span style={{ color: "var(--glam-navy)" }}>
-                    {stats.restock.openCount} · el más viejo {relativeDays(stats.restock.oldestOpenAt)}
-                  </span>
-                ) : (
-                  "Ninguno"
-                )
+              <StatTile
+                icon={Clock}
+                label="Última venta"
+                value={sales.lastSaleAt ? capitalize(relativeDays(sales.lastSaleAt)) : "Sin ventas"}
+                hint={sales.lastSaleAt ? formatDateTime(sales.lastSaleAt) : "Aún no cobra su primer ticket"}
+                muted={!sales.lastSaleAt}
+              />
+              <StatTile icon={Users} label="Clientes registrados" value={String(sales.customersCount)} />
+              <StatTile icon={Receipt} label="Tickets históricos" value={String(sales.lifetimeTickets)} />
+            </>
+          ) : null}
+          {!isFranchise && stats.inventory ? (
+            <StatTile
+              icon={Package}
+              label="Bajo su stock"
+              value={stats.inventory.belowMinCount ? `${stats.inventory.belowMinCount} productos` : "Ninguno"}
+              hint={`de ${stats.inventory.trackedCount} con stock definido`}
+              tone={stats.inventory.belowMinCount ? "warning" : undefined}
+              href={
+                stats.inventory.belowMinCount
+                  ? `${BRANCH_TYPE_COPY.branch.listHref}/${branch.id}?tab=inventario&bajo=1`
+                  : undefined
               }
             />
-            <DetailField label="Pedidos este mes" value={String(stats.restock.monthCount)} />
-            <DetailField label="Último pedido" value={relativeDays(stats.restock.lastOrderAt)} />
-            {!isFranchise ? (
-              <DetailField
-                label="Corte de faltantes"
-                value={
-                  branch.restockCutoffDow == null
-                    ? "Manual (sin corte automático)"
-                    : `Cada ${WEEKDAY_LABELS[branch.restockCutoffDow]}`
-                }
-              />
-            ) : null}
-          </div>
-        </section>
-      </div>
+          ) : null}
+          <StatTile icon={UserCog} label="Usuarios asignados" value={String(stats.usersCount)} />
+        </div>
+      </section>
 
       <section className="panel p-5">
-        <h2 style={{ marginTop: 0 }}>Datos de la {isFranchise ? "franquicia" : "sucursal"}</h2>
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          <DetailField label="Código" value={branch.code} />
-          <DetailField label="Nombre" value={branch.name} />
-          <DetailField label="Teléfono" value={branch.phone || "—"} />
-          <DetailField label="Domicilio" value={address || "—"} />
-          <DetailField label="Estado" value={branch.isActive ? "Activa" : "Inactiva"} />
+        <div className="toolbar" style={{ marginBottom: 0, flexWrap: "wrap" }}>
+          <h2 style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <Truck size={18} style={{ color: "var(--glam-blue)" }} /> Surtido a fábrica
+          </h2>
           {!isFranchise ? (
-            <DetailField
+            <Link
+              href={`${BRANCH_TYPE_COPY.branch.listHref}/${branch.id}?tab=pedidos`}
+              className="inline-flex items-center gap-1 text-sm"
+              style={{ color: "var(--glam-blue)", fontWeight: 600 }}
+            >
+              Ver pedidos a fábrica <ArrowRight size={14} />
+            </Link>
+          ) : null}
+        </div>
+        <div className={`stat-tiles ${isFranchise ? "cols-3" : ""}`} style={{ marginTop: 16 }}>
+          <StatTile
+            icon={Inbox}
+            label={isFranchise ? "Por enviar" : "Por recibir"}
+            value={stats.restock.openCount ? `${stats.restock.openCount} pedidos` : "Ninguno"}
+            hint={
+              stats.restock.openCount
+                ? `El más viejo ${relativeDays(stats.restock.oldestOpenAt)}`
+                : "No hay pedidos en camino"
+            }
+          />
+          <StatTile icon={ClipboardList} label="Pedidos este mes" value={String(stats.restock.monthCount)} />
+          <StatTile
+            icon={CalendarClock}
+            label="Último pedido"
+            value={capitalize(relativeDays(stats.restock.lastOrderAt))}
+            hint={stats.restock.lastOrderAt ? formatDateTime(stats.restock.lastOrderAt) : "Aún no pide a fábrica"}
+            muted={!stats.restock.lastOrderAt}
+          />
+          {!isFranchise ? (
+            <StatTile
+              icon={CalendarDays}
+              label="Corte de faltantes"
+              value={
+                branch.restockCutoffDow == null
+                  ? "Manual"
+                  : capitalize(WEEKDAY_LABELS[branch.restockCutoffDow] ?? "")
+              }
+              hint={branch.restockCutoffDow == null ? "Sin corte automático" : "Cada semana, automático"}
+            />
+          ) : null}
+        </div>
+      </section>
+
+      <section className="panel p-5">
+        <div className="toolbar" style={{ marginBottom: 0, flexWrap: "wrap" }}>
+          <h2>Datos de la {isFranchise ? "franquicia" : "sucursal"}</h2>
+          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <span className="branch-code-badge">{branch.code}</span>
+            <span
+              className="branch-status-pill"
+              style={
+                branch.isActive
+                  ? { background: HEALTH_BG.good, color: HEALTH_COLORS.good }
+                  : { background: "var(--bg)", color: "var(--muted)" }
+              }
+            >
+              {branch.isActive ? "Activa" : "Inactiva"}
+            </span>
+          </div>
+        </div>
+        <div className="info-rows" style={{ marginTop: 12 }}>
+          <InfoRow icon={Store} label="Nombre" value={branch.name} />
+          <InfoRow icon={Phone} label="Teléfono" value={branch.phone || null} empty="Sin teléfono registrado" />
+          <InfoRow icon={MapPin} label="Domicilio" value={address || null} empty="Sin domicilio registrado" />
+          {!isFranchise ? (
+            <InfoRow
+              icon={Printer}
               label="Ticket impreso"
-              value={`${Number(ticket.paperWidthMm ?? 80)} mm${
+              value={`Papel de ${Number(ticket.paperWidthMm ?? 80)} mm${
                 ticket.footerMessage ? ` · "${String(ticket.footerMessage)}"` : ""
               }`}
             />
           ) : null}
-          {branch.notes ? <DetailField label="Notas internas" value={branch.notes} /> : null}
+          {branch.notes ? <InfoRow icon={StickyNote} label="Notas internas" value={branch.notes} /> : null}
         </div>
       </section>
     </div>

@@ -68,9 +68,21 @@ export function BranchHealthSignals({
 }) {
   if (!health.signals.length) {
     return (
-      <p className="page-kicker" style={{ margin: 0 }}>
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          gap: 8,
+          padding: "10px 12px",
+          borderRadius: 10,
+          background: HEALTH_BG.good,
+          color: HEALTH_COLORS.good,
+          fontWeight: 600,
+        }}
+      >
+        <CheckCircle2 size={16} style={{ flex: "0 0 auto" }} />
         Sin señales de alerta: vende, tiene inventario y su surtido va al día.
-      </p>
+      </div>
     );
   }
   return (
