@@ -48,6 +48,7 @@ import {
 } from "./pos-labels";
 import { RestockOrderDetail } from "./RestockOrderCard";
 import { RestockOrderActions } from "./RestockOrderActions";
+import { markFormPrinted } from "./useFactoryFormDownload";
 
 function itemKey(item: RestockOrderItem): string {
   return item.lineId ? `line:${item.lineId}` : `product:${item.productId}`;
@@ -224,6 +225,12 @@ export function RestockOrderSheetPage() {
         ...RESTOCK_ENTRY_FORM_OPTIONS,
         footers: true,
       });
+      if (order) {
+        // Impreso: desde ahora el pedido ya no se puede cancelar.
+        await markFormPrinted(`/pos/restock/orders/${order.id}/form-printed`);
+        // Solo el pedido: recargar todo borraría lo que se esté capturando en la hoja.
+        setOrder(await httpClient.get<RestockOrder>(`/pos/restock/orders/${order.id}`));
+      }
     } catch (error) {
       toast.error(getApiErrorMessage(error, "No se pudo generar el PDF"));
     } finally {

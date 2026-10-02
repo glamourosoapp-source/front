@@ -629,6 +629,9 @@ export interface RestockOrder {
   notes?: string | null;
   /** Nota de fábrica sobre el envío. Separada para no pisar la de quien pidió. */
   dispatchNotes?: string | null;
+  /** Primera impresión del formato de pedido; desde ahí ya no se cancela. */
+  formPrintedAt?: string | null;
+  formPrintedBy?: string | null;
   items?: RestockOrderItem[];
   /** Devoluciones a fábrica ligadas a este pedido: lo que el transportista se llevó de regreso. */
   returns?: FactoryReturn[];

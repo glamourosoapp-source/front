@@ -1,4 +1,4 @@
-import { BIDON_LITERS } from "./constants";
+import { BIDON_LITERS, RESTOCK_ORDER_STATUS } from "./constants";
 
 /**
  * Empaques a pedir a fábrica para cubrir un faltante.
@@ -66,4 +66,23 @@ export function unitsPerRestockPackage(item: {
   }
   const units = Number(item.unitsPerPackage);
   return units > 0 ? units : 1;
+}
+
+/**
+ * Por qué un pedido a fábrica ya no se puede cancelar, o `null` si sí se puede.
+ *
+ * Solo se cancela mientras nadie lo ha empezado a trabajar (decisión de
+ * Ramiro, 2026-10-01): sigue en su estado inicial (pendiente) y su formato no
+ * se ha impreso. Con la hoja impresa fábrica ya pudo empezar a surtirlo.
+ */
+export function restockCancelBlocker(order: {
+  status: string;
+  formPrintedAt?: string | Date | null;
+}): string | null {
+  if (order.status === RESTOCK_ORDER_STATUS.CANCELLED) return "Este pedido ya está cancelado";
+  if (order.status !== RESTOCK_ORDER_STATUS.PENDING) {
+    return "Solo se puede cancelar un pedido pendiente: este ya avanzó";
+  }
+  if (order.formPrintedAt) return "Ya se imprimió su formato: fábrica pudo empezar a surtirlo";
+  return null;
 }

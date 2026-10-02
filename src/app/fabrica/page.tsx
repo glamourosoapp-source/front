@@ -275,7 +275,11 @@ export default function FactoryPage() {
                     type="button"
                     className="factory-download"
                     disabled={isDownloading(order.id)}
-                    onClick={() => void downloadForm(`/factory/orders/${order.id}/form`, order.id)}
+                    onClick={() =>
+                      void downloadForm(`/factory/orders/${order.id}/form`, order.id, {
+                        printedUrl: `/factory/orders/${order.id}/form-printed`,
+                      })
+                    }
                     title="El formato de pedido en PDF, para imprimirlo y palomear a mano"
                   >
                     <FileDown size={18} />
@@ -441,7 +445,11 @@ export default function FactoryPage() {
                     type="button"
                     className="factory-download"
                     disabled={isDownloading(order.id)}
-                    onClick={() => void downloadForm(`/factory/orders/${order.id}/form`, order.id)}
+                    onClick={() =>
+                      void downloadForm(`/factory/orders/${order.id}/form`, order.id, {
+                        printedUrl: `/factory/orders/${order.id}/form-printed`,
+                      })
+                    }
                     title="El formato de pedido en PDF"
                   >
                     <FileDown size={18} />

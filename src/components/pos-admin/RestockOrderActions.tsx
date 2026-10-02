@@ -17,6 +17,7 @@ import {
 import { Check, Eye, FileDown, MoreHorizontal, PackageCheck, PackagePlus, Pencil, Send, X } from "lucide-react";
 import { toast } from "sonner";
 import { RESTOCK_ORDER_STATUS, RESTOCK_ORIGIN } from "@glamouroso/shared/constants";
+import { restockCancelBlocker } from "@glamouroso/shared/pos-restock";
 import { config } from "@/config";
 import { httpClient, getApiErrorMessage } from "@/services/http-client";
 import type { RestockOrder } from "@/types";
@@ -90,7 +91,9 @@ export function RestockOrderActions({
   const sent = order.status === RESTOCK_ORDER_STATUS.SENT;
   const received = order.status === RESTOCK_ORDER_STATUS.RECEIVED;
   const dispatch = canDispatch && !isFranchise;
-  const canCancel = canUpdate && open;
+  // Solo pendiente y sin formato impreso; si no, el menú dice por qué.
+  const cancelBlocker = restockCancelBlocker(order);
+  const canCancel = canUpdate && open && !cancelBlocker;
   const canCorrect = dispatch && (sent || received);
 
   async function run(action: "approve" | "cancel" | "receive") {
@@ -173,7 +176,10 @@ export function RestockOrderActions({
         disabled={downloading}
         onClick={() => {
           closeMenu();
-          void download(`/pos/restock/orders/${order.id}/form`);
+          void download(`/pos/restock/orders/${order.id}/form`, undefined, {
+            printedUrl: `/pos/restock/orders/${order.id}/form-printed`,
+            onPrinted: onChanged,
+          });
         }}
       >
         <ListItemIcon><FileDown size={16} /></ListItemIcon>
@@ -226,6 +232,13 @@ export function RestockOrderActions({
       >
         <ListItemIcon sx={{ color: "inherit" }}><X size={16} /></ListItemIcon>
         <ListItemText>Cancelar pedido</ListItemText>
+      </MenuItem>
+    );
+  } else if (canUpdate && open && cancelBlocker) {
+    menuItems.push(
+      <MenuItem key="cancel" disabled>
+        <ListItemIcon><X size={16} /></ListItemIcon>
+        <ListItemText primary="Cancelar pedido" secondary={cancelBlocker} />
       </MenuItem>
     );
   }

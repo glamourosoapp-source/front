@@ -191,6 +191,8 @@ interface RestockOrderCardProps {
   canUpdate: boolean;
   onApprove?: (order: RestockOrder) => void;
   onCancel?: (order: RestockOrder) => void;
+  /** Se descargó el formato: el pedido ya no se cancela, hay que refrescarlo. */
+  onPrinted?: () => void;
   /** En el detalle de la sucursal el encabezado no repite la sucursal. */
   showBranch?: boolean;
   /** Abre el detalle de la sucursal desde el módulo de fábrica. */
@@ -207,6 +209,7 @@ export function RestockOrderCard({
   canUpdate,
   onApprove,
   onCancel,
+  onPrinted,
   showBranch = true,
   linkBranch = false,
 }: RestockOrderCardProps) {
@@ -269,7 +272,12 @@ export function RestockOrderCard({
             variant="outlined"
             startIcon={<FileDown size={14} />}
             disabled={downloadingForm}
-            onClick={() => void downloadForm(`/pos/restock/orders/${order.id}/form`)}
+            onClick={() =>
+              void downloadForm(`/pos/restock/orders/${order.id}/form`, undefined, {
+                printedUrl: `/pos/restock/orders/${order.id}/form-printed`,
+                onPrinted,
+              })
+            }
             title="El formato de pedido a fábrica en PDF, con las partidas de este pedido"
           >
             {downloadingForm ? "Generando..." : "Descargar formato"}
@@ -294,9 +302,11 @@ export function RestockOrderCard({
               >
                 Aprobar
               </Button>
-              <Button size="small" color="error" startIcon={<X size={14} />} onClick={() => onCancel?.(order)}>
-                Cancelar
-              </Button>
+              {order.formPrintedAt ? null : (
+                <Button size="small" color="error" startIcon={<X size={14} />} onClick={() => onCancel?.(order)}>
+                  Cancelar
+                </Button>
+              )}
             </>
           ) : null}
         </div>

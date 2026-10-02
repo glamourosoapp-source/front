@@ -301,6 +301,7 @@ export default function FactoryPanelPage() {
           linkBranch
           onApprove={(o) => void act(o, "approve")}
           onCancel={(o) => void act(o, "cancel")}
+          onPrinted={() => void load()}
         />
       ))}
       {loading ? <p className="page-kicker">Cargando...</p> : null}
