@@ -50,6 +50,22 @@ interface DayGroup {
   tickets: number;
   items: number;
   voided: number;
+  /** Lo cobrado por forma de pago, sin anulados. */
+  byPayment: Record<string, number>;
+}
+
+/** Orden y color fijos: la barra de un día se compara a ojo con la del otro. */
+const PAYMENT_SEGMENTS = [
+  { key: POS_PAYMENT_METHODS.CASH, color: "#16a34a" },
+  { key: POS_PAYMENT_METHODS.CARD, color: "#06a6e0" },
+  { key: POS_PAYMENT_METHODS.TRANSFER, color: "#7c3aed" },
+];
+
+/** "Jueves, 1 de octubre de 2026" → ["Jueves", "1 de octubre de 2026"]. */
+function splitDayLabel(day: string): [string, string] {
+  const label = formatBusinessDayLong(day);
+  const comma = label.indexOf(", ");
+  return comma === -1 ? [label, ""] : [label.slice(0, comma), label.slice(comma + 2)];
 }
 
 /**
@@ -124,6 +140,7 @@ export function BranchSalesTab({ branchId }: { branchId: string }) {
         tickets: 0,
         items: 0,
         voided: 0,
+        byPayment: {},
       };
       group.sales.push(sale);
       if (sale.status === POS_SALE_STATUS.VOIDED) {
@@ -132,6 +149,7 @@ export function BranchSalesTab({ branchId }: { branchId: string }) {
         group.tickets += 1;
         group.total += Number(sale.total);
         group.items += Number(sale.itemsCount);
+        group.byPayment[sale.paymentMethod] = (group.byPayment[sale.paymentMethod] ?? 0) + Number(sale.total);
       }
       byDay.set(day, group);
     }
@@ -144,6 +162,9 @@ export function BranchSalesTab({ branchId }: { branchId: string }) {
     setOpenDays((current) => ({ ...current, [day]: !isDayOpen(day, index) }));
   const setAllDays = (open: boolean) =>
     setOpenDays(Object.fromEntries(groups.map((group) => [group.day, open])));
+
+  const today = todayInMexico();
+  const yesterday = shiftDateOnly(today, -1);
 
   const rangeTotal = groups.reduce((sum, group) => sum + group.total, 0);
   const rangeTickets = groups.reduce((sum, group) => sum + group.tickets, 0);
@@ -184,6 +205,7 @@ export function BranchSalesTab({ branchId }: { branchId: string }) {
 
       {groups.map((group, index) => {
         const open = isDayOpen(group.day, index);
+        const [weekday, fullDate] = splitDayLabel(group.day);
         return (
           <section key={group.day} className={`pos-day${open ? " is-open" : ""}`}>
             <button
@@ -192,17 +214,64 @@ export function BranchSalesTab({ branchId }: { branchId: string }) {
               onClick={() => toggleDay(group.day, index)}
               aria-expanded={open}
             >
-              <ChevronDown size={18} className="pos-day-chevron" />
-              <h3 className="pos-day-title">{formatBusinessDayLong(group.day)}</h3>
-              <span className="pos-day-total">
-                <strong>{formatMoney(group.total)}</strong> · {group.tickets}{" "}
-                {group.tickets === 1 ? "ticket" : "tickets"} · {formatQuantity(group.items)}{" "}
-                {group.items === 1 ? "producto" : "productos"}
-                {group.voided ? ` · ${group.voided} ${group.voided === 1 ? "anulado" : "anulados"}` : ""}
+              <span className="pos-day-chevron" aria-hidden>
+                <ChevronDown size={18} />
+              </span>
+              <span className="pos-day-date">
+                <span className="pos-day-weekday">
+                  {weekday}
+                  {group.day === today ? <span className="pos-day-badge">Hoy</span> : null}
+                  {group.day === yesterday ? <span className="pos-day-badge is-muted">Ayer</span> : null}
+                </span>
+                <span className="pos-day-fulldate">{fullDate}</span>
+              </span>
+              <span className="pos-day-payments">
+                <span className="pos-day-paybar">
+                  {PAYMENT_SEGMENTS.map((segment) =>
+                    group.byPayment[segment.key] ? (
+                      <span
+                        key={segment.key}
+                        style={{
+                          flexGrow: group.byPayment[segment.key],
+                          background: segment.color,
+                        }}
+                      />
+                    ) : null,
+                  )}
+                </span>
+                <span className="pos-day-paylegend">
+                  {PAYMENT_SEGMENTS.map((segment) =>
+                    group.byPayment[segment.key] ? (
+                      <span key={segment.key}>
+                        <i style={{ background: segment.color }} />
+                        {posPaymentMethodLabel(segment.key)} {formatMoney(group.byPayment[segment.key])}
+                      </span>
+                    ) : null,
+                  )}
+                  {group.voided ? (
+                    <span className="is-voided">
+                      {group.voided} {group.voided === 1 ? "anulado" : "anulados"}
+                    </span>
+                  ) : null}
+                </span>
+              </span>
+              <span className="pos-day-stats">
+                <span className="pos-day-stat">
+                  <small>Tickets</small>
+                  <b>{group.tickets}</b>
+                </span>
+                <span className="pos-day-stat">
+                  <small>Productos</small>
+                  <b>{formatQuantity(group.items)}</b>
+                </span>
+                <span className="pos-day-stat is-total">
+                  <small>Total</small>
+                  <b>{formatMoney(group.total)}</b>
+                </span>
               </span>
             </button>
             {open ? (
-              <div className="table-container-premium">
+              <div className="pos-day-body">
                 <table className="table">
                   <thead>
                     <tr>
