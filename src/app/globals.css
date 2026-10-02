@@ -444,66 +444,223 @@ textarea {
 /* ---- Ventas de sucursal agrupadas por día ----
    Una tabla por día de negocio, con su encabezado y su total: en una lista
    plana no se distinguía dónde terminaba un día y empezaba otro. */
+/* Cada día de Ventas es una tarjeta: el encabezado es el botón que la
+   contrae (con 7 o 30 días desplegados la pestaña era puro scroll) y trae
+   el resumen del día para no tener que abrirla. */
 .pos-day {
-  display: grid;
-  gap: 10px;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  box-shadow: var(--shadow-sm);
+  overflow: hidden;
+  transition: box-shadow 160ms ease, border-color 160ms ease;
 }
 
-/* El encabezado del día es el botón que lo contrae: con 7 o 30 días
-   desplegados la pestaña era puro scroll. */
+.pos-day:hover,
+.pos-day.is-open {
+  border-color: #d5deeb;
+  box-shadow: var(--shadow-md);
+}
+
 .pos-day-head {
-  display: flex;
-  flex-wrap: wrap;
+  display: grid;
+  grid-template-columns: auto minmax(170px, 1fr) minmax(220px, 1.3fr) auto;
   align-items: center;
-  gap: 10px;
+  gap: 20px;
   width: 100%;
-  padding: 8px 12px;
-  margin: 0 -12px;
-  box-sizing: content-box;
+  padding: 16px 20px;
   border: 0;
-  border-radius: 10px;
   background: none;
   font: inherit;
+  color: inherit;
   text-align: left;
   cursor: pointer;
   transition: background 140ms ease;
 }
 
 .pos-day-head:hover {
-  background: var(--soft-blue);
+  background: #fafcff;
+}
+
+.pos-day-head:focus-visible {
+  outline: 2px solid var(--glam-blue);
+  outline-offset: -2px;
 }
 
 .pos-day-chevron {
-  flex-shrink: 0;
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  background: var(--soft-blue);
   color: var(--glam-navy);
   transform: rotate(-90deg);
-  transition: transform 160ms ease;
+  transition: transform 180ms ease, background 140ms ease, color 140ms ease;
 }
 
 .pos-day.is-open .pos-day-chevron {
+  background: var(--glam-navy);
+  color: #fff;
   transform: rotate(0deg);
 }
 
-.pos-day-title {
-  margin: 0;
-  color: var(--glam-navy);
-  font-family: var(--font-display);
-  font-size: 16px;
-  font-style: italic;
-  font-weight: 700;
+.pos-day-date {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
 }
 
-.pos-day-total {
-  margin-left: auto;
-  color: var(--muted);
+.pos-day-weekday {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--glam-navy);
+  font-family: var(--font-display);
+  font-size: 18px;
+  font-style: italic;
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+.pos-day-badge {
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--glam-blue);
+  color: #fff;
   font-family: var(--font-body);
+  font-size: 11px;
+  font-style: normal;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+
+.pos-day-badge.is-muted {
+  background: var(--soft-blue);
+  color: var(--glam-navy);
+}
+
+.pos-day-fulldate {
+  color: var(--muted);
   font-size: 13px;
+}
+
+.pos-day-payments {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+}
+
+.pos-day-paybar {
+  display: flex;
+  gap: 2px;
+  height: 8px;
+  border-radius: 999px;
+  background: var(--border);
+  overflow: hidden;
+}
+
+.pos-day-paylegend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 14px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.pos-day-paylegend > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   white-space: nowrap;
 }
 
-.pos-day-total strong {
+.pos-day-paylegend i {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+}
+
+.pos-day-paylegend .is-voided {
+  color: #c62828;
+  font-weight: 600;
+}
+
+.pos-day-stats {
+  display: flex;
+  align-items: stretch;
+  gap: 8px;
+}
+
+.pos-day-stat {
+  display: grid;
+  gap: 2px;
+  min-width: 78px;
+  padding: 8px 12px;
+  border-radius: 10px;
+  background: var(--bg);
+  text-align: right;
+}
+
+.pos-day-stat small {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.pos-day-stat b {
   color: var(--glam-navy);
-  font-size: 15px;
+  font-size: 16px;
+  font-variant-numeric: tabular-nums;
+}
+
+.pos-day-stat.is-total {
+  min-width: 120px;
+  background: var(--soft-blue);
+}
+
+.pos-day-stat.is-total b {
+  font-size: 18px;
+}
+
+.pos-day-body {
+  border-top: 1px solid var(--border);
+  overflow-x: auto;
+}
+
+@media (max-width: 1100px) {
+  .pos-day-head {
+    grid-template-columns: auto 1fr auto;
+  }
+
+  .pos-day-payments {
+    grid-column: 2 / -1;
+    grid-row: 2;
+  }
+}
+
+@media (max-width: 640px) {
+  .pos-day-head {
+    grid-template-columns: auto 1fr;
+    gap: 12px;
+    padding: 14px;
+  }
+
+  .pos-day-stats,
+  .pos-day-payments {
+    grid-column: 1 / -1;
+  }
+
+  .pos-day-stats {
+    grid-row: auto;
+  }
+
+  .pos-day-stat {
+    flex: 1;
+    min-width: 0;
+  }
 }
 
 /* Cada renglón abre el ticket: tiene que verse tocable. */
