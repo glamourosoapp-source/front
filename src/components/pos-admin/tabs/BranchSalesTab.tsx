@@ -13,7 +13,7 @@ import {
   Switch,
   Tooltip,
 } from "@mui/material";
-import { CloudOff, PackageX, TriangleAlert } from "lucide-react";
+import { ChevronDown, CloudOff, PackageX, TriangleAlert } from "lucide-react";
 import { POS_PAYMENT_METHODS, POS_SALE_STATUS, posPaymentMethodLabel } from "@glamouroso/shared/constants";
 import { DetailField } from "@/components/ui/DetailField";
 import { httpClient, getApiErrorMessage } from "@/services/http-client";
@@ -67,6 +67,16 @@ export function BranchSalesTab({ branchId }: { branchId: string }) {
   const [loading, setLoading] = useState(false);
   const [selected, setSelected] = useState<PosSale | null>(null);
   const [onlyContainerWarning, setOnlyContainerWarning] = useState(false);
+  /**
+   * Días que el usuario abrió o cerró a mano. Sin entrada, el día va abierto
+   * solo si es el más reciente: con 7 o 30 días, tener todos desplegados era
+   * scrollear cientos de renglones para llegar al resumen de un día viejo.
+   */
+  const [openDays, setOpenDays] = useState<Record<string, boolean>>({});
+
+  useEffect(() => {
+    setOpenDays({});
+  }, [from, to]);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -128,6 +138,13 @@ export function BranchSalesTab({ branchId }: { branchId: string }) {
     return Array.from(byDay.values()).sort((a, b) => b.day.localeCompare(a.day));
   }, [sales]);
 
+  const isDayOpen = (day: string, index: number) => openDays[day] ?? index === 0;
+  const allOpen = groups.every((group, index) => isDayOpen(group.day, index));
+  const toggleDay = (day: string, index: number) =>
+    setOpenDays((current) => ({ ...current, [day]: !isDayOpen(day, index) }));
+  const setAllDays = (open: boolean) =>
+    setOpenDays(Object.fromEntries(groups.map((group) => [group.day, open])));
+
   const rangeTotal = groups.reduce((sum, group) => sum + group.total, 0);
   const rangeTickets = groups.reduce((sum, group) => sum + group.tickets, 0);
 
@@ -153,6 +170,11 @@ export function BranchSalesTab({ branchId }: { branchId: string }) {
           }
           label="Solo con aviso de envase"
         />
+        {groups.length > 1 ? (
+          <Button size="small" onClick={() => setAllDays(!allOpen)}>
+            {allOpen ? "Contraer todos los días" : "Desplegar todos los días"}
+          </Button>
+        ) : null}
         <FilterMeta>
           <strong>{formatMoney(rangeTotal)}</strong> en {rangeTickets}{" "}
           {rangeTickets === 1 ? "ticket" : "tickets"}
@@ -160,118 +182,148 @@ export function BranchSalesTab({ branchId }: { branchId: string }) {
         </FilterMeta>
       </FilterBar>
 
-      {groups.map((group) => (
-        <section key={group.day} className="pos-day">
-          <div className="pos-day-head">
-            <h3 className="pos-day-title">{formatBusinessDayLong(group.day)}</h3>
-            <span className="pos-day-total">
-              <strong>{formatMoney(group.total)}</strong> · {group.tickets}{" "}
-              {group.tickets === 1 ? "ticket" : "tickets"} · {formatQuantity(group.items)}{" "}
-              {group.items === 1 ? "producto" : "productos"}
-              {group.voided
-                ? ` · ${group.voided} ${group.voided === 1 ? "anulado" : "anulados"}`
-                : ""}
-            </span>
-          </div>
-          <div className="table-container-premium">
-            <table className="table">
-              <thead>
-                <tr>
-                  <th style={{ width: 110 }}>Hora</th>
-                  <th>Folio</th>
-                  <th>Cajero</th>
-                  <th>Cliente</th>
-                  <th style={{ width: 120 }}>Pago</th>
-                  <th style={{ textAlign: "right", width: 110 }}>Productos</th>
-                  <th style={{ textAlign: "right", width: 130 }}>Total</th>
-                  <th style={{ width: 110 }}>Estado</th>
-                </tr>
-              </thead>
-              <tbody>
-                {group.sales.map((sale) => {
-                  const voided = sale.status === POS_SALE_STATUS.VOIDED;
-                  return (
-                    <tr
-                      key={sale.id}
-                      className={voided ? "is-voided" : ""}
-                      onClick={() => setSelected(sale)}
-                      title="Ver el ticket completo"
-                    >
-                      <td style={{ fontWeight: 600, color: "var(--glam-navy)" }}>
-                        {formatBusinessTime(sale.soldAt)}
-                      </td>
-                      <td>
-                        {sale.ticketNumber}
-                        {sale.recordedOffline ? (
-                          <Tooltip
-                            title={`Cobrado sin internet${
-                              sale.syncedAt ? `, subió el ${formatDateTime(sale.syncedAt)}` : ""
-                            }`}
-                          >
-                            <span style={{ marginLeft: 6, color: "#b45309", verticalAlign: "middle" }}>
-                              <CloudOff size={13} />
-                            </span>
-                          </Tooltip>
-                        ) : null}
-                        {sale.priceMismatch ? (
-                          <Tooltip title="Alguna partida se cobró a un precio distinto al del catálogo">
-                            <span style={{ marginLeft: 6, color: "#c62828", verticalAlign: "middle" }}>
-                              <TriangleAlert size={13} />
-                            </span>
-                          </Tooltip>
-                        ) : null}
-                        {hasContainerWarning(sale) ? (
-                          <Tooltip title="Alguna partida no descontó envase ni tapa (no hay envase configurado para ese tamaño)">
-                            <Chip
-                              icon={<PackageX size={12} />}
-                              label="Sin envase"
-                              size="small"
-                              color="warning"
-                              variant="outlined"
-                              sx={{ ml: 0.75, height: 20, verticalAlign: "middle" }}
-                            />
-                          </Tooltip>
-                        ) : null}
-                      </td>
-                      <td>{sale.cashier?.name ?? "—"}</td>
-                      <td>
-                        {sale.customer ? (
-                          <Link
-                            href={`/dashboard/customers/${sale.customer.id}`}
-                            onClick={(event) => event.stopPropagation()}
-                          >
-                            {sale.customer.name}
-                          </Link>
-                        ) : (
-                          <span className="pill-muted">Mostrador</span>
-                        )}
-                      </td>
-                      <td>{posPaymentMethodLabel(sale.paymentMethod)}</td>
-                      <td style={{ textAlign: "right" }}>{formatQuantity(sale.itemsCount)}</td>
-                      <td
-                        style={{
-                          textAlign: "right",
-                          fontWeight: 700,
-                          textDecoration: voided ? "line-through" : undefined,
-                        }}
-                      >
-                        {formatMoney(sale.total)}
-                      </td>
-                      <td>
-                        {voided ? (
-                          <Chip label="Anulado" size="small" color="error" />
-                        ) : (
-                          <Chip label="Cobrado" size="small" color="success" />
-                        )}
-                      </td>
+      {groups.map((group, index) => {
+        const open = isDayOpen(group.day, index);
+        return (
+          <section key={group.day} className={`pos-day${open ? " is-open" : ""}`}>
+            <button
+              type="button"
+              className="pos-day-head"
+              onClick={() => toggleDay(group.day, index)}
+              aria-expanded={open}
+            >
+              <ChevronDown size={18} className="pos-day-chevron" />
+              <h3 className="pos-day-title">{formatBusinessDayLong(group.day)}</h3>
+              <span className="pos-day-total">
+                <strong>{formatMoney(group.total)}</strong> · {group.tickets}{" "}
+                {group.tickets === 1 ? "ticket" : "tickets"} · {formatQuantity(group.items)}{" "}
+                {group.items === 1 ? "producto" : "productos"}
+                {group.voided ? ` · ${group.voided} ${group.voided === 1 ? "anulado" : "anulados"}` : ""}
+              </span>
+            </button>
+            {open ? (
+              <div className="table-container-premium">
+                <table className="table">
+                  <thead>
+                    <tr>
+                      <th style={{ width: 110 }}>Hora</th>
+                      <th>Folio</th>
+                      <th>Cajero</th>
+                      <th>Cliente</th>
+                      <th style={{ width: 120 }}>Pago</th>
+                      <th style={{ textAlign: "right", width: 110 }}>Productos</th>
+                      <th style={{ textAlign: "right", width: 130 }}>Total</th>
+                      <th style={{ width: 110 }}>Estado</th>
                     </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        </section>
-      ))}
+                  </thead>
+                  <tbody>
+                    {group.sales.map((sale) => {
+                      const voided = sale.status === POS_SALE_STATUS.VOIDED;
+                      return (
+                        <tr
+                          key={sale.id}
+                          className={voided ? "is-voided" : ""}
+                          onClick={() => setSelected(sale)}
+                          title="Ver el ticket completo"
+                        >
+                          <td
+                            style={{
+                              fontWeight: 600,
+                              color: "var(--glam-navy)",
+                            }}
+                          >
+                            {formatBusinessTime(sale.soldAt)}
+                          </td>
+                          <td>
+                            {sale.ticketNumber}
+                            {sale.recordedOffline ? (
+                              <Tooltip
+                                title={`Cobrado sin internet${
+                                  sale.syncedAt ? `, subió el ${formatDateTime(sale.syncedAt)}` : ""
+                                }`}
+                              >
+                                <span
+                                  style={{
+                                    marginLeft: 6,
+                                    color: "#b45309",
+                                    verticalAlign: "middle",
+                                  }}
+                                >
+                                  <CloudOff size={13} />
+                                </span>
+                              </Tooltip>
+                            ) : null}
+                            {sale.priceMismatch ? (
+                              <Tooltip title="Alguna partida se cobró a un precio distinto al del catálogo">
+                                <span
+                                  style={{
+                                    marginLeft: 6,
+                                    color: "#c62828",
+                                    verticalAlign: "middle",
+                                  }}
+                                >
+                                  <TriangleAlert size={13} />
+                                </span>
+                              </Tooltip>
+                            ) : null}
+                            {hasContainerWarning(sale) ? (
+                              <Tooltip title="Alguna partida no descontó envase ni tapa (no hay envase configurado para ese tamaño)">
+                                <Chip
+                                  icon={<PackageX size={12} />}
+                                  label="Sin envase"
+                                  size="small"
+                                  color="warning"
+                                  variant="outlined"
+                                  sx={{
+                                    ml: 0.75,
+                                    height: 20,
+                                    verticalAlign: "middle",
+                                  }}
+                                />
+                              </Tooltip>
+                            ) : null}
+                          </td>
+                          <td>{sale.cashier?.name ?? "—"}</td>
+                          <td>
+                            {sale.customer ? (
+                              <Link
+                                href={`/dashboard/customers/${sale.customer.id}`}
+                                onClick={(event) => event.stopPropagation()}
+                              >
+                                {sale.customer.name}
+                              </Link>
+                            ) : (
+                              <span className="pill-muted">Mostrador</span>
+                            )}
+                          </td>
+                          <td>{posPaymentMethodLabel(sale.paymentMethod)}</td>
+                          <td style={{ textAlign: "right" }}>{formatQuantity(sale.itemsCount)}</td>
+                          <td
+                            style={{
+                              textAlign: "right",
+                              fontWeight: 700,
+                              textDecoration: voided ? "line-through" : undefined,
+                            }}
+                          >
+                            {formatMoney(sale.total)}
+                          </td>
+                          <td>
+                            {voided ? (
+                              <Chip label="Anulado" size="small" color="error" />
+                            ) : (
+                              <Chip label="Cobrado" size="small" color="success" />
+                            )}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            ) : null}
+          </section>
+        );
+      })}
 
       {loading ? <p className="page-kicker">Cargando...</p> : null}
       {!loading && !sales.length ? (
@@ -337,9 +389,7 @@ export function BranchSalesTab({ branchId }: { branchId: string }) {
                       {Number(selected.itemsCount) === 1 ? "producto" : "productos"}
                     </td>
                     <td style={{ textAlign: "right", fontWeight: 700 }}>Total</td>
-                    <td style={{ textAlign: "right", fontWeight: 700 }}>
-                      {formatMoney(selected.total)}
-                    </td>
+                    <td style={{ textAlign: "right", fontWeight: 700 }}>{formatMoney(selected.total)}</td>
                   </tr>
                 </tfoot>
               </table>
@@ -357,14 +407,14 @@ export function BranchSalesTab({ branchId }: { branchId: string }) {
               ) : null}
               {selected.priceMismatch ? (
                 <p className="page-kicker" style={{ color: "#c62828" }}>
-                  El precio cobrado no coincide con el del catálogo actual. Manda lo que se cobró:
-                  el cliente ya pagó ese importe.
+                  El precio cobrado no coincide con el del catálogo actual. Manda lo que se cobró: el cliente
+                  ya pagó ese importe.
                 </p>
               ) : null}
               {selected.syncConflict ? (
                 <p className="page-kicker" style={{ color: "#c62828" }}>
-                  El folio que traía la caja ({String(selected.syncConflict.proposed)}) ya estaba
-                  usado, así que este ticket quedó con otro.
+                  El folio que traía la caja ({String(selected.syncConflict.proposed)}) ya estaba usado, así
+                  que este ticket quedó con otro.
                 </p>
               ) : null}
               {selected.notes ? <DetailField label="Notas" value={selected.notes} /> : null}

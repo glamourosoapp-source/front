@@ -449,11 +449,39 @@ textarea {
   gap: 10px;
 }
 
+/* El encabezado del día es el botón que lo contrae: con 7 o 30 días
+   desplegados la pestaña era puro scroll. */
 .pos-day-head {
   display: flex;
   flex-wrap: wrap;
-  align-items: baseline;
+  align-items: center;
   gap: 10px;
+  width: 100%;
+  padding: 8px 12px;
+  margin: 0 -12px;
+  box-sizing: content-box;
+  border: 0;
+  border-radius: 10px;
+  background: none;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: background 140ms ease;
+}
+
+.pos-day-head:hover {
+  background: var(--soft-blue);
+}
+
+.pos-day-chevron {
+  flex-shrink: 0;
+  color: var(--glam-navy);
+  transform: rotate(-90deg);
+  transition: transform 160ms ease;
+}
+
+.pos-day.is-open .pos-day-chevron {
+  transform: rotate(0deg);
 }
 
 .pos-day-title {
