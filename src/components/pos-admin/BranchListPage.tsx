@@ -8,6 +8,7 @@ import { DataTable } from "@/components/ui/DataTable";
 import { BranchFormDialog } from "@/components/pos-admin/BranchFormDialog";
 import { BranchHealthChip } from "@/components/pos-admin/BranchHealthChip";
 import { BranchSyncCell } from "@/components/pos-admin/BranchSyncCell";
+import { BranchStoreTodayCell } from "@/components/pos-admin/BranchStoreTodayCell";
 import { httpClient, getApiErrorMessage } from "@/services/http-client";
 import { formatMoney } from "@/lib/format-money";
 import { usePermissions } from "@/lib/permissions";
@@ -131,6 +132,16 @@ export function BranchListPage({ type }: { type: BranchType }) {
       // de la operación del día que no se puede ver por ningún otro lado.
       render: (row: BranchStats) => <BranchSyncCell stats={row} />,
     },
+    ...(!isFranchise
+      ? [
+          {
+            key: "storeToday",
+            label: "Hoy",
+            // Apertura y cierre que registró el cajero, contra el horario.
+            render: (row: BranchStats) => <BranchStoreTodayCell day={row.storeToday} />,
+          },
+        ]
+      : []),
     ...(!isFranchise && seesSales
       ? [
           {

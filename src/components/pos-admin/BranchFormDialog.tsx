@@ -20,6 +20,7 @@ import { httpClient, getApiErrorMessage } from "@/services/http-client";
 import { config } from "@/config";
 import { Branch } from "@/types";
 import { usePermissions } from "@/lib/permissions";
+import { completeOpeningHours, OpeningHoursEditor, openingHoursError } from "./OpeningHoursEditor";
 import type { StockSheetResult } from "@/lib/stock-sheet";
 import { toast } from "sonner";
 import {
@@ -69,6 +70,7 @@ export function BranchFormDialog({
   const [type, setType] = useState<string>(branch?.type || defaultType);
   const [stockChoice, setStockChoice] = useState<StockSheetChoice | null>(null);
   const [stockResult, setStockResult] = useState<StockSheetResult | null>(null);
+  const [openingHours, setOpeningHours] = useState(() => completeOpeningHours(branch?.openingHours));
   const { can } = usePermissions();
   // El Excel de stock solo al dar de alta una sucursal con caja: una franquicia no lleva inventario.
   const canAttachStock = !isEdit && type === BRANCH_TYPES.BRANCH && can("posInventory", "update");
@@ -78,6 +80,7 @@ export function BranchFormDialog({
     setIsActive(branch?.isActive ?? true);
     setType(branch?.type || defaultType);
     setStockChoice(null);
+    setOpeningHours(completeOpeningHours(branch?.openingHours));
   }, [open, branch, defaultType]);
 
   async function save(event: FormEvent<HTMLFormElement>) {
@@ -97,6 +100,15 @@ export function BranchFormDialog({
       restockCutoffDow: cutoffRaw === "" ? null : Number(cutoffRaw),
       notes: String(form.get("notes") || "").trim() || null,
     };
+    // Solo una sucursal con caja abre y cierra tienda; una franquicia no lleva horario.
+    if (type === BRANCH_TYPES.BRANCH) {
+      const hoursError = openingHoursError(openingHours);
+      if (hoursError) {
+        toast.error(hoursError);
+        return;
+      }
+      payload.openingHours = openingHours;
+    }
 
     const stock = canAttachStock ? stockChoice : null;
     if (stock && stock.asInventory === null) {
@@ -199,6 +211,9 @@ export function BranchFormDialog({
           <TextField name="city" label="Ciudad" defaultValue={branch?.city || ""} fullWidth />
           <TextField name="postalCode" label="Código postal" defaultValue={branch?.postalCode || ""} fullWidth />
           <TextField name="phone" label="Teléfono" defaultValue={branch?.phone || ""} fullWidth />
+          {type === BRANCH_TYPES.BRANCH ? (
+            <OpeningHoursEditor value={openingHours} onChange={setOpeningHours} disabled={saving} />
+          ) : null}
 
           {/* El ticket (datos de facturación, letra y qué se imprime) se configura
               en Punto de venta → Ticket de venta, que además tiene vista previa. */}

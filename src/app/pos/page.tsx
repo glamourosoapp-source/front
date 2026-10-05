@@ -32,6 +32,7 @@ import {
   CloudUpload,
   TriangleAlert,
   Undo2,
+  DoorClosed,
 } from "lucide-react";
 import { httpClient, getApiErrorMessage } from "@/services/http-client";
 import { useAuthStore } from "@/stores/auth.store";
@@ -39,6 +40,8 @@ import { usePermissions } from "@/lib/permissions";
 import { useRealtime } from "@/components/realtime/RealtimeProvider";
 import { usePosStore } from "@/stores/pos.store";
 import { usePosShortcuts } from "@/hooks/usePosShortcuts";
+import { useStoreDay } from "@/hooks/useStoreDay";
+import { PosCloseStoreConfirm, PosStoreDayGate } from "@/components/pos/PosStoreDayGate";
 import { usePwaInstall } from "@/hooks/usePwaInstall";
 import { usePosOffline } from "@/hooks/usePosOffline";
 import { posSync } from "@/lib/pos-offline/sync";
@@ -173,6 +176,14 @@ export default function PosPage() {
    * cobrar ni subir nada. Es configuración del usuario, no falta de internet.
    */
   const [noBranch, setNoBranch] = useState(false);
+  const [closeStoreOpen, setCloseStoreOpen] = useState(false);
+  /**
+   * Apertura y cierre de tienda: sin "Abrir tienda" la caja no cobra, y después
+   * de "Cerré la tienda" tampoco hasta reabrir o hasta mañana. Un usuario sin
+   * sucursal (admin revisando la caja) no registra nada.
+   */
+  const storeDay = useStoreDay(session?.storeDay);
+  const storeLocked = Boolean(session?.branch.code) && !noBranch && storeDay.loaded && storeDay.status !== "open";
 
   /**
    * La caja escribe en la PC primero y sube después, con o sin internet.
@@ -751,6 +762,10 @@ export default function PosPage() {
       notes,
     }: PosChargeParams) => {
       if (!ticket.lines.length) return;
+      if (storeLocked) {
+        toast.error("Abre la tienda antes de cobrar.");
+        return;
+      }
       if (storageReady === false) {
         toast.error(
           "Este navegador no puede guardar las ventas. Abre la caja en Chrome, fuera de una ventana privada.",
@@ -830,6 +845,7 @@ export default function PosPage() {
       session,
       catalog?.version,
       storageReady,
+      storeLocked,
       backup,
       setLastSale,
       finishActiveTicket,
@@ -891,7 +907,7 @@ export default function PosPage() {
   }, []);
 
   // ---- Atajos ----
-  const shortcutsEnabled = dialog === null && quantityIntent === null;
+  const shortcutsEnabled = dialog === null && quantityIntent === null && !storeLocked && !closeStoreOpen;
 
   usePosShortcuts(
     useMemo(
@@ -1074,6 +1090,17 @@ export default function PosPage() {
             <Settings size={14} />
             Configuración
           </Link>
+          {session?.branch.code && !noBranch ? (
+            <button
+              className="pos-action"
+              onClick={() => setCloseStoreOpen(true)}
+              disabled={storeDay.status !== "open"}
+              title="Registrar que la tienda cerró por hoy"
+            >
+              <DoorClosed size={14} />
+              Cerrar tienda
+            </button>
+          ) : null}
           <button className="pos-action" onClick={() => logout()}>
             <LogOut size={14} />
             Salir
@@ -1622,6 +1649,30 @@ export default function PosPage() {
         settings={ticketSettings}
         reprint={sheetReprint}
         walkInCustomerName={walkInName}
+      />
+      {storeLocked ? (
+        <PosStoreDayGate
+          status={storeDay.status}
+          date={storeDay.date}
+          closedAt={storeDay.closedAt}
+          branchName={session?.branch.name ?? ""}
+          cashierName={user?.name ?? ""}
+          onOpen={async () => {
+            const day = await storeDay.open();
+            toast.success(`Tienda abierta a las ${new Date(day.openedAt ?? Date.now()).toLocaleTimeString("es-MX", { hour: "2-digit", minute: "2-digit" })}`);
+            focusCode();
+          }}
+        />
+      ) : null}
+      <PosCloseStoreConfirm
+        open={closeStoreOpen}
+        pendingTickets={tickets.filter((row) => row.lines.length > 0).length}
+        onCancel={() => setCloseStoreOpen(false)}
+        onConfirm={async () => {
+          await storeDay.close();
+          setCloseStoreOpen(false);
+          toast.success("Tienda cerrada por hoy");
+        }}
       />
     </main>
   );

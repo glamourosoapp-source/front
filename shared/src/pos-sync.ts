@@ -26,6 +26,10 @@ export const POS_SYNC_EVENT_TYPES = {
   SALE_CREATED: "sale.created",
   SALE_VOIDED: "sale.voided",
   CUSTOMER_CREATED: "customer.created",
+  /** "Abrir tienda" / "Reabrir": lo primero del día en la caja. */
+  STORE_OPENED: "store.opened",
+  /** "Cerré la tienda": la caja no cobra hasta el día siguiente o reabrir. */
+  STORE_CLOSED: "store.closed",
 } as const;
 
 export type PosSyncEventType = (typeof POS_SYNC_EVENT_TYPES)[keyof typeof POS_SYNC_EVENT_TYPES];
@@ -108,10 +112,23 @@ export interface PosCustomerEventPayload {
   birthday?: string | null;
 }
 
+/**
+ * Apertura o cierre de tienda. La hora es `occurredAt` (el clic). `businessDate`
+ * es el día que se abre o se cierra: un cierre pasada la medianoche sigue
+ * cerrando el día que se abrió.
+ */
+export interface PosStoreEventPayload {
+  /** "YYYY-MM-DD" en la zona de la organización. */
+  businessDate: string;
+  /** true si ocurrió sin conexión. */
+  recordedOffline: boolean;
+}
+
 export type PosSyncEventPayload =
   | PosSaleEventPayload
   | PosVoidEventPayload
-  | PosCustomerEventPayload;
+  | PosCustomerEventPayload
+  | PosStoreEventPayload;
 
 export interface PosSyncEvent<T extends PosSyncEventPayload = PosSyncEventPayload> {
   /** uuid generado en la caja: es la clave de idempotencia del evento. */

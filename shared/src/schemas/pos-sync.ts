@@ -61,6 +61,11 @@ export const posSyncVoidPayloadSchema = z.object({
   voidedAt: isoDate,
 });
 
+export const posSyncStorePayloadSchema = z.object({
+  businessDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  recordedOffline: z.boolean().default(false),
+});
+
 export const posSyncEventSchema = z.discriminatedUnion("type", [
   z.object({
     id: z.string().uuid(),
@@ -79,6 +84,18 @@ export const posSyncEventSchema = z.discriminatedUnion("type", [
     type: z.literal(POS_SYNC_EVENT_TYPES.CUSTOMER_CREATED),
     occurredAt: isoDate,
     payload: posSyncCustomerSchema,
+  }),
+  z.object({
+    id: z.string().uuid(),
+    type: z.literal(POS_SYNC_EVENT_TYPES.STORE_OPENED),
+    occurredAt: isoDate,
+    payload: posSyncStorePayloadSchema,
+  }),
+  z.object({
+    id: z.string().uuid(),
+    type: z.literal(POS_SYNC_EVENT_TYPES.STORE_CLOSED),
+    occurredAt: isoDate,
+    payload: posSyncStorePayloadSchema,
   }),
 ]);
 

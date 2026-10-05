@@ -15,6 +15,7 @@ import type {
 } from "./constants";
 import type { BranchHealth } from "./pos-health";
 import type { BranchSyncState } from "./pos-sync";
+import type { BranchOpeningHours, StoreDayEvaluation } from "./pos-store-hours";
 import type { TicketSettings } from "./utils/pos-ticket-settings";
 import type { PermissionMap } from "./permissions";
 
@@ -370,6 +371,8 @@ export interface Branch {
   ticketSettings?: Record<string, unknown> | null;
   /** Lo que la caja de esta sucursal reportó en su último contacto. */
   syncState?: BranchSyncState | null;
+  /** Horario semanal de apertura y cierre de tienda. */
+  openingHours?: BranchOpeningHours | null;
   notes?: string | null;
   usersCount?: number;
   createdAt?: string;
@@ -529,6 +532,8 @@ export interface PosSession {
   cashier: { id: string; name: string };
   lastSale?: PosSale | null;
   catalogVersion: string;
+  /** Apertura/cierre de HOY según el servidor (otra PC pudo haber abierto). */
+  storeDay?: StoreDayEvaluation | null;
 }
 
 /** Producto tal como lo consume la caja (catálogo ligero, sin embeddings ni descripción). */
@@ -915,6 +920,8 @@ export interface BranchStats {
     lastSaleAt: string | null;
   } | null;
   inventory: { belowMinCount: number; trackedCount: number } | null;
+  /** Apertura/cierre de hoy contra el horario; null en franquicias. */
+  storeToday: StoreDayEvaluation | null;
   restock: {
     openCount: number;
     oldestOpenAt: string | null;

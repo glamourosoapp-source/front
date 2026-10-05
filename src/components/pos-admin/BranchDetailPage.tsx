@@ -22,6 +22,7 @@ import { BranchInventoryTab } from "./tabs/BranchInventoryTab";
 import { BranchUsersTab } from "./tabs/BranchUsersTab";
 import { BranchCustomersTab } from "./tabs/BranchCustomersTab";
 import { BranchSyncTab } from "./tabs/BranchSyncTab";
+import { BranchStoreDaysTab } from "./tabs/BranchStoreDaysTab";
 
 type TabKey =
   | "resumen"
@@ -31,6 +32,7 @@ type TabKey =
   | "inventario"
   | "usuarios"
   | "clientes"
+  | "aperturas"
   | "caja";
 
 /**
@@ -68,6 +70,7 @@ export function BranchDetailPage({ type }: { type: BranchType }) {
         { key: "inventario", label: "Inventario y stock" },
         { key: "usuarios", label: "Usuarios" },
         { key: "clientes", label: "Clientes" },
+        { key: "aperturas", label: "Aperturas y cierres" },
         // Solo una sucursal tiene caja; una franquicia no cobra en el sistema.
         { key: "caja", label: "Caja y sincronización" },
       ];
@@ -219,6 +222,7 @@ export function BranchDetailPage({ type }: { type: BranchType }) {
       ) : null}
       {tab === "usuarios" ? <BranchUsersTab branch={branch} /> : null}
       {tab === "clientes" ? <BranchCustomersTab branchId={branch.id} /> : null}
+      {tab === "aperturas" ? <BranchStoreDaysTab branch={branch} /> : null}
       {tab === "caja" ? <BranchSyncTab branch={branch} /> : null}
 
       <BranchFormDialog

@@ -10,6 +10,30 @@ import {
 
 const optionalString = z.union([z.string(), z.literal(""), z.null()]).optional();
 
+const storeTime = z.string().regex(/^([01]\d|2[0-3]):([0-5]\d)$/, "Hora en formato HH:mm");
+
+/** Horario de un día; `null` = ese día la sucursal no abre. */
+const storeDayHoursSchema = z.union([
+  z.null(),
+  z
+    .object({ open: storeTime, close: storeTime })
+    .refine((day) => day.close > day.open, { message: "La hora de cierre debe ser después de la apertura" }),
+]);
+
+/**
+ * Horario semanal de la sucursal (apertura y cierre de tienda). Se guarda
+ * completo: el panel siempre manda los 7 días.
+ */
+export const openingHoursSchema = z.object({
+  sunday: storeDayHoursSchema.optional(),
+  monday: storeDayHoursSchema.optional(),
+  tuesday: storeDayHoursSchema.optional(),
+  wednesday: storeDayHoursSchema.optional(),
+  thursday: storeDayHoursSchema.optional(),
+  friday: storeDayHoursSchema.optional(),
+  saturday: storeDayHoursSchema.optional(),
+});
+
 /**
  * Configuración del ticket térmico.
  *
@@ -103,6 +127,7 @@ const branchPayload = {
    */
   restockCutoffDow: z.union([z.null(), z.coerce.number().int().min(0).max(6)]).optional(),
   ticketSettings: ticketSettingsSchema.optional(),
+  openingHours: openingHoursSchema.optional(),
   notes: optionalString,
 };
 
@@ -119,6 +144,7 @@ export const updateBranchSchema = z.object({
   phone: branchPayload.phone,
   restockCutoffDow: branchPayload.restockCutoffDow,
   ticketSettings: branchPayload.ticketSettings,
+  openingHours: branchPayload.openingHours,
   notes: optionalString,
   isActive: z.boolean().optional(),
 });
@@ -131,6 +157,12 @@ export const queryBranchSchema = paginationSchema.extend({
 /** Resumen por sucursal del panel: todas, o solo sucursales / solo franquicias. */
 export const queryBranchStatsSchema = z.object({
   type: z.union([z.enum([BRANCH_TYPES.BRANCH, BRANCH_TYPES.FRANCHISE]), z.literal(""), z.null()]).optional(),
+});
+
+/** Historial de aperturas y cierres de una sucursal. */
+export const queryStoreDaysSchema = z.object({
+  from: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+  to: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
 });
 
 /** Clientes registrados en una sucursal (los que compraron ahí con teléfono). */

@@ -842,3 +842,112 @@
 .pos.pos-has-banner {
   grid-template-rows: auto auto auto auto minmax(0, 1fr) auto;
 }
+
+/* --- Apertura y cierre de tienda: tapa la caja hasta abrir --- */
+.pos-store-gate {
+  position: fixed;
+  inset: 0;
+  z-index: 1500;
+  display: grid;
+  place-items: center;
+  padding: 16px;
+  background: var(--glam-navy);
+}
+
+.pos-store-gate-card {
+  width: min(460px, 100%);
+  padding: 32px 28px;
+  border-radius: 16px;
+  background: #fff;
+  color: var(--text);
+  text-align: center;
+  display: grid;
+  justify-items: center;
+  gap: 10px;
+}
+
+.pos-store-gate-card h1 {
+  margin: 0;
+  font-size: 24px;
+  font-style: italic;
+  font-weight: 800;
+  color: var(--glam-navy);
+}
+
+.pos-store-gate-icon {
+  display: grid;
+  place-items: center;
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  background: var(--soft-blue);
+  color: var(--glam-blue);
+}
+
+.pos-store-gate-icon.closed {
+  background: #fff7d1;
+  color: var(--glam-navy);
+}
+
+.pos-store-gate-kicker {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: #687084;
+}
+
+.pos-store-gate-text {
+  margin: 0 0 8px;
+  color: #687084;
+  font-size: 14px;
+  line-height: 1.45;
+}
+
+.pos-store-gate-warn {
+  margin: 0;
+  padding: 8px 12px;
+  border-left: 3px solid #ffe443;
+  background: #fffbe6;
+  font-size: 13px;
+  text-align: left;
+}
+
+.pos-store-gate-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 52px;
+  padding: 0 28px;
+  border: 0;
+  border-radius: 10px;
+  background: var(--glam-blue);
+  color: #fff;
+  font-size: 17px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.pos-store-gate-button:disabled {
+  opacity: 0.6;
+  cursor: wait;
+}
+
+.pos-store-gate-button.danger {
+  background: var(--glam-navy);
+  min-height: 40px;
+  font-size: 14px;
+  padding: 0 18px;
+}
+
+.pos-store-gate-actions {
+  display: flex;
+  gap: 10px;
+  justify-content: center;
+}
+
+.pos-store-gate-foot {
+  margin: 4px 0 0;
+  font-size: 12px;
+  color: #687084;
+}
