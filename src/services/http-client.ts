@@ -19,7 +19,15 @@ class HttpClient {
       return request;
     });
     this.api.interceptors.response.use(
-      (response) => response,
+      (response) => {
+        // El back renueva una vez al día la sesión de quien está fijado a una
+        // sucursal (la caja): se guarda para que no caduque mientras se use.
+        const renewed = response.headers?.["x-renewed-token"];
+        if (typeof renewed === "string" && renewed && typeof window !== "undefined") {
+          localStorage.setItem("token", renewed);
+        }
+        return response;
+      },
       (error) => {
         // El 401 de /auth/login|register es "credenciales inválidas": lo maneja
         // el formulario. Redirigir aquí recargaría la página y se comería el error.
