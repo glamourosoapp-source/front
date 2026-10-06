@@ -25,6 +25,7 @@ import {
   type LocalSale,
   type OutboxEntry,
 } from "./store";
+import { withTabLock } from "./sync-lock";
 
 /**
  * Motor de sincronización de la caja.
@@ -68,7 +69,10 @@ type Listener = (status: SyncStatus) => void;
 class PosSyncEngine {
   private status: SyncStatus = { ...INITIAL };
   private listeners = new Set<Listener>();
-  /** Una sola subida a la vez: dos lotes en paralelo repetirían eventos. */
+  /**
+   * Una sola subida a la vez en esta pestaña. Entre pestañas lo cuida
+   * `withTabLock`: la cola en IndexedDB es una sola para todas.
+   */
   private running: Promise<void> | null = null;
   private timer: number | null = null;
   private onCatalog: ((catalog: PosCatalog) => void) | null = null;
@@ -139,13 +143,22 @@ class PosSyncEngine {
   /** Sube la cola. Devuelve cuando el intento terminó, con éxito o sin él. */
   sync(): Promise<void> {
     if (this.running) return this.running;
-    this.running = this.run().finally(() => {
-      this.running = null;
-    });
+    this.running = (async () => {
+      let more = false;
+      try {
+        more = await withTabLock(() => this.run());
+      } finally {
+        this.running = null;
+      }
+      // Quedaban más de un lote: sigue de inmediato en vez de esperar al
+      // minuto, ya con el candado suelto.
+      if (more) void this.sync();
+    })();
     return this.running;
   }
 
-  private async run(): Promise<void> {
+  /** Sube un lote. Devuelve si quedó cola por subir después de este. */
+  private async run(): Promise<boolean> {
     const queue = await pending();
     const meta = await readMeta();
     this.emit({
@@ -187,11 +200,7 @@ class PosSyncEngine {
         lastSyncedAt: left.length === 0 ? new Date().toISOString() : this.status.lastSyncedAt,
       });
 
-      // Quedaban más de un lote: sigue de inmediato en vez de esperar al minuto.
-      if (left.length && left.length < queue.length) {
-        this.running = null;
-        void this.sync();
-      }
+      return left.length > 0 && left.length < queue.length;
     } catch (error) {
       // Sin red no es un error que reportar al cajero: es el estado normal de
       // una sucursal con el internet caído, y la caja sigue cobrando. Pero si
@@ -204,6 +213,7 @@ class PosSyncEngine {
         online: reachable,
         lastError: getApiErrorMessage(error, "Sin conexión con el servidor"),
       });
+      return false;
     } finally {
       this.emit({ syncing: false });
       await this.refreshCounters();

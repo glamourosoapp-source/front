@@ -7,6 +7,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
+    "test": "bun test src",
     "icons:pos": "bun run scripts/generate-pos-icons.ts",
     "logo:ticket": "bun run scripts/generate-ticket-logo.ts"
   },
