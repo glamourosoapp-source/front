@@ -90,11 +90,12 @@ export default function PosPrintSettingsPage() {
       await printRaw(
         config,
         buildTicketEscPos(sale, settings, {
+          openDrawer: true,
           logo,
           walkInCustomerName: session?.walkInCustomerName,
         })
       );
-      toast.success("Ticket de prueba enviado a la impresora");
+      toast.success("Ticket de prueba enviado: debe salir el ticket y abrirse el cajón");
     } catch (error) {
       toast.error(getApiErrorMessage(error, "No se pudo imprimir la prueba"));
     }

@@ -671,6 +671,7 @@ export default function PosPage() {
             printConfig,
             buildTicketEscPos(sale, ticketSettings, {
               reprint,
+              openDrawer: true,
               logo,
               walkInCustomerName: walkInName,
             }),

@@ -156,6 +156,20 @@ class EscPosBuilder {
     return this;
   }
 
+  /**
+   * Pulso que abre el cajón de dinero (`ESC p m t1 t2`).
+   *
+   * El cajón va conectado a la impresora térmica y solo se abre cuando ella le
+   * manda este pulso. Eleventa lo mandaba en cada venta; la caja nueva no, y en
+   * las sucursales el cajón se quedaba cerrado. Se manda a los dos pines (2 y 5)
+   * porque cada cajón viene cableado a uno u otro y el pin libre lo ignora.
+   * 25 y 250 (×2 ms) son los tiempos de fábrica de Epson, que aceptan las
+   * POS-80C, XP-80C y GTP de las sucursales.
+   */
+  openDrawer(): this {
+    return this.raw(ESC, 0x70, 0x00, 0x19, 0xfa).raw(ESC, 0x70, 0x01, 0x19, 0xfa);
+  }
+
   /** Avance configurado y corte (si la impresora de la sucursal lo tiene). */
   feedAndCut(): this {
     for (let i = 0; i < this.settings.feedLines; i += 1) this.raw(0x0a);
@@ -201,6 +215,12 @@ function breakdownLine(item: PosSaleItem): string | null {
 
 export interface BuildTicketOptions {
   reprint?: boolean;
+  /**
+   * Abrir el cajón de dinero antes de imprimir. Va en cada venta nueva (como
+   * hacía eleventa) y en la impresión de prueba; nunca en una reimpresión, que
+   * no mueve dinero.
+   */
+  openDrawer?: boolean;
   /** Nombre a imprimir cuando la venta no tiene cliente (configurable). */
   walkInCustomerName?: string;
   /** Logo ya rasterizado en comandos ESC/POS (ver `logo-raster.ts`). */
@@ -284,6 +304,9 @@ export function buildTicketEscPos(
   options: BuildTicketOptions = {}
 ): Uint8Array {
   const builder = new EscPosBuilder(settings);
+  // Primero el cajón, para que abra mientras el ticket sale. Una sola vez
+  // aunque se impriman copias.
+  if (options.openDrawer && !options.reprint) builder.openDrawer();
   // Cada copia se imprime completa y con su propio corte: la primera es del
   // cliente y las siguientes quedan marcadas como copia de la sucursal.
   for (let copy = 0; copy < settings.copies; copy += 1) {
