@@ -36,6 +36,19 @@ export const queryPosBranchTimeseriesSchema = queryPosReportSchema.extend({
   granularity: z.enum(["day", "week", "month", "year"]).default("day"),
 });
 
+/**
+ * Todo lo de la pestaña Gráficas de Cortes en una sola solicitud: el periodo,
+ * el anterior con el que se compara y desde cuándo armar el mapa de calor.
+ * Antes eran diez llamadas por cambio de filtro y agotaban el límite por IP.
+ */
+export const queryPosChartsSchema = queryPosReportSchema.extend({
+  prevFrom: dateOnly,
+  prevTo: dateOnly,
+  heatFrom: dateOnly,
+  granularity: z.enum(["day", "week"]).default("day"),
+  withHours: z.enum(["true", "false"]).optional(),
+});
+
 export const queryPosTopProductsSchema = queryPosReportSchema.extend({
   limit: z.coerce.number().int().min(1).max(50).default(10),
   orderBy: z.enum(["revenue", "quantity"]).default("revenue"),

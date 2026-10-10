@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { Tooltip } from "@mui/material";
+import { Button, Dialog, DialogContent, DialogTitle, IconButton, Tooltip, useMediaQuery } from "@mui/material";
 import {
   CartesianGrid,
   Line,
@@ -11,7 +11,18 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
-import { ArrowDownRight, ArrowUpRight, Clock, Crown, Droplets, TrendingDown, TrendingUp } from "lucide-react";
+import {
+  ArrowDownRight,
+  ArrowUpRight,
+  Clock,
+  Crown,
+  Droplets,
+  Maximize2,
+  Search,
+  TrendingDown,
+  TrendingUp,
+  X,
+} from "lucide-react";
 import { BRANCH_TYPES, POS_PAYMENT_METHODS, posPaymentMethodLabel } from "@glamouroso/shared/constants";
 import { httpClient, getApiErrorMessage } from "@/services/http-client";
 import { formatMoney, formatMoneyShort, formatQuantity } from "@/lib/format-money";
@@ -20,6 +31,7 @@ import type { ReportSummary } from "@/lib/export-pos-reports";
 import type { Branch } from "@/types";
 import { toast } from "sonner";
 import { periodBounds, previousPeriod, type PeriodValue } from "./PeriodPicker";
+import { FilterSegmented } from "./FilterBar";
 import { shiftDateOnly, todayInMexico } from "./pos-labels";
 
 /* ---- Datos que llegan del Back ---- */
@@ -221,36 +233,20 @@ export function PosChartsTab({
 
   const load = useCallback(async () => {
     setLoading(true);
-    const scope = branchIds.length ? { branchIds: branchIds.join(",") } : {};
-    const current = { from, to: end, ...scope };
-    const previous = { from: prev.from, to: prev.to, ...scope };
-    const granularity = weekly ? "week" : "day";
     try {
-      const [branchesRes, prevBranchesRes, summary, prevSummary, series, prevSeries, heat, payments, hours, prevHours] =
-        await Promise.all([
-          httpClient.get<BranchSalesRow[]>("/pos/reports/sales-by-branch", current),
-          httpClient.get<BranchSalesRow[]>("/pos/reports/sales-by-branch", previous),
-          httpClient.get<ReportSummary>("/pos/reports/summary", current),
-          httpClient.get<ReportSummary>("/pos/reports/summary", previous),
-          httpClient.get<SeriesPoint[]>("/pos/reports/timeseries", { ...current, granularity }),
-          httpClient.get<SeriesPoint[]>("/pos/reports/timeseries", { ...previous, granularity }),
-          httpClient.get<HeatCell[]>("/pos/reports/heatmap", { ...current, from: heatFrom }),
-          httpClient.get<BranchDayRow[]>("/pos/reports/branch-days", current),
-          isDay ? httpClient.get<HourPoint[]>("/pos/reports/hours", current) : Promise.resolve([]),
-          isDay ? httpClient.get<HourPoint[]>("/pos/reports/hours", previous) : Promise.resolve([]),
-        ]);
-      setData({
-        branches: branchesRes,
-        prevBranches: prevBranchesRes,
-        summary,
-        prevSummary,
-        series,
-        prevSeries,
-        hours,
-        prevHours,
-        heat,
-        payments,
-      });
+      // Una sola solicitud: diez por cambio de filtro agotaban el límite por IP del Back.
+      setData(
+        await httpClient.get<ChartData>("/pos/reports/charts", {
+          from,
+          to: end,
+          prevFrom: prev.from,
+          prevTo: prev.to,
+          heatFrom,
+          granularity: weekly ? "week" : "day",
+          ...(isDay ? { withHours: "true" } : {}),
+          ...(branchIds.length ? { branchIds: branchIds.join(",") } : {}),
+        })
+      );
     } catch (error) {
       toast.error(getApiErrorMessage(error, "No se pudieron cargar las gráficas"));
     } finally {
@@ -262,19 +258,29 @@ export function PosChartsTab({
     void load();
   }, [load]);
 
-  // Un cobro mueve las cifras; varios seguidos se juntan en una sola recarga.
+  /*
+   * Un cobro mueve las cifras, pero solo si el periodo llega a hoy: un periodo
+   * pasado ya no cambia. Con 28 cajas cobrando, recargar con cada ticket
+   * agotaba el límite de solicitudes por IP de la oficina; se juntan en una
+   * recarga cada 10 s y solo con la pestaña a la vista.
+   */
+  const includesToday = end >= today;
   const reloadTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => {
+    if (!includesToday) return;
     const unsubscribe = subscribe((event) => {
-      if (event.type !== "pos_sales_changed") return;
-      if (reloadTimer.current) clearTimeout(reloadTimer.current);
-      reloadTimer.current = setTimeout(() => void load(), 3000);
+      if (event.type !== "pos_sales_changed" || reloadTimer.current) return;
+      reloadTimer.current = setTimeout(() => {
+        reloadTimer.current = null;
+        if (document.visibilityState === "visible") void load();
+      }, 10_000);
     });
     return () => {
       unsubscribe();
       if (reloadTimer.current) clearTimeout(reloadTimer.current);
+      reloadTimer.current = null;
     };
-  }, [subscribe, load]);
+  }, [subscribe, load, includesToday]);
 
   /* ---- Ranking de sucursales ---- */
   const ranking = useMemo(() => {
@@ -292,7 +298,8 @@ export function PosChartsTab({
         const before = prevById.get(row.branchId);
         return { ...row, prevTotal: before?.total ?? 0, delta: change(row.total, before?.total ?? 0) };
       })
-      .sort((a, b) => b.total - a.total || a.name.localeCompare(b.name, "es"));
+      .sort((a, b) => b.total - a.total || a.name.localeCompare(b.name, "es"))
+      .map((row, index) => ({ ...row, rank: index + 1 }));
     return {
       rows,
       total: rows.reduce((sum, row) => sum + row.total, 0),
@@ -300,6 +307,13 @@ export function PosChartsTab({
     };
   }, [data, branches]);
   const maxBranch = Math.max(1, ...ranking.rows.map((row) => row.total));
+  const [rankingOpen, setRankingOpen] = useState(false);
+  const rankFoot: RankFoot = {
+    total: ranking.total,
+    tickets: ranking.rows.reduce((sum, row) => sum + row.ticketsCount, 0),
+    avgTicket: data?.summary?.avgTicket ?? 0,
+    delta: change(ranking.total, ranking.prevTotal),
+  };
 
   /* ---- Tendencia: por día (o semana) contra el periodo anterior, alineados por posición ---- */
   const trend = useMemo(() => {
@@ -476,88 +490,53 @@ export function PosChartsTab({
         </div>
       </section>
 
-      {/* Ranking */}
+      {/* Ranking: las primeras en el panel, todas en el modal */}
       <Panel
         title="Ranking de sucursales"
         kicker={`Lo vendido por cada tienda, su parte del total, su ticket promedio y cómo va ${prev.label}.`}
+        aside={
+          ranking.rows.length ? (
+            <Button
+              variant="outlined"
+              size="small"
+              endIcon={<Maximize2 size={14} />}
+              onClick={() => setRankingOpen(true)}
+              sx={{ flex: "0 0 auto", whiteSpace: "nowrap" }}
+            >
+              Ver todas ({ranking.rows.length})
+            </Button>
+          ) : null
+        }
       >
         {!ranking.rows.length ? (
           <Empty>No hay sucursales con caja en este filtro.</Empty>
         ) : (
-          <div className="rank-table" role="table" aria-label="Ranking de sucursales">
-            <div className="rank-row is-head" role="row">
-              <span role="columnheader">#</span>
-              <span role="columnheader">Sucursal</span>
-              <span role="columnheader" className="rank-bar-col">
-                Venta
-              </span>
-              <span role="columnheader" className="is-num">
-                Parte
-              </span>
-              <span role="columnheader" className="is-num">
-                Tickets
-              </span>
-              <span role="columnheader" className="is-num">
-                Ticket prom.
-              </span>
-              <span role="columnheader" className="is-num">
-                Cambio
-              </span>
-            </div>
-            {ranking.rows.map((row, index) => (
-              <div key={row.branchId} className="rank-row" role="row">
-                <span role="cell" className="rank-pos">
-                  {index + 1}
-                </span>
-                <span role="cell" className="rank-name">
-                  <b>{row.name}</b>
-                  <small>{row.code}</small>
-                </span>
-                <span role="cell" className="rank-bar-col">
-                  <span className="rank-bar">
-                    <i style={{ width: `${(row.total / maxBranch) * 100}%` }} />
-                  </span>
-                  <b className="rank-amount">{formatMoney(row.total)}</b>
-                </span>
-                <span role="cell" className="is-num">
-                  {ranking.total ? pct((row.total / ranking.total) * 100) : "—"}
-                </span>
-                <span role="cell" className="is-num">
-                  {row.ticketsCount}
-                </span>
-                <span role="cell" className="is-num">
-                  {row.ticketsCount ? formatMoney(row.avgTicket) : "—"}
-                </span>
-                <span role="cell" className="is-num">
-                  {row.total || row.prevTotal ? <Delta value={row.delta} emptyLabel="nueva" /> : "—"}
-                </span>
-              </div>
-            ))}
-            <div className="rank-row is-foot" role="row">
-              <span role="cell" />
-              <span role="cell" className="rank-name">
-                <b>Total</b>
-              </span>
-              <span role="cell" className="rank-bar-col">
-                <span className="rank-bar is-ghost" aria-hidden />
-                <b className="rank-amount">{formatMoney(ranking.total)}</b>
-              </span>
-              <span role="cell" className="is-num">
-                100%
-              </span>
-              <span role="cell" className="is-num">
-                {ranking.rows.reduce((sum, row) => sum + row.ticketsCount, 0)}
-              </span>
-              <span role="cell" className="is-num">
-                {formatMoney(data.summary?.avgTicket ?? 0)}
-              </span>
-              <span role="cell" className="is-num">
-                <Delta value={change(ranking.total, ranking.prevTotal)} />
-              </span>
-            </div>
-          </div>
+          <>
+            <RankTable
+              rows={ranking.rows.slice(0, RANK_PREVIEW)}
+              max={maxBranch}
+              total={ranking.total}
+              foot={rankFoot}
+            />
+            {ranking.rows.length > RANK_PREVIEW ? (
+              <button type="button" className="rank-more" onClick={() => setRankingOpen(true)}>
+                Y {ranking.rows.length - RANK_PREVIEW}{" "}
+                {ranking.rows.length - RANK_PREVIEW === 1 ? "sucursal más" : "sucursales más"} · Ver todas
+              </button>
+            ) : null}
+          </>
         )}
       </Panel>
+
+      <RankingDialog
+        open={rankingOpen}
+        onClose={() => setRankingOpen(false)}
+        rows={ranking.rows}
+        max={maxBranch}
+        total={ranking.total}
+        foot={rankFoot}
+        periodLabel={prev.label}
+      />
 
       <section className="grid grid-2-even chart-grid">
         {/* Tendencia */}
@@ -808,5 +787,210 @@ function HeatRow({
         );
       })}
     </>
+  );
+}
+
+/* ---- Ranking: tabla compartida por el panel y el modal ---- */
+
+/** En el panel solo las primeras; las demás, en "Ver todas". */
+const RANK_PREVIEW = 5;
+
+interface RankRow extends BranchSalesRow {
+  rank: number;
+  prevTotal: number;
+  delta: number | null;
+}
+
+interface RankFoot {
+  total: number;
+  tickets: number;
+  avgTicket: number;
+  delta: number | null;
+}
+
+function RankTable({
+  rows,
+  max,
+  total,
+  foot,
+}: {
+  rows: RankRow[];
+  max: number;
+  total: number;
+  foot: RankFoot;
+}) {
+  return (
+    <div className="rank-table" role="table" aria-label="Ranking de sucursales">
+      <div className="rank-row is-head" role="row">
+        <span role="columnheader">#</span>
+        <span role="columnheader">Sucursal</span>
+        <span role="columnheader" className="rank-bar-col">
+          Venta
+        </span>
+        <span role="columnheader" className="is-num">
+          Parte
+        </span>
+        <span role="columnheader" className="is-num">
+          Tickets
+        </span>
+        <span role="columnheader" className="is-num">
+          Ticket prom.
+        </span>
+        <span role="columnheader" className="is-num">
+          Cambio
+        </span>
+      </div>
+      {rows.map((row) => (
+        <div key={row.branchId} className={`rank-row${row.total ? "" : " is-zero"}`} role="row">
+          <span role="cell" className="rank-pos">
+            {row.rank}
+          </span>
+          <span role="cell" className="rank-name">
+            <b>{row.name}</b>
+            <small>{row.code}</small>
+          </span>
+          <span role="cell" className="rank-bar-col">
+            <span className="rank-bar">
+              {/* Sin venta no hay barra: la rayita mínima parecía un error. */}
+              {row.total > 0 ? <i style={{ width: `${(row.total / max) * 100}%` }} /> : null}
+            </span>
+            <b className="rank-amount">{formatMoney(row.total)}</b>
+          </span>
+          <span role="cell" className="is-num">
+            {total ? pct((row.total / total) * 100) : "—"}
+          </span>
+          <span role="cell" className="is-num">
+            {row.ticketsCount}
+          </span>
+          <span role="cell" className="is-num">
+            {row.ticketsCount ? formatMoney(row.avgTicket) : "—"}
+          </span>
+          <span role="cell" className="is-num">
+            {row.total || row.prevTotal ? <Delta value={row.delta} emptyLabel="nueva" /> : "—"}
+          </span>
+        </div>
+      ))}
+      <div className="rank-row is-foot" role="row">
+        <span role="cell" />
+        <span role="cell" className="rank-name">
+          <b>Total</b>
+        </span>
+        <span role="cell" className="rank-bar-col">
+          <span className="rank-bar is-ghost" aria-hidden />
+          <b className="rank-amount">{formatMoney(foot.total)}</b>
+        </span>
+        <span role="cell" className="is-num">
+          {foot.total ? "100%" : "—"}
+        </span>
+        <span role="cell" className="is-num">
+          {foot.tickets}
+        </span>
+        <span role="cell" className="is-num">
+          {formatMoney(foot.avgTicket)}
+        </span>
+        <span role="cell" className="is-num">
+          <Delta value={foot.delta} emptyLabel="—" />
+        </span>
+      </div>
+    </div>
+  );
+}
+
+type RankSort = "sales" | "drop" | "growth" | "ticket";
+
+const RANK_SORTS: Array<{ value: RankSort; label: string }> = [
+  { value: "sales", label: "Más venta" },
+  { value: "drop", label: "Mayor caída" },
+  { value: "growth", label: "Mayor crecimiento" },
+  { value: "ticket", label: "Ticket promedio" },
+];
+
+/** Las que no se pueden comparar (sin venta antes) van al final al ordenar por cambio. */
+function sortRanking(rows: RankRow[], sort: RankSort): RankRow[] {
+  const sorted = [...rows];
+  if (sort === "sales") return sorted.sort((a, b) => a.rank - b.rank);
+  if (sort === "ticket") return sorted.sort((a, b) => b.avgTicket - a.avgTicket || a.rank - b.rank);
+  const sign = sort === "drop" ? 1 : -1;
+  return sorted.sort((a, b) => {
+    if (a.delta === null && b.delta === null) return a.rank - b.rank;
+    if (a.delta === null) return 1;
+    if (b.delta === null) return -1;
+    return sign * (a.delta - b.delta) || a.rank - b.rank;
+  });
+}
+
+/**
+ * Todas las sucursales del ranking, con buscador y orden. Con 28 tiendas el
+ * panel solo enseña las cinco primeras; aquí se busca una o se ordenan por
+ * caída para ver cuáles hay que atender.
+ */
+function RankingDialog({
+  open,
+  onClose,
+  rows,
+  max,
+  total,
+  foot,
+  periodLabel,
+}: {
+  open: boolean;
+  onClose: () => void;
+  rows: RankRow[];
+  max: number;
+  total: number;
+  foot: RankFoot;
+  periodLabel: string;
+}) {
+  const fullScreen = useMediaQuery("(max-width: 640px)");
+  const [search, setSearch] = useState("");
+  const [sort, setSort] = useState<RankSort>("sales");
+  const visible = useMemo(() => {
+    const term = search.trim().toLowerCase();
+    const filtered = term
+      ? rows.filter((row) => row.name.toLowerCase().includes(term) || row.code.toLowerCase().includes(term))
+      : rows;
+    return sortRanking(filtered, sort);
+  }, [rows, search, sort]);
+
+  return (
+    <Dialog
+      open={open}
+      onClose={onClose}
+      fullWidth
+      maxWidth="lg"
+      fullScreen={fullScreen}
+      slotProps={{ paper: { className: "rank-dialog" } }}
+    >
+      <DialogTitle className="rank-dialog-title">
+        <div>
+          <span>Ranking de sucursales</span>
+          <small>
+            {rows.length} sucursales · cambio {periodLabel}
+          </small>
+        </div>
+        <IconButton onClick={onClose} aria-label="Cerrar">
+          <X size={18} />
+        </IconButton>
+      </DialogTitle>
+      <div className="rank-dialog-tools">
+        <label className="branch-search rank-dialog-search">
+          <Search size={16} />
+          <input
+            value={search}
+            onChange={(event) => setSearch(event.target.value)}
+            placeholder="Buscar sucursal o código"
+            aria-label="Buscar sucursal"
+          />
+        </label>
+        <FilterSegmented label="Ordenar" value={sort} options={RANK_SORTS} onChange={setSort} />
+      </div>
+      <DialogContent className="rank-dialog-body">
+        {visible.length ? (
+          <RankTable rows={visible} max={max} total={total} foot={foot} />
+        ) : (
+          <Empty>Ninguna sucursal coincide con “{search}”.</Empty>
+        )}
+      </DialogContent>
+    </Dialog>
   );
 }

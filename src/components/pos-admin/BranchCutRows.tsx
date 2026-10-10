@@ -234,19 +234,28 @@ export function BranchCutRows({
     void load();
   }, [load]);
 
-  // Cada cobro mueve las cifras; con varias cajas a la vez se junta en una recarga.
+  /*
+   * Cada cobro mueve las cifras si el periodo llega a hoy. Se junta en una
+   * recarga cada 5 s y solo con la pestaña a la vista: con 28 cajas, recargar
+   * por ticket agotaba el límite de solicitudes por IP del Back.
+   */
+  const includesToday = !invalidRange && dates.to >= today;
   const reloadTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => {
+    if (!includesToday) return;
     const unsubscribe = subscribe((event) => {
-      if (event.type !== "pos_sales_changed") return;
-      if (reloadTimer.current) clearTimeout(reloadTimer.current);
-      reloadTimer.current = setTimeout(() => void load(), 1500);
+      if (event.type !== "pos_sales_changed" || reloadTimer.current) return;
+      reloadTimer.current = setTimeout(() => {
+        reloadTimer.current = null;
+        if (document.visibilityState === "visible") void load();
+      }, 5000);
     });
     return () => {
       unsubscribe();
       if (reloadTimer.current) clearTimeout(reloadTimer.current);
+      reloadTimer.current = null;
     };
-  }, [subscribe, load]);
+  }, [subscribe, load, includesToday]);
 
   /** Renglones del detalle, del más reciente hacia atrás; los vacíos también salen. */
   const detailKeys = useMemo(() => {
