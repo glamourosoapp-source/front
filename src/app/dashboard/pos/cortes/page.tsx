@@ -24,7 +24,8 @@ import {
 import { httpClient, getApiErrorMessage } from "@/services/http-client";
 import { formatMoney, formatMoneyShort, formatQuantity } from "@/lib/format-money";
 import { usePermissions } from "@/lib/permissions";
-import { FilterBar, FilterDivider, FilterMeta } from "@/components/pos-admin/FilterBar";
+import { FilterBar, FilterDivider } from "@/components/pos-admin/FilterBar";
+import { PeriodPicker, periodBounds } from "@/components/pos-admin/PeriodPicker";
 import {
   exportPosReportToPdf,
   exportPosReportToXlsx,
@@ -32,7 +33,6 @@ import {
   type BranchRow,
   type ReportSummary,
 } from "@/lib/export-pos-reports";
-import { posWeekStart, shiftDateOnly } from "@/components/pos-admin/pos-labels";
 import { BranchCutRows, type BranchCutPeriod } from "@/components/pos-admin/BranchCutRows";
 import { Branch, CashCut, ListResponse } from "@/types";
 import { toast } from "sonner";
@@ -54,24 +54,6 @@ interface HourPoint {
 /** Hoy en la zona del negocio, que es la que usan los cortes. */
 function todayInMexico(): string {
   return new Date().toLocaleDateString("en-CA", { timeZone: "America/Mexico_City" });
-}
-
-function rangeFor(granularity: Granularity, anchor: string): { from: string; to: string } {
-  if (granularity === "day") return { from: anchor, to: anchor };
-  if (granularity === "week") {
-    const from = posWeekStart(anchor);
-    const end = new Date(`${from}T00:00:00Z`);
-    end.setUTCDate(end.getUTCDate() + 6);
-    return { from, to: end.toISOString().slice(0, 10) };
-  }
-  if (granularity === "month") {
-    const from = `${anchor.slice(0, 7)}-01`;
-    const end = new Date(`${from}T00:00:00Z`);
-    end.setUTCMonth(end.getUTCMonth() + 1);
-    end.setUTCDate(0);
-    return { from, to: end.toISOString().slice(0, 10) };
-  }
-  return { from: anchor, to: anchor };
 }
 
 /** El corte guarda la granularidad en inglés; la etiqueta la lee una persona. */
@@ -176,14 +158,11 @@ export default function PosCortesPage() {
     () =>
       granularity === "day"
         ? { mode: "day", day: anchor }
-        : { mode: "range", ...(granularity === "range" ? { from: anchor, to: rangeTo } : rangeFor(granularity, anchor)) },
+        : { mode: "range", ...periodBounds({ granularity, anchor, rangeTo }) },
     [granularity, anchor, rangeTo]
   );
 
-  const range = useMemo(
-    () => (granularity === "range" ? { from: anchor, to: rangeTo } : rangeFor(granularity, anchor)),
-    [granularity, anchor, rangeTo]
-  );
+  const range = useMemo(() => periodBounds({ granularity, anchor, rangeTo }), [granularity, anchor, rangeTo]);
 
   useEffect(() => {
     if (!canView) return;
@@ -319,51 +298,14 @@ export default function PosCortesPage() {
             </MenuItem>
           ))}
         </TextField>
-        <TextField
-          select
-          size="small"
-          label="Periodo"
-          value={granularity}
-          onChange={(event) => {
-            const next = event.target.value as Granularity;
-            // Un rango de un solo día no es lo que se busca al elegirlo: arranca
-            // con los últimos 7 días hasta la fecha que ya estaba elegida.
-            if (next === "range" && granularity !== "range") {
-              setRangeTo(anchor);
-              setAnchor(shiftDateOnly(anchor, -6));
-            }
-            // Y al salir del rango, la fecha vuelve a ser la final, no la de inicio.
-            if (granularity === "range" && next !== "range") setAnchor(rangeTo);
-            setGranularity(next);
+        <PeriodPicker
+          value={{ granularity, anchor, rangeTo }}
+          onChange={(next) => {
+            setGranularity(next.granularity);
+            setAnchor(next.anchor);
+            setRangeTo(next.rangeTo);
           }}
-          InputLabelProps={{ shrink: true }}
-          sx={{ minWidth: 185 }}
-        >
-          <MenuItem value="day">Día</MenuItem>
-          <MenuItem value="week">Semana (vie–jue)</MenuItem>
-          <MenuItem value="month">Mes</MenuItem>
-          <MenuItem value="range">Rango de fechas</MenuItem>
-        </TextField>
-        <TextField
-          size="small"
-          label={granularity === "range" ? "Desde" : "Fecha"}
-          type="date"
-          value={anchor}
-          onChange={(event) => setAnchor(event.target.value)}
-          InputLabelProps={{ shrink: true }}
-          sx={{ minWidth: 165 }}
         />
-        {granularity === "range" ? (
-          <TextField
-            size="small"
-            label="Hasta"
-            type="date"
-            value={rangeTo}
-            onChange={(event) => setRangeTo(event.target.value)}
-            InputLabelProps={{ shrink: true }}
-            sx={{ minWidth: 165 }}
-          />
-        ) : null}
         <FilterDivider />
         {/* Exportar es acción del periodo elegido: va junto a los filtros. */}
         <Button
@@ -390,7 +332,6 @@ export default function PosCortesPage() {
         >
           PDF
         </Button>
-        <FilterMeta>{periodLabel}</FilterMeta>
       </FilterBar>
 
       {/*
