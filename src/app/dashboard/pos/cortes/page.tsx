@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState, type CSSProperties, type ReactNode } from "react";
-import { Button, Chip, MenuItem, Tab, Tabs, TextField } from "@mui/material";
+import { Button, MenuItem, Tab, Tabs, TextField } from "@mui/material";
 import {
   Bar,
   BarChart,
@@ -34,7 +34,7 @@ import {
   type ReportSummary,
 } from "@/lib/export-pos-reports";
 import { BranchCutRows, type BranchCutPeriod } from "@/components/pos-admin/BranchCutRows";
-import { Branch, CashCut, ListResponse } from "@/types";
+import { Branch, ListResponse } from "@/types";
 import { toast } from "sonner";
 
 type Granularity = "day" | "week" | "month" | "range";
@@ -55,14 +55,6 @@ interface HourPoint {
 function todayInMexico(): string {
   return new Date().toLocaleDateString("en-CA", { timeZone: "America/Mexico_City" });
 }
-
-/** El corte guarda la granularidad en inglés; la etiqueta la lee una persona. */
-const GRANULARITY_LABELS: Record<string, string> = {
-  day: "Día",
-  week: "Semana",
-  month: "Mes",
-  range: "Periodo",
-};
 
 /* Estilo de las gráficas: el mismo del Overview (`/dashboard`), para que las
    dos pantallas se lean como una sola. Si cambia allá, cambia aquí. */
@@ -149,7 +141,6 @@ export default function PosCortesPage() {
   const [byBranch, setByBranch] = useState<BranchRow[]>([]);
   const [series, setSeries] = useState<SeriesPoint[]>([]);
   const [hours, setHours] = useState<HourPoint[]>([]);
-  const [cuts, setCuts] = useState<CashCut[]>([]);
   const [loading, setLoading] = useState(false);
 
   /* La pestaña Por sucursal con "Día" muestra el día, el anterior y la semana;
@@ -177,7 +168,7 @@ export default function PosCortesPage() {
     setLoading(true);
     const params = { ...range, ...(branchId ? { branchId } : {}) };
     try {
-      const [summaryRes, branchRes, seriesRes, hoursRes, cutsRes] = await Promise.all([
+      const [summaryRes, branchRes, seriesRes, hoursRes] = await Promise.all([
         httpClient.get<ReportSummary>("/pos/reports/summary", params),
         httpClient.get<BranchRow[]>("/pos/reports/sales-by-branch", params),
         httpClient.get<SeriesPoint[]>("/pos/reports/timeseries", {
@@ -185,16 +176,11 @@ export default function PosCortesPage() {
           granularity: granularity === "range" ? "day" : granularity,
         }),
         httpClient.get<HourPoint[]>("/pos/reports/hours", params),
-        httpClient.get<ListResponse<CashCut>>("/pos/cash-cuts", {
-          limit: 20,
-          ...(branchId ? { branchId } : {}),
-        }),
       ]);
       setSummary(summaryRes);
       setByBranch(branchRes);
       setSeries(seriesRes);
       setHours(hoursRes);
-      setCuts(cutsRes.items);
     } catch (error) {
       toast.error(getApiErrorMessage(error, "Error al cargar el corte"));
     } finally {
@@ -385,48 +371,12 @@ export default function PosCortesPage() {
 
       <Tabs value={tab} onChange={(_e, value) => setTab(value)}>
         <Tab label="Por sucursal" />
-        <Tab label="Productos vendidos" />
         <Tab label="Gráficas" />
-        <Tab label={`Cortes generados (${cuts.length})`} />
       </Tabs>
 
       {tab === 0 ? <BranchCutRows branches={branches} branchId={branchId} period={cutPeriod} /> : null}
 
       {tab === 1 ? (
-        <div className="table-container-premium">
-          <table className="table">
-            <thead>
-              <tr>
-                <th>Producto</th>
-                <th>Unidad</th>
-                <th style={{ textAlign: "right" }}>Cantidad</th>
-                <th style={{ textAlign: "right" }}>Importe</th>
-                <th style={{ textAlign: "right" }}>Tickets</th>
-              </tr>
-            </thead>
-            <tbody>
-              {(summary?.products ?? []).map((row) => (
-                <tr key={`${row.name}-${row.saleUnit}`}>
-                  <td>{row.name}</td>
-                  <td>{row.saleUnit === "liter" ? "litro" : "pieza"}</td>
-                  <td style={{ textAlign: "right" }}>{formatQuantity(row.quantity)}</td>
-                  <td style={{ textAlign: "right", fontWeight: 700 }}>{formatMoney(row.revenue)}</td>
-                  <td style={{ textAlign: "right" }}>{row.tickets}</td>
-                </tr>
-              ))}
-              {!summary?.products.length ? (
-                <tr>
-                  <td colSpan={5} style={{ textAlign: "center", padding: 28, color: "var(--muted)" }}>
-                    Sin ventas en este periodo.
-                  </td>
-                </tr>
-              ) : null}
-            </tbody>
-          </table>
-        </div>
-      ) : null}
-
-      {tab === 2 ? (
         <div className="page-stack">
           <section className="grid grid-2-even" style={{ gap: "20px" }}>
             <div className="panel p-5" style={CHART_PANEL}>
@@ -586,61 +536,6 @@ export default function PosCortesPage() {
               </div>
             </div>
           </section>
-        </div>
-      ) : null}
-
-      {tab === 3 ? (
-        <div className="table-container-premium">
-          <table className="table">
-            <thead>
-              <tr>
-                <th>Generado</th>
-                <th>Sucursal</th>
-                <th>Periodo</th>
-                <th style={{ textAlign: "right" }}>Total</th>
-                <th style={{ textAlign: "right" }}>Tickets</th>
-                <th>Por</th>
-              </tr>
-            </thead>
-            <tbody>
-              {cuts.map((cut) => {
-                const s = cut.summary as Record<string, unknown>;
-                return (
-                  <tr key={cut.id}>
-                    <td>
-                      {cut.createdAt
-                        ? new Date(cut.createdAt).toLocaleString("es-MX", {
-                            dateStyle: "short",
-                            timeStyle: "short",
-                          })
-                        : "—"}
-                    </td>
-                    <td>{cut.branch ? `${cut.branch.code} · ${cut.branch.name}` : "Todas"}</td>
-                    <td>
-                      {String(s.from ?? "")} a {String(s.to ?? "")}
-                      <Chip
-                        label={GRANULARITY_LABELS[cut.granularity] ?? cut.granularity}
-                        size="small"
-                        sx={{ ml: 1, height: 18, fontSize: 10 }}
-                      />
-                    </td>
-                    <td style={{ textAlign: "right", fontWeight: 700 }}>
-                      {formatMoney(Number(s.total ?? 0))}
-                    </td>
-                    <td style={{ textAlign: "right" }}>{String(s.ticketsCount ?? 0)}</td>
-                    <td>{cut.generatedByUser?.name ?? "—"}</td>
-                  </tr>
-                );
-              })}
-              {!cuts.length ? (
-                <tr>
-                  <td colSpan={6} style={{ textAlign: "center", padding: 28, color: "var(--muted)" }}>
-                    Todavía no hay cortes congelados.
-                  </td>
-                </tr>
-              ) : null}
-            </tbody>
-          </table>
         </div>
       ) : null}
 
