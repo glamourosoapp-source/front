@@ -677,6 +677,107 @@ textarea {
   color: var(--muted);
 }
 
+/* ---- Cortes por sucursal (primera pestaña de Cortes) ----
+
+   Misma tarjeta que el día de Ventas, pero cada fila es una sucursal y los
+   bloques son periodos (hoy, ayer, semana) con su monto y sus tickets. */
+.pos-cut .pos-day-stat {
+  min-width: 112px;
+}
+
+.pos-cut .pos-day-stat.is-total {
+  min-width: 132px;
+}
+
+.pos-cut .pos-day-stat em {
+  color: var(--muted);
+  font-size: 12px;
+  font-style: normal;
+  font-variant-numeric: tabular-nums;
+}
+
+.pos-cut .pos-day-badge {
+  white-space: nowrap;
+}
+
+.pos-cut-caption {
+  color: var(--glam-navy);
+  font-weight: 600;
+}
+
+/* El total de todas las sucursales no se abre: encabeza la lista. */
+.pos-cut.is-overall {
+  border-color: #cfe3f3;
+  background: linear-gradient(180deg, #f5fbff 0%, var(--card) 100%);
+}
+
+.pos-cut.is-overall .pos-day-head {
+  cursor: default;
+}
+
+.pos-cut.is-overall .pos-day-head:hover {
+  background: none;
+}
+
+.pos-cut.is-overall .pos-day-chevron {
+  background: var(--glam-navy);
+  color: #fff;
+  transform: none;
+}
+
+/* El detalle de la semana se lee, no se toca: sin cursor de renglón clicable. */
+.pos-cut .table tbody tr {
+  cursor: default;
+}
+
+.pos-cut .table tbody tr:hover {
+  background: none;
+}
+
+.pos-cut .table tbody tr.is-previous-week td {
+  color: var(--muted);
+  background: #fafbfd;
+}
+
+.pos-cut-inline-badge {
+  margin-left: 8px;
+  vertical-align: 1px;
+}
+
+.pos-cut-note {
+  margin-left: 8px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.pos-cut-footer {
+  display: flex;
+  justify-content: flex-end;
+  padding: 10px 20px 14px;
+  border-top: 1px solid var(--border);
+  font-size: 13px;
+}
+
+@media (max-width: 640px) {
+  .pos-cut .pos-day-stat,
+  .pos-cut .pos-day-stat.is-total {
+    min-width: 0;
+  }
+
+  .pos-cut .pos-day-stat.is-total b {
+    font-size: 16px;
+  }
+}
+
+.pos-cut-footer a {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--glam-blue);
+  font-weight: 600;
+}
+
 /* ---- Barra de filtros (pantallas del punto de venta) ----
 
    `.toolbar` reparte a sus hijos con `space-between`: con tres controles los

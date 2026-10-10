@@ -33,6 +33,7 @@ import {
   type ReportSummary,
 } from "@/lib/export-pos-reports";
 import { posWeekStart } from "@/components/pos-admin/pos-labels";
+import { BranchCutRows } from "@/components/pos-admin/BranchCutRows";
 import { Branch, CashCut, ListResponse } from "@/types";
 import { toast } from "sonner";
 
@@ -421,12 +422,15 @@ export default function PosCortesPage() {
       </section>
 
       <Tabs value={tab} onChange={(_e, value) => setTab(value)}>
+        <Tab label="Por sucursal" />
         <Tab label="Productos vendidos" />
         <Tab label="Gráficas" />
         <Tab label={`Cortes generados (${cuts.length})`} />
       </Tabs>
 
-      {tab === 0 ? (
+      {tab === 0 ? <BranchCutRows branches={branches} branchId={branchId} /> : null}
+
+      {tab === 1 ? (
         <div className="table-container-premium">
           <table className="table">
             <thead>
@@ -460,7 +464,7 @@ export default function PosCortesPage() {
         </div>
       ) : null}
 
-      {tab === 1 ? (
+      {tab === 2 ? (
         <div className="page-stack">
           <section className="grid grid-2-even" style={{ gap: "20px" }}>
             <div className="panel p-5" style={CHART_PANEL}>
@@ -623,7 +627,7 @@ export default function PosCortesPage() {
         </div>
       ) : null}
 
-      {tab === 2 ? (
+      {tab === 3 ? (
         <div className="table-container-premium">
           <table className="table">
             <thead>
