@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState, type CSSProperties, type ReactNode } from "react";
-import { Button, MenuItem, Tab, Tabs, TextField } from "@mui/material";
+import { Button, Tab, Tabs, Tooltip } from "@mui/material";
 import {
   Bar,
   BarChart,
@@ -26,6 +26,7 @@ import { formatMoney, formatMoneyShort, formatQuantity } from "@/lib/format-mone
 import { usePermissions } from "@/lib/permissions";
 import { FilterBar, FilterDivider } from "@/components/pos-admin/FilterBar";
 import { PeriodPicker, periodBounds } from "@/components/pos-admin/PeriodPicker";
+import { BranchPicker, branchSelectionLabel } from "@/components/pos-admin/BranchPicker";
 import {
   exportPosReportToPdf,
   exportPosReportToXlsx,
@@ -131,7 +132,8 @@ export default function PosCortesPage() {
   const canFreeze = can("posReports", "create");
 
   const [branches, setBranches] = useState<Branch[]>([]);
-  const [branchId, setBranchId] = useState("");
+  /** Sucursales elegidas; vacío = todas. */
+  const [branchIds, setBranchIds] = useState<string[]>([]);
   const [granularity, setGranularity] = useState<Granularity>("day");
   const [anchor, setAnchor] = useState(todayInMexico());
   const [rangeTo, setRangeTo] = useState(todayInMexico());
@@ -166,7 +168,7 @@ export default function PosCortesPage() {
   const load = useCallback(async () => {
     if (!canView) return;
     setLoading(true);
-    const params = { ...range, ...(branchId ? { branchId } : {}) };
+    const params = { ...range, ...(branchIds.length ? { branchIds: branchIds.join(",") } : {}) };
     try {
       const [summaryRes, branchRes, seriesRes, hoursRes] = await Promise.all([
         httpClient.get<ReportSummary>("/pos/reports/summary", params),
@@ -186,7 +188,7 @@ export default function PosCortesPage() {
     } finally {
       setLoading(false);
     }
-  }, [canView, range, branchId, granularity]);
+  }, [canView, range, branchIds, granularity]);
 
   useEffect(() => {
     void load();
@@ -208,15 +210,21 @@ export default function PosCortesPage() {
     );
   }
 
-  const branchLabel = branchId
-    ? `${branches.find((b) => b.id === branchId)?.code ?? ""} · ${branches.find((b) => b.id === branchId)?.name ?? ""}`
-    : "Todas las sucursales";
+  // Para el encabezado del Excel y el PDF: con varias se listan los códigos.
+  const branchLabel =
+    branchIds.length > 2
+      ? `${branchIds.length} sucursales: ${branchIds
+          .map((id) => branches.find((b) => b.id === id)?.code ?? "")
+          .join(", ")}`
+      : branchSelectionLabel(branches, branchIds);
+  // Un corte congelado es de una sucursal o de todas (`cash_cuts.branch_id`).
+  const canFreezeSelection = branchIds.length <= 1;
   const periodLabel = range.from === range.to ? range.from : `${range.from} a ${range.to}`;
 
   async function freeze() {
     try {
       await httpClient.post("/pos/cash-cuts", {
-        ...(branchId ? { branchId } : {}),
+        ...(branchIds.length === 1 ? { branchId: branchIds[0] } : {}),
         from: range.from,
         to: range.to,
         granularity,
@@ -260,30 +268,23 @@ export default function PosCortesPage() {
           </p>
         </div>
         {canFreeze ? (
-          <Button variant="contained" startIcon={<Lock size={16} />} onClick={() => void freeze()}>
-            Generar corte
-          </Button>
+          <Tooltip title={canFreezeSelection ? "" : "Un corte se genera de una sucursal o de todas"}>
+            <span>
+              <Button
+                variant="contained"
+                startIcon={<Lock size={16} />}
+                disabled={!canFreezeSelection}
+                onClick={() => void freeze()}
+              >
+                Generar corte
+              </Button>
+            </span>
+          </Tooltip>
         ) : null}
       </div>
 
       <FilterBar>
-        <TextField
-          select
-          size="small"
-          label="Sucursal"
-          value={branchId}
-          onChange={(event) => setBranchId(event.target.value)}
-          InputLabelProps={{ shrink: true }}
-          SelectProps={{ displayEmpty: true }}
-          sx={{ minWidth: 250 }}
-        >
-          <MenuItem value="">Todas las sucursales</MenuItem>
-          {branches.map((branch) => (
-            <MenuItem key={branch.id} value={branch.id}>
-              {branch.code} · {branch.name}
-            </MenuItem>
-          ))}
-        </TextField>
+        <BranchPicker branches={branches} value={branchIds} onChange={setBranchIds} />
         <PeriodPicker
           value={{ granularity, anchor, rangeTo }}
           onChange={(next) => {
@@ -374,7 +375,7 @@ export default function PosCortesPage() {
         <Tab label="Gráficas" />
       </Tabs>
 
-      {tab === 0 ? <BranchCutRows branches={branches} branchId={branchId} period={cutPeriod} /> : null}
+      {tab === 0 ? <BranchCutRows branches={branches} branchIds={branchIds} period={cutPeriod} /> : null}
 
       {tab === 1 ? (
         <div className="page-stack">

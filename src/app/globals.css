@@ -1377,6 +1377,240 @@ textarea {
   }
 }
 
+/* ---- Selector de sucursales (BranchPicker): una, varias o todas ---- */
+.branch-trigger {
+  display: inline-flex;
+  flex: 0 1 260px;
+  align-items: center;
+  gap: 10px;
+  min-width: 200px;
+  height: 40px;
+  padding: 0 10px 0 12px;
+  background: #fff;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  color: var(--glam-navy);
+  font-family: var(--font-body);
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 160ms ease, background 140ms ease;
+}
+
+.branch-trigger:hover,
+.branch-trigger.is-open {
+  border-color: #c9d6e8;
+  background: #fbfdff;
+}
+
+.branch-trigger.has-value {
+  border-color: #bfe3f4;
+  background: var(--soft-blue);
+}
+
+.branch-trigger > svg:first-child {
+  flex: 0 0 auto;
+  color: var(--glam-blue);
+}
+
+.branch-trigger-text {
+  display: grid;
+  flex: 1;
+  min-width: 0;
+  line-height: 1.15;
+}
+
+.branch-trigger-text small {
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.branch-trigger-text span {
+  overflow: hidden;
+  font-size: 14px;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.branch-trigger-count {
+  display: grid;
+  place-items: center;
+  min-width: 22px;
+  height: 22px;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: var(--glam-navy);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.branch-trigger-clear {
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  color: var(--muted);
+  transition: background 140ms ease, color 140ms ease;
+}
+
+.branch-trigger-clear:hover,
+.branch-trigger-clear:focus-visible {
+  background: #fff;
+  color: #c62828;
+  outline: none;
+}
+
+.branch-trigger .branch-trigger-caret {
+  color: var(--muted);
+}
+
+.branch-picker {
+  display: flex;
+  flex-direction: column;
+  width: 360px;
+  max-width: 100%;
+  max-height: min(560px, calc(100vh - 140px));
+}
+
+.branch-search {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 14px 14px 8px;
+  padding: 0 12px;
+  height: 40px;
+  background: var(--bg);
+  border: 1px solid transparent;
+  border-radius: 10px;
+  color: var(--muted);
+  transition: border-color 140ms ease, background 140ms ease;
+}
+
+.branch-search:focus-within {
+  background: #fff;
+  border-color: var(--glam-blue);
+}
+
+.branch-search input {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  outline: none;
+  background: transparent;
+  color: var(--text);
+  font-family: var(--font-body);
+  font-size: 14px;
+}
+
+.branch-list {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 2px 8px 8px;
+}
+
+.branch-option {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 9px 10px;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  font-family: var(--font-body);
+  text-align: left;
+  cursor: pointer;
+  transition: background 120ms ease;
+}
+
+.branch-option:hover {
+  background: var(--bg);
+}
+
+.branch-option.is-checked {
+  background: var(--soft-blue);
+}
+
+.branch-option.is-all {
+  width: auto;
+  margin: 0 8px 4px;
+  padding-bottom: 11px;
+  border-radius: 10px 10px 0 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.branch-check {
+  display: grid;
+  flex: 0 0 auto;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  border: 1.5px solid #c3cbd8;
+  border-radius: 6px;
+  background: #fff;
+  color: #fff;
+  transition: background 120ms ease, border-color 120ms ease;
+}
+
+.branch-option.is-checked .branch-check {
+  background: var(--glam-navy);
+  border-color: var(--glam-navy);
+}
+
+.branch-option-text {
+  display: grid;
+  min-width: 0;
+  line-height: 1.25;
+}
+
+.branch-option-text b {
+  overflow: hidden;
+  color: var(--glam-navy);
+  font-size: 14px;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.branch-option-text small {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.branch-option.is-inactive .branch-option-text b {
+  color: var(--muted);
+}
+
+.branch-empty {
+  margin: 0;
+  padding: 18px 10px;
+  color: var(--muted);
+  font-size: 13px;
+  text-align: center;
+}
+
+.branch-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 12px 14px;
+  background: #fbfcfe;
+  border-top: 1px solid var(--border);
+}
+
+.branch-footer-count {
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 600;
+}
+
 /* En celular la barra con selector de periodo se apila: cada control a lo
    ancho y sin separadores, que sueltos en su propio renglón parecían basura. */
 @media (max-width: 720px) {
@@ -1385,6 +1619,7 @@ textarea {
   }
 
   .filter-bar:has(.period-trigger-group) > .MuiTextField-root,
+  .filter-bar:has(.period-trigger-group) .branch-trigger,
   .filter-bar:has(.period-trigger-group) .filter-seg,
   .filter-bar:has(.period-trigger-group) .period-trigger-group {
     flex: 1 1 100%;

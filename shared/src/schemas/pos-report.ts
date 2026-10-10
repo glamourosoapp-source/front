@@ -10,8 +10,18 @@ const dateOnly = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Usa el formato YYYY-MM
  * Filtro común de los reportes del POS. `branchId` ausente = todas las
  * sucursales (solo para usuarios sin sucursal fija).
  */
+/** Varias sucursales separadas por coma: "uuid1,uuid2". Vacío = todas. */
+const branchIdList = z
+  .string()
+  .refine(
+    (value) => value === "" || value.split(",").every((id) => z.string().uuid().safeParse(id.trim()).success),
+    "Usa ids de sucursal separados por coma"
+  );
+
 export const queryPosReportSchema = z.object({
   branchId: z.union([z.string().uuid(), z.literal(""), z.null()]).optional(),
+  /** Gana sobre `branchId` cuando viene: el filtro de varias sucursales de Cortes. */
+  branchIds: branchIdList.optional(),
   from: dateOnly,
   to: dateOnly,
   granularity: z.enum(POS_REPORT_GRANULARITIES).default("range"),

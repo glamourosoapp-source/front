@@ -164,11 +164,12 @@ function RangeStats({ totals }: { totals: CutTotals }) {
  */
 export function BranchCutRows({
   branches,
-  branchId,
+  branchIds,
   period,
 }: {
   branches: Branch[];
-  branchId: string;
+  /** Sucursales elegidas en el filtro; vacío = todas. */
+  branchIds: string[];
   period: BranchCutPeriod;
 }) {
   const { subscribe } = useRealtime();
@@ -219,7 +220,7 @@ export function BranchCutRows({
         await httpClient.get<BranchDayRow[]>("/pos/reports/branch-days", {
           from: dates.from,
           to: dates.to,
-          ...(branchId ? { branchId } : {}),
+          ...(branchIds.length ? { branchIds: branchIds.join(",") } : {}),
         }),
       );
     } catch (error) {
@@ -227,7 +228,7 @@ export function BranchCutRows({
     } finally {
       setLoading(false);
     }
-  }, [invalidRange, dates.from, dates.to, branchId]);
+  }, [invalidRange, dates.from, dates.to, branchIds]);
 
   useEffect(() => {
     void load();
@@ -272,8 +273,9 @@ export function BranchCutRows({
     // ceros a media mañana es justo lo que hay que ver. Las franquicias no
     // tienen caja.
     for (const branch of branches) {
-      if (branch.type === BRANCH_TYPES.FRANCHISE || !branch.isActive) continue;
-      if (branchId && branch.id !== branchId) continue;
+      if (branch.type === BRANCH_TYPES.FRANCHISE) continue;
+      // Elegida a mano sale aunque esté inactiva; en "todas", solo las activas.
+      if (branchIds.length ? !branchIds.includes(branch.id) : !branch.isActive) continue;
       ensure(branch);
     }
     const overall = { day: emptyTotals(), previous: emptyTotals(), period: emptyTotals() };
@@ -301,7 +303,7 @@ export function BranchCutRows({
         b.period.total - a.period.total || b.day.total - a.day.total || a.branch.code.localeCompare(b.branch.code),
     );
     return { cuts, overall };
-  }, [rows, branches, branchId, isDay, dates, bucketOf]);
+  }, [rows, branches, branchIds, isDay, dates, bucketOf]);
 
   const allOpen = cuts.length > 0 && cuts.every((cut) => openBranches[cut.branch.id]);
 
@@ -355,7 +357,9 @@ export function BranchCutRows({
                   <Store size={17} />
                 </span>
                 <span className="pos-day-date">
-                  <span className="pos-day-weekday">Todas las sucursales</span>
+                  <span className="pos-day-weekday">
+                    {branchIds.length ? `Total de ${cuts.length} sucursales` : "Todas las sucursales"}
+                  </span>
                   <span className="pos-day-fulldate">{itemsLabel(overall.period.items, itemsSuffix)}</span>
                 </span>
                 <PayBreakdown totals={overall.period} caption={periodCaption} />
