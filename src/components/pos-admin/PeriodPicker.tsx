@@ -80,6 +80,50 @@ export function periodBounds(value: PeriodValue): { from: string; to: string } {
   return { from: value.anchor, to: value.rangeTo };
 }
 
+/**
+ * Periodo contra el que se compara, con su etiqueta para el "vs …":
+ * - día: el mismo día de la semana anterior (un viernes se compara con viernes);
+ * - semana y mes: el anterior, **al mismo avance** si el actual va a medias
+ *   (lunes contra lunes, día 10 contra día 10);
+ * - rango: los mismos días justo antes.
+ */
+export function previousPeriod(
+  value: PeriodValue,
+  today: string = todayInMexico()
+): { from: string; to: string; label: string } {
+  const { from, to } = periodBounds(value);
+  const end = to > today ? today : to;
+  const length = from > end ? 1 : daysBetween(from, end);
+  if (value.granularity === "day") {
+    const prev = shiftDateOnly(from, -7);
+    return { from: prev, to: prev, label: `vs ${WEEKDAYS_SHORT[dowOf(prev)]!.toLowerCase()} ${shortDate(prev)}` };
+  }
+  if (value.granularity === "week") {
+    const prevFrom = shiftDateOnly(from, -7);
+    return {
+      from: prevFrom,
+      to: shiftDateOnly(prevFrom, length - 1),
+      label: length < 7 ? "vs semana anterior al mismo día" : "vs semana anterior",
+    };
+  }
+  if (value.granularity === "month") {
+    const prevFrom = shiftMonth(from, -1);
+    const prevEnd = monthEnd(prevFrom);
+    const candidate = shiftDateOnly(prevFrom, length - 1);
+    const name = MONTHS[Number(prevFrom.slice(5, 7)) - 1]!;
+    return {
+      from: prevFrom,
+      to: candidate > prevEnd ? prevEnd : candidate,
+      label: end < to ? `vs ${name} al día ${Number(end.slice(8, 10))}` : `vs ${name}`,
+    };
+  }
+  return {
+    from: shiftDateOnly(from, -length),
+    to: shiftDateOnly(from, -1),
+    label: `vs ${length === 1 ? "el día anterior" : `los ${length} días anteriores`}`,
+  };
+}
+
 /** Celdas de un mes: `null` donde no hay día, para alinear con el día de inicio de semana. */
 function monthCells(month: string, weekStartDow: number): Array<string | null> {
   const first = monthStart(month);

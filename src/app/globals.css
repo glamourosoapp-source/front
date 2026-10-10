@@ -2580,3 +2580,597 @@ textarea.input {
   font-size: 12px;
   font-weight: 700;
 }
+
+/* ---- Gráficas de Cortes (PosChartsTab) ----
+
+   Pensadas para el dueño: cada panel contesta una pregunta del negocio. Una
+   serie = navy; la comparación, gris de contexto; subir/bajar con flecha y
+   texto además del color. Marcas delgadas, rejilla de un pelo. */
+.chart-tab {
+  transition: opacity 160ms ease;
+}
+
+/* Al recargar se queda la gráfica anterior atenuada: sin parpadeo ni salto. */
+.chart-tab.is-refreshing {
+  opacity: 0.6;
+}
+
+.chart-insights {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+  gap: 12px;
+}
+
+.chart-insight {
+  display: flex;
+  gap: 12px;
+  padding: 14px 16px;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  box-shadow: var(--shadow-sm);
+}
+
+.chart-insight > svg {
+  flex: 0 0 auto;
+  margin-top: 2px;
+  padding: 7px;
+  width: 32px;
+  height: 32px;
+  border-radius: 10px;
+  background: var(--soft-blue);
+  color: var(--glam-navy);
+}
+
+.chart-insight.is-alert > svg {
+  background: #fdecec;
+  color: #c62828;
+}
+
+.chart-insight > div {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.chart-insight small {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.chart-insight b {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  color: var(--glam-navy);
+  font-size: 17px;
+  font-weight: 700;
+  line-height: 1.25;
+}
+
+.chart-insight span:not(.chart-delta) {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.chart-delta {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 2px 7px 2px 5px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.chart-delta.is-up {
+  background: #e8f6ee;
+  color: #15803d;
+}
+
+.chart-delta.is-down {
+  background: #fdecec;
+  color: #c62828;
+}
+
+.chart-delta.is-neutral {
+  padding: 2px 7px;
+  background: var(--bg);
+  color: var(--muted);
+  font-weight: 600;
+}
+
+/* Cambio bajo la cifra de cada tarjeta de arriba. */
+.metric-change {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin-top: 4px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+/* `.metric span` pone mayúsculas a las etiquetas de la tarjeta; el cambio se lee normal. */
+.metric .metric-change span {
+  font-size: 12px;
+  letter-spacing: normal;
+  text-transform: none;
+}
+
+.metric .metric-change .chart-delta.is-up {
+  color: #15803d;
+}
+
+.metric .metric-change .chart-delta.is-down {
+  color: #c62828;
+}
+
+.metric .metric-change .chart-delta {
+  font-weight: 700;
+}
+
+.chart-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 20px;
+  min-width: 0;
+}
+
+.chart-panel-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.chart-panel-head h2 {
+  margin: 0;
+  color: var(--glam-navy);
+  font-size: 16px;
+  font-weight: 700;
+}
+
+.chart-panel-head p {
+  margin: 2px 0 0;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.chart-aside-stat {
+  display: grid;
+  flex: 0 0 auto;
+  padding: 6px 12px;
+  border-radius: 10px;
+  background: var(--soft-blue);
+  text-align: right;
+}
+
+.chart-aside-stat small {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.chart-aside-stat b {
+  color: var(--glam-navy);
+  font-size: 17px;
+}
+
+.chart-empty {
+  display: grid;
+  place-items: center;
+  min-height: 180px;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.chart-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 16px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.chart-legend span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.chart-legend i {
+  width: 10px;
+  height: 10px;
+  border-radius: 3px;
+}
+
+.chart-legend i.is-line {
+  width: 16px;
+  height: 3px;
+  border-radius: 2px;
+}
+
+/* El alto incluye el eje x: sin scroll anidado. */
+.chart-plot {
+  height: 280px;
+  min-width: 0;
+}
+
+.chart-grid {
+  gap: 20px;
+}
+
+/* Ranking de sucursales: tabla con barra, que es su propia vista de datos. */
+.rank-table {
+  display: grid;
+  overflow-x: auto;
+}
+
+.rank-row {
+  display: grid;
+  grid-template-columns: 28px minmax(150px, 1.1fr) minmax(220px, 2fr) 64px 70px 110px 90px;
+  align-items: center;
+  gap: 12px;
+  min-width: 760px;
+  padding: 9px 4px;
+  border-bottom: 1px solid #f0f3f8;
+  font-size: 14px;
+}
+
+.rank-row .is-num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.rank-row.is-head {
+  padding-top: 0;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.rank-row.is-foot {
+  border-bottom: 0;
+  border-top: 1px solid var(--border);
+  font-weight: 700;
+}
+
+.rank-pos {
+  color: var(--muted);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+}
+
+.rank-name {
+  display: grid;
+  min-width: 0;
+  line-height: 1.2;
+}
+
+.rank-name b {
+  overflow: hidden;
+  color: var(--glam-navy);
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.rank-name small {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.rank-bar-col {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.rank-bar {
+  flex: 1;
+  height: 10px;
+  min-width: 60px;
+  border-radius: 999px;
+  background: #f0f3f8;
+  overflow: hidden;
+}
+
+.rank-bar.is-ghost {
+  background: transparent;
+}
+
+.rank-bar i {
+  display: block;
+  height: 100%;
+  min-width: 2px;
+  border-radius: 0 4px 4px 0;
+  background: var(--glam-navy);
+}
+
+.rank-amount {
+  flex: 0 0 112px;
+  color: var(--glam-navy);
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+/* Mapa de calor: un solo tono, de casi blanco a navy. */
+.heatmap {
+  display: grid;
+  gap: 12px;
+  overflow-x: auto;
+}
+
+.heatmap-grid {
+  display: grid;
+  gap: 3px;
+  min-width: 420px;
+}
+
+.heatmap-hour {
+  color: var(--muted);
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+}
+
+.heatmap-day {
+  align-self: center;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.heatmap-cell {
+  height: 26px;
+  border-radius: 5px;
+  cursor: default;
+  transition: outline-color 120ms ease;
+  outline: 2px solid transparent;
+  outline-offset: 1px;
+}
+
+.heatmap-cell:hover {
+  outline-color: var(--glam-blue);
+}
+
+.heatmap-scale {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 4px;
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.heatmap-scale i {
+  width: 20px;
+  height: 10px;
+  border-radius: 3px;
+}
+
+.heatmap-scale span:first-child {
+  margin-right: 4px;
+}
+
+.heatmap-scale span:last-child {
+  margin-left: 4px;
+}
+
+/* Qué se vende */
+.mix-bar {
+  display: flex;
+  gap: 2px;
+  height: 10px;
+  border-radius: 999px;
+  overflow: hidden;
+}
+
+.product-bars {
+  display: grid;
+  gap: 10px;
+  margin: 4px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.product-bars li {
+  display: grid;
+  grid-template-columns: minmax(130px, 1.3fr) minmax(80px, 1fr) 96px;
+  align-items: center;
+  gap: 12px;
+}
+
+.product-name {
+  display: grid;
+  min-width: 0;
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.2;
+}
+
+.product-name,
+.product-name small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.product-name small {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 500;
+}
+
+.product-bar {
+  height: 10px;
+  border-radius: 999px;
+  background: #f0f3f8;
+  overflow: hidden;
+}
+
+.product-bar i {
+  display: block;
+  height: 100%;
+  min-width: 2px;
+  border-radius: 0 4px 4px 0;
+  background: var(--glam-navy);
+}
+
+.product-value {
+  display: grid;
+  text-align: right;
+  line-height: 1.2;
+}
+
+.product-value b {
+  color: var(--glam-navy);
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+}
+
+.product-value small {
+  color: var(--muted);
+  font-size: 11px;
+}
+
+/* Formas de pago por sucursal: barra 100 % con huecos de 2 px entre tramos. */
+.pay-bars {
+  display: grid;
+  gap: 12px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.pay-bars li {
+  display: grid;
+  grid-template-columns: minmax(110px, 0.9fr) minmax(100px, 1.4fr) 120px;
+  align-items: center;
+  gap: 12px;
+}
+
+.pay-name {
+  overflow: hidden;
+  color: var(--glam-navy);
+  font-size: 13px;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pay-bar {
+  display: flex;
+  gap: 2px;
+  height: 12px;
+  border-radius: 999px;
+  overflow: hidden;
+  background: #f0f3f8;
+}
+
+.pay-bar i {
+  display: block;
+  height: 100%;
+}
+
+.pay-value {
+  display: grid;
+  text-align: right;
+  line-height: 1.2;
+}
+
+.pay-value b {
+  color: var(--glam-navy);
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+}
+
+.pay-value small {
+  color: var(--muted);
+  font-size: 11px;
+}
+
+@media (max-width: 640px) {
+  .chart-panel {
+    padding: 16px;
+  }
+
+  .chart-panel-head {
+    flex-direction: column;
+  }
+
+  .chart-aside-stat {
+    text-align: left;
+  }
+
+  .product-bars li,
+  .pay-bars li {
+    grid-template-columns: 1fr 96px;
+  }
+
+  .product-bar,
+  .pay-bar {
+    grid-column: 1 / -1;
+    grid-row: 2;
+  }
+}
+
+/* Ranking en celular: nombre y cambio arriba, barra con monto abajo. Parte,
+   tickets y ticket promedio quedan para pantallas anchas (y el Excel). */
+@media (max-width: 640px) {
+  .rank-row {
+    grid-template-columns: 22px 1fr auto;
+    grid-template-areas:
+      "pos name delta"
+      "pos bar bar";
+    row-gap: 6px;
+    min-width: 0;
+  }
+
+  .rank-row.is-head,
+  .rank-row > :nth-child(4),
+  .rank-row > :nth-child(5),
+  .rank-row > :nth-child(6) {
+    display: none;
+  }
+
+  .rank-row > :nth-child(1) {
+    grid-area: pos;
+    align-self: start;
+  }
+
+  .rank-row > :nth-child(2) {
+    grid-area: name;
+  }
+
+  .rank-row > :nth-child(3) {
+    grid-area: bar;
+  }
+
+  .rank-row > :nth-child(7) {
+    grid-area: delta;
+  }
+
+  .rank-amount {
+    flex-basis: auto;
+  }
+
+  .chart-insight {
+    padding: 12px 14px;
+  }
+}
