@@ -34,11 +34,23 @@ interface CutTotals {
 
 interface BranchCut {
   branch: Pick<Branch, "id" | "code" | "name">;
-  today: CutTotals;
-  yesterday: CutTotals;
-  week: CutTotals;
-  days: Record<string, CutTotals>;
+  /** Modo día: el día elegido. */
+  day: CutTotals;
+  /** Modo día: el día anterior. */
+  previous: CutTotals;
+  /** Modo día: la semana vie–jue hasta el día elegido. Modo rango: todo el rango. */
+  period: CutTotals;
+  /** Renglones del detalle: por día, o por semana en rangos largos. */
+  buckets: Record<string, CutTotals>;
 }
+
+/**
+ * Qué periodo pinta la pestaña, según el filtro de la página:
+ * - `day`: el día elegido, el anterior y la semana del punto de venta hasta
+ *   ese día. Con la fecha de hoy es el "hoy, ayer y semana" de cada mañana.
+ * - `range`: semana, mes o rango libre; cada sucursal con lo de ese periodo.
+ */
+export type BranchCutPeriod = { mode: "day"; day: string } | { mode: "range"; from: string; to: string };
 
 /** Mismo orden y color que las tarjetas de día de Ventas de la sucursal. */
 const PAYMENT_SEGMENTS = [
@@ -46,6 +58,9 @@ const PAYMENT_SEGMENTS = [
   { key: POS_PAYMENT_METHODS.CARD, color: "#06a6e0" },
   { key: POS_PAYMENT_METHODS.TRANSFER, color: "#7c3aed" },
 ];
+
+/** Más días que esto y el detalle de cada sucursal se agrupa por semana vie–jue. */
+const MAX_DAY_ROWS = 62;
 
 const emptyTotals = (): CutTotals => ({ total: 0, tickets: 0, items: 0, voided: 0, byPayment: {} });
 
@@ -57,7 +72,7 @@ function addRow(target: CutTotals, row: BranchDayRow) {
   if (row.total) target.byPayment[row.paymentMethod] = (target.byPayment[row.paymentMethod] ?? 0) + row.total;
 }
 
-/** "Viernes, 9 de octubre de 2026" → "vie 9 oct", para los renglones del detalle. */
+/** "2026-10-09" → "vie 9 oct", para etiquetas cortas. */
 function shortDay(day: string): string {
   return new Date(`${day}T12:00:00Z`).toLocaleDateString("es-MX", {
     weekday: "short",
@@ -67,9 +82,13 @@ function shortDay(day: string): string {
   });
 }
 
-/** "1 producto", "3.5 productos": en la semana se suman piezas y litros. */
-function itemsLabel(items: number): string {
-  return `${formatQuantity(items)} ${items === 1 ? "producto" : "productos"} en la semana`;
+function countDays(from: string, to: string): number {
+  return Math.round((Date.parse(`${to}T00:00:00Z`) - Date.parse(`${from}T00:00:00Z`)) / 86_400_000) + 1;
+}
+
+/** "1 producto", "3.5 productos": se suman piezas y litros. */
+function itemsLabel(items: number, suffix: string): string {
+  return `${formatQuantity(items)} ${items === 1 ? "producto" : "productos"} ${suffix}`;
 }
 
 function PayBreakdown({ totals, caption }: { totals: CutTotals; caption: string }) {
@@ -103,6 +122,7 @@ function PayBreakdown({ totals, caption }: { totals: CutTotals; caption: string 
   );
 }
 
+/** Bloque de un periodo (modo día): monto grande y sus tickets debajo. */
 function PeriodStat({ label, totals, total }: { label: string; totals: CutTotals; total?: boolean }) {
   return (
     <span className={`pos-day-stat${total ? " is-total" : ""}`}>
@@ -115,33 +135,90 @@ function PeriodStat({ label, totals, total }: { label: string; totals: CutTotals
   );
 }
 
+/** Bloques del modo rango: tickets, productos y total, como la tarjeta de día de Ventas. */
+function RangeStats({ totals }: { totals: CutTotals }) {
+  return (
+    <span className="pos-day-stats">
+      <span className="pos-day-stat">
+        <small>Tickets</small>
+        <b>{totals.tickets}</b>
+      </span>
+      <span className="pos-day-stat">
+        <small>Productos</small>
+        <b>{formatQuantity(totals.items)}</b>
+      </span>
+      <span className="pos-day-stat is-total">
+        <small>Total</small>
+        <b>{formatMoney(totals.total)}</b>
+      </span>
+    </span>
+  );
+}
+
 /**
- * Primera pestaña de Cortes: una fila por sucursal con lo vendido **hoy, ayer
- * y en la semana del punto de venta** (viernes a jueves), sin importar el
- * periodo de los filtros. Es lo primero que se revisa cada mañana: qué tienda
- * vendió qué y cuánto entró en efectivo. Cada fila abre su semana día por día.
+ * Primera pestaña de Cortes: una tarjeta por sucursal. Sigue el filtro de
+ * periodo de la página: con **Día** (hoy por defecto) muestra el día, el
+ * anterior y la semana del punto de venta (viernes a jueves), que es lo que se
+ * revisa cada mañana; con **Semana, Mes o Rango** muestra lo de ese periodo.
+ * Cada tarjeta se abre en su detalle día por día.
  */
-export function BranchCutRows({ branches, branchId }: { branches: Branch[]; branchId: string }) {
+export function BranchCutRows({
+  branches,
+  branchId,
+  period,
+}: {
+  branches: Branch[];
+  branchId: string;
+  period: BranchCutPeriod;
+}) {
   const { subscribe } = useRealtime();
-  const [today, setToday] = useState(todayInMexico());
-  const yesterday = shiftDateOnly(today, -1);
-  const weekStart = posWeekStart(today);
-  // El viernes la semana nueva empieza hoy y ayer queda en la anterior.
-  const from = weekStart < yesterday ? weekStart : yesterday;
+  const today = todayInMexico();
+  const isDay = period.mode === "day";
+
+  // Fechas que pide la pestaña y cómo se reparten en bloques.
+  const dates = useMemo(() => {
+    if (period.mode === "day") {
+      const previous = shiftDateOnly(period.day, -1);
+      const weekStart = posWeekStart(period.day);
+      // El viernes la semana nueva empieza ese día y el anterior queda en la otra.
+      return {
+        from: weekStart < previous ? weekStart : previous,
+        to: period.day,
+        day: period.day,
+        previous,
+        weekStart,
+      };
+    }
+    return { from: period.from, to: period.to, day: "", previous: "", weekStart: "" };
+  }, [period]);
+  const invalidRange = !dates.from || !dates.to || dates.from > dates.to;
+  // Un rango que llega al futuro no tiene renglones que pintar después de hoy.
+  const lastDay = dates.to > today ? today : dates.to;
+  const byWeek = !isDay && !invalidRange && countDays(dates.from, lastDay) > MAX_DAY_ROWS;
+  const bucketOf = useCallback(
+    (day: string) => {
+      if (!byWeek) return day;
+      const start = posWeekStart(day);
+      return start < dates.from ? dates.from : start;
+    },
+    [byWeek, dates.from],
+  );
 
   const [rows, setRows] = useState<BranchDayRow[]>([]);
   const [loading, setLoading] = useState(false);
   const [openBranches, setOpenBranches] = useState<Record<string, boolean>>({});
 
   const load = useCallback(async () => {
+    if (invalidRange) {
+      setRows([]);
+      return;
+    }
     setLoading(true);
-    // Si la pantalla quedó abierta de un día para otro, "hoy" se recorre solo.
-    setToday(todayInMexico());
     try {
       setRows(
         await httpClient.get<BranchDayRow[]>("/pos/reports/branch-days", {
-          from,
-          to: today,
+          from: dates.from,
+          to: dates.to,
           ...(branchId ? { branchId } : {}),
         }),
       );
@@ -150,7 +227,7 @@ export function BranchCutRows({ branches, branchId }: { branches: Branch[]; bran
     } finally {
       setLoading(false);
     }
-  }, [from, today, branchId]);
+  }, [invalidRange, dates.from, dates.to, branchId]);
 
   useEffect(() => {
     void load();
@@ -170,19 +247,23 @@ export function BranchCutRows({ branches, branchId }: { branches: Branch[]; bran
     };
   }, [subscribe, load]);
 
-  /** Días del detalle, de hoy hacia atrás: los días sin venta también salen. */
-  const detailDays = useMemo(() => {
-    const days: string[] = [];
-    for (let day = today; day >= from; day = shiftDateOnly(day, -1)) days.push(day);
-    return days;
-  }, [today, from]);
+  /** Renglones del detalle, del más reciente hacia atrás; los vacíos también salen. */
+  const detailKeys = useMemo(() => {
+    if (invalidRange) return [];
+    const keys: string[] = [];
+    for (let day = lastDay; day >= dates.from; day = shiftDateOnly(day, -1)) {
+      const key = bucketOf(day);
+      if (keys[keys.length - 1] !== key) keys.push(key);
+    }
+    return keys;
+  }, [invalidRange, lastDay, dates.from, bucketOf]);
 
   const { cuts, overall } = useMemo(() => {
     const byBranch = new Map<string, BranchCut>();
     const ensure = (branch: Pick<Branch, "id" | "code" | "name">) => {
       let cut = byBranch.get(branch.id);
       if (!cut) {
-        cut = { branch, today: emptyTotals(), yesterday: emptyTotals(), week: emptyTotals(), days: {} };
+        cut = { branch, day: emptyTotals(), previous: emptyTotals(), period: emptyTotals(), buckets: {} };
         byBranch.set(branch.id, cut);
       }
       return cut;
@@ -195,48 +276,67 @@ export function BranchCutRows({ branches, branchId }: { branches: Branch[]; bran
       if (branchId && branch.id !== branchId) continue;
       ensure(branch);
     }
-    const overall = { today: emptyTotals(), yesterday: emptyTotals(), week: emptyTotals() };
+    const overall = { day: emptyTotals(), previous: emptyTotals(), period: emptyTotals() };
     for (const row of rows) {
       const known = branches.find((branch) => branch.id === row.branchId);
       const cut = ensure(known ?? { id: row.branchId, code: "—", name: "Sucursal" });
-      if (row.day === today) {
-        addRow(cut.today, row);
-        addRow(overall.today, row);
+      if (isDay) {
+        if (row.day === dates.day) {
+          addRow(cut.day, row);
+          addRow(overall.day, row);
+        }
+        if (row.day === dates.previous) {
+          addRow(cut.previous, row);
+          addRow(overall.previous, row);
+        }
       }
-      if (row.day === yesterday) {
-        addRow(cut.yesterday, row);
-        addRow(overall.yesterday, row);
+      if (!isDay || row.day >= dates.weekStart) {
+        addRow(cut.period, row);
+        addRow(overall.period, row);
       }
-      if (row.day >= weekStart) {
-        addRow(cut.week, row);
-        addRow(overall.week, row);
-      }
-      addRow((cut.days[row.day] ??= emptyTotals()), row);
+      addRow((cut.buckets[bucketOf(row.day)] ??= emptyTotals()), row);
     }
     const cuts = Array.from(byBranch.values()).sort(
       (a, b) =>
-        b.week.total - a.week.total || b.today.total - a.today.total || a.branch.code.localeCompare(b.branch.code),
+        b.period.total - a.period.total || b.day.total - a.day.total || a.branch.code.localeCompare(b.branch.code),
     );
     return { cuts, overall };
-  }, [rows, branches, branchId, today, yesterday, weekStart]);
+  }, [rows, branches, branchId, isDay, dates, bucketOf]);
 
   const allOpen = cuts.length > 0 && cuts.every((cut) => openBranches[cut.branch.id]);
-  const weekLabel = formatDateOnlyRange(weekStart, shiftDateOnly(weekStart, 6));
-  const weekStat = weekStart === today ? "Semana (desde hoy)" : "Semana";
+
+  // Etiquetas: con la fecha de hoy se lee "Hoy / Ayer"; con otra, la fecha.
+  const dayIsToday = isDay && dates.day === today;
+  const dayLabel = dayIsToday ? "Hoy" : shortDay(dates.day || today);
+  const previousLabel = dayIsToday ? "Ayer" : shortDay(dates.previous || today);
+  const weekLabel = isDay && dates.weekStart === dates.day ? `Semana (desde ${dayIsToday ? "hoy" : "ese día"})` : "Semana";
+  const periodCaption = isDay ? "Semana:" : "Periodo:";
+  const itemsSuffix = isDay ? "en la semana" : "en el periodo";
+  const rangeLabel = invalidRange ? "" : formatDateOnlyRange(dates.from, dates.to);
+
+  const kicker = invalidRange
+    ? "Elige un rango válido: la fecha de inicio no puede ser posterior a la final."
+    : isDay
+      ? `${dayIsToday ? "Hoy es" : "Día elegido:"} ${formatBusinessDayLong(dates.day).replace(/ de \d{4}$/, "").toLowerCase()}. Semana del ${formatDateOnlyRange(dates.weekStart, shiftDateOnly(dates.weekStart, 6))} (viernes a jueves). Para otro periodo, cambia el filtro de Periodo arriba.`
+      : `Ventas por sucursal del ${rangeLabel}${byWeek ? "; el detalle de cada sucursal va por semana (viernes a jueves)" : ""}.`;
+
+  const bucketLabel = (key: string) => {
+    if (!byWeek) return shortDay(key);
+    const weekEnd = shiftDateOnly(posWeekStart(key), 6);
+    const end = weekEnd > dates.to ? dates.to : weekEnd;
+    return end === key ? shortDay(key) : formatDateOnlyRange(key, end);
+  };
 
   return (
     <div className="page-stack">
       <FilterBar>
         <span className="page-kicker" style={{ margin: 0 }}>
-          Hoy es {formatBusinessDayLong(today).replace(/ de \d{4}$/, "").toLowerCase()}. La semana va del{" "}
-          {weekLabel} (viernes a jueves); los filtros de arriba no cambian esta vista.
+          {kicker}
         </span>
-        {cuts.length > 1 ? (
+        {cuts.length > 1 && !invalidRange ? (
           <Button
             size="small"
-            onClick={() =>
-              setOpenBranches(Object.fromEntries(cuts.map((cut) => [cut.branch.id, !allOpen])))
-            }
+            onClick={() => setOpenBranches(Object.fromEntries(cuts.map((cut) => [cut.branch.id, !allOpen])))}
           >
             {allOpen ? "Contraer todas" : "Desplegar todas"}
           </Button>
@@ -246,117 +346,134 @@ export function BranchCutRows({ branches, branchId }: { branches: Branch[]; bran
         </FilterMeta>
       </FilterBar>
 
-      {cuts.length > 1 ? (
-        <section className="pos-day pos-cut is-overall">
-          <div className="pos-day-head">
-            <span className="pos-day-chevron" aria-hidden>
-              <Store size={17} />
-            </span>
-            <span className="pos-day-date">
-              <span className="pos-day-weekday">Todas las sucursales</span>
-              <span className="pos-day-fulldate">
-                {itemsLabel(overall.week.items)}
-              </span>
-            </span>
-            <PayBreakdown totals={overall.week} caption="Semana:" />
-            <span className="pos-day-stats">
-              <PeriodStat label="Hoy" totals={overall.today} />
-              <PeriodStat label="Ayer" totals={overall.yesterday} />
-              <PeriodStat label={weekStat} totals={overall.week} total />
-            </span>
-          </div>
-        </section>
-      ) : null}
-
-      {cuts.map((cut) => {
-        const open = Boolean(openBranches[cut.branch.id]);
-        return (
-          <section key={cut.branch.id} className={`pos-day pos-cut${open ? " is-open" : ""}`}>
-            <button
-              type="button"
-              className="pos-day-head"
-              onClick={() => setOpenBranches((current) => ({ ...current, [cut.branch.id]: !open }))}
-              aria-expanded={open}
-            >
-              <span className="pos-day-chevron" aria-hidden>
-                <ChevronDown size={18} />
-              </span>
-              <span className="pos-day-date">
-                <span className="pos-day-weekday">
-                  {cut.branch.name}
-                  {!cut.today.tickets ? <span className="pos-day-badge is-muted">Sin ventas hoy</span> : null}
+      {invalidRange ? null : (
+        <>
+          {cuts.length > 1 ? (
+            <section className="pos-day pos-cut is-overall">
+              <div className="pos-day-head">
+                <span className="pos-day-chevron" aria-hidden>
+                  <Store size={17} />
                 </span>
-                <span className="pos-day-fulldate">
-                  {cut.branch.code} · {itemsLabel(cut.week.items)}
+                <span className="pos-day-date">
+                  <span className="pos-day-weekday">Todas las sucursales</span>
+                  <span className="pos-day-fulldate">{itemsLabel(overall.period.items, itemsSuffix)}</span>
                 </span>
-              </span>
-              <PayBreakdown totals={cut.week} caption="Semana:" />
-              <span className="pos-day-stats">
-                <PeriodStat label="Hoy" totals={cut.today} />
-                <PeriodStat label="Ayer" totals={cut.yesterday} />
-                <PeriodStat label={weekStat} totals={cut.week} total />
-              </span>
-            </button>
-            {open ? (
-              <div className="pos-day-body">
-                <table className="table">
-                  <thead>
-                    <tr>
-                      <th>Día</th>
-                      {PAYMENT_SEGMENTS.map((segment) => (
-                        <th key={segment.key} style={{ textAlign: "right" }}>
-                          {posPaymentMethodLabel(segment.key)}
-                        </th>
-                      ))}
-                      <th style={{ textAlign: "right" }}>Tickets</th>
-                      <th style={{ textAlign: "right" }}>Productos</th>
-                      <th style={{ textAlign: "right" }}>Anulados</th>
-                      <th style={{ textAlign: "right" }}>Total</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {detailDays.map((day) => {
-                      const totals = cut.days[day] ?? emptyTotals();
-                      const outsideWeek = day < weekStart;
-                      return (
-                        <tr key={day} className={outsideWeek ? "is-previous-week" : ""}>
-                          <td style={{ fontWeight: 600, color: "var(--glam-navy)", whiteSpace: "nowrap" }}>
-                            {shortDay(day)}
-                            {day === today ? <span className="pos-day-badge pos-cut-inline-badge">Hoy</span> : null}
-                            {day === yesterday ? (
-                              <span className="pos-day-badge is-muted pos-cut-inline-badge">Ayer</span>
-                            ) : null}
-                            {outsideWeek ? <span className="pos-cut-note">semana anterior</span> : null}
-                          </td>
-                          {PAYMENT_SEGMENTS.map((segment) => (
-                            <td key={segment.key} style={{ textAlign: "right" }}>
-                              {totals.byPayment[segment.key] ? formatMoney(totals.byPayment[segment.key]) : "—"}
-                            </td>
-                          ))}
-                          <td style={{ textAlign: "right" }}>{totals.tickets}</td>
-                          <td style={{ textAlign: "right" }}>{formatQuantity(totals.items)}</td>
-                          <td style={{ textAlign: "right", color: totals.voided ? "#c62828" : undefined }}>
-                            {totals.voided || "—"}
-                          </td>
-                          <td style={{ textAlign: "right", fontWeight: 700 }}>{formatMoney(totals.total)}</td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-                <div className="pos-cut-footer">
-                  <Link href={`/dashboard/pos/sucursales/${cut.branch.id}?tab=ventas`}>
-                    Ver los tickets de {cut.branch.name} <ExternalLink size={13} />
-                  </Link>
-                </div>
+                <PayBreakdown totals={overall.period} caption={periodCaption} />
+                {isDay ? (
+                  <span className="pos-day-stats">
+                    <PeriodStat label={dayLabel} totals={overall.day} />
+                    <PeriodStat label={previousLabel} totals={overall.previous} />
+                    <PeriodStat label={weekLabel} totals={overall.period} total />
+                  </span>
+                ) : (
+                  <RangeStats totals={overall.period} />
+                )}
               </div>
-            ) : null}
-          </section>
-        );
-      })}
+            </section>
+          ) : null}
+
+          {cuts.map((cut) => {
+            const open = Boolean(openBranches[cut.branch.id]);
+            const idle = isDay ? !cut.day.tickets : !cut.period.tickets;
+            return (
+              <section key={cut.branch.id} className={`pos-day pos-cut${open ? " is-open" : ""}`}>
+                <button
+                  type="button"
+                  className="pos-day-head"
+                  onClick={() => setOpenBranches((current) => ({ ...current, [cut.branch.id]: !open }))}
+                  aria-expanded={open}
+                >
+                  <span className="pos-day-chevron" aria-hidden>
+                    <ChevronDown size={18} />
+                  </span>
+                  <span className="pos-day-date">
+                    <span className="pos-day-weekday">
+                      {cut.branch.name}
+                      {idle ? (
+                        <span className="pos-day-badge is-muted">
+                          {isDay ? (dayIsToday ? "Sin ventas hoy" : "Sin ventas ese día") : "Sin ventas"}
+                        </span>
+                      ) : null}
+                    </span>
+                    <span className="pos-day-fulldate">
+                      {cut.branch.code} · {itemsLabel(cut.period.items, itemsSuffix)}
+                    </span>
+                  </span>
+                  <PayBreakdown totals={cut.period} caption={periodCaption} />
+                  {isDay ? (
+                    <span className="pos-day-stats">
+                      <PeriodStat label={dayLabel} totals={cut.day} />
+                      <PeriodStat label={previousLabel} totals={cut.previous} />
+                      <PeriodStat label={weekLabel} totals={cut.period} total />
+                    </span>
+                  ) : (
+                    <RangeStats totals={cut.period} />
+                  )}
+                </button>
+                {open ? (
+                  <div className="pos-day-body">
+                    <table className="table">
+                      <thead>
+                        <tr>
+                          <th>{byWeek ? "Semana" : "Día"}</th>
+                          {PAYMENT_SEGMENTS.map((segment) => (
+                            <th key={segment.key} style={{ textAlign: "right" }}>
+                              {posPaymentMethodLabel(segment.key)}
+                            </th>
+                          ))}
+                          <th style={{ textAlign: "right" }}>Tickets</th>
+                          <th style={{ textAlign: "right" }}>Productos</th>
+                          <th style={{ textAlign: "right" }}>Anulados</th>
+                          <th style={{ textAlign: "right" }}>Total</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {detailKeys.map((key) => {
+                          const totals = cut.buckets[key] ?? emptyTotals();
+                          const outsideWeek = isDay && key < dates.weekStart;
+                          return (
+                            <tr key={key} className={outsideWeek ? "is-previous-week" : ""}>
+                              <td style={{ fontWeight: 600, color: "var(--glam-navy)", whiteSpace: "nowrap" }}>
+                                {bucketLabel(key)}
+                                {!byWeek && key === today ? (
+                                  <span className="pos-day-badge pos-cut-inline-badge">Hoy</span>
+                                ) : null}
+                                {!byWeek && key === shiftDateOnly(today, -1) ? (
+                                  <span className="pos-day-badge is-muted pos-cut-inline-badge">Ayer</span>
+                                ) : null}
+                                {outsideWeek ? <span className="pos-cut-note">semana anterior</span> : null}
+                              </td>
+                              {PAYMENT_SEGMENTS.map((segment) => (
+                                <td key={segment.key} style={{ textAlign: "right" }}>
+                                  {totals.byPayment[segment.key] ? formatMoney(totals.byPayment[segment.key]) : "—"}
+                                </td>
+                              ))}
+                              <td style={{ textAlign: "right" }}>{totals.tickets}</td>
+                              <td style={{ textAlign: "right" }}>{formatQuantity(totals.items)}</td>
+                              <td style={{ textAlign: "right", color: totals.voided ? "#c62828" : undefined }}>
+                                {totals.voided || "—"}
+                              </td>
+                              <td style={{ textAlign: "right", fontWeight: 700 }}>{formatMoney(totals.total)}</td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                    <div className="pos-cut-footer">
+                      <Link href={`/dashboard/pos/sucursales/${cut.branch.id}?tab=ventas`}>
+                        Ver los tickets de {cut.branch.name} <ExternalLink size={13} />
+                      </Link>
+                    </div>
+                  </div>
+                ) : null}
+              </section>
+            );
+          })}
+        </>
+      )}
 
       {loading && !rows.length ? <p className="page-kicker">Cargando...</p> : null}
-      {!loading && !cuts.length ? (
+      {!loading && !invalidRange && !cuts.length ? (
         <div className="panel p-5" style={{ textAlign: "center", color: "var(--muted)" }}>
           No hay sucursales con caja para mostrar.
         </div>

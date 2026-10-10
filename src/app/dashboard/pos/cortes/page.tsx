@@ -32,8 +32,8 @@ import {
   type BranchRow,
   type ReportSummary,
 } from "@/lib/export-pos-reports";
-import { posWeekStart } from "@/components/pos-admin/pos-labels";
-import { BranchCutRows } from "@/components/pos-admin/BranchCutRows";
+import { posWeekStart, shiftDateOnly } from "@/components/pos-admin/pos-labels";
+import { BranchCutRows, type BranchCutPeriod } from "@/components/pos-admin/BranchCutRows";
 import { Branch, CashCut, ListResponse } from "@/types";
 import { toast } from "sonner";
 
@@ -169,6 +169,16 @@ export default function PosCortesPage() {
   const [hours, setHours] = useState<HourPoint[]>([]);
   const [cuts, setCuts] = useState<CashCut[]>([]);
   const [loading, setLoading] = useState(false);
+
+  /* La pestaña Por sucursal con "Día" muestra el día, el anterior y la semana;
+     con semana, mes o rango, lo de ese periodo. */
+  const cutPeriod = useMemo<BranchCutPeriod>(
+    () =>
+      granularity === "day"
+        ? { mode: "day", day: anchor }
+        : { mode: "range", ...(granularity === "range" ? { from: anchor, to: rangeTo } : rangeFor(granularity, anchor)) },
+    [granularity, anchor, rangeTo]
+  );
 
   const range = useMemo(
     () => (granularity === "range" ? { from: anchor, to: rangeTo } : rangeFor(granularity, anchor)),
@@ -314,14 +324,25 @@ export default function PosCortesPage() {
           size="small"
           label="Periodo"
           value={granularity}
-          onChange={(event) => setGranularity(event.target.value as Granularity)}
+          onChange={(event) => {
+            const next = event.target.value as Granularity;
+            // Un rango de un solo día no es lo que se busca al elegirlo: arranca
+            // con los últimos 7 días hasta la fecha que ya estaba elegida.
+            if (next === "range" && granularity !== "range") {
+              setRangeTo(anchor);
+              setAnchor(shiftDateOnly(anchor, -6));
+            }
+            // Y al salir del rango, la fecha vuelve a ser la final, no la de inicio.
+            if (granularity === "range" && next !== "range") setAnchor(rangeTo);
+            setGranularity(next);
+          }}
           InputLabelProps={{ shrink: true }}
           sx={{ minWidth: 185 }}
         >
           <MenuItem value="day">Día</MenuItem>
           <MenuItem value="week">Semana (vie–jue)</MenuItem>
           <MenuItem value="month">Mes</MenuItem>
-          <MenuItem value="range">Rango</MenuItem>
+          <MenuItem value="range">Rango de fechas</MenuItem>
         </TextField>
         <TextField
           size="small"
@@ -428,7 +449,7 @@ export default function PosCortesPage() {
         <Tab label={`Cortes generados (${cuts.length})`} />
       </Tabs>
 
-      {tab === 0 ? <BranchCutRows branches={branches} branchId={branchId} /> : null}
+      {tab === 0 ? <BranchCutRows branches={branches} branchId={branchId} period={cutPeriod} /> : null}
 
       {tab === 1 ? (
         <div className="table-container-premium">
