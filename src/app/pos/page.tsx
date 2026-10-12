@@ -15,7 +15,6 @@ import {
   Ban,
   Copy,
   Droplets,
-  LogOut,
   Printer,
   Receipt,
   Search,
@@ -106,7 +105,6 @@ type QuantityIntent =
 
 export default function PosPage() {
   const user = useAuthStore((s) => s.user);
-  const logout = useAuthStore((s) => s.logout);
   const { can } = usePermissions();
   const { subscribe, connectionState } = useRealtime();
   const pwa = usePwaInstall();
@@ -1102,10 +1100,6 @@ export default function PosPage() {
               Cerrar tienda
             </button>
           ) : null}
-          <button className="pos-action" onClick={() => logout()}>
-            <LogOut size={14} />
-            Salir
-          </button>
         </div>
       </header>
 
