@@ -17,9 +17,12 @@ const sharedAliases = {
 // difirieran, la caja creería que siempre hay versión nueva.
 process.env.NEXT_PUBLIC_BUILD_ID ||= process.env.RAILWAY_GIT_COMMIT_SHA || String(Date.now());
 const buildId = process.env.NEXT_PUBLIC_BUILD_ID;
+// Hora del build, para el aviso de versión que la caja muestra arriba.
+process.env.NEXT_PUBLIC_BUILD_TIME ||= new Date().toISOString();
+const buildTime = process.env.NEXT_PUBLIC_BUILD_TIME;
 
 const nextConfig: NextConfig = {
-  env: { NEXT_PUBLIC_BUILD_ID: buildId },
+  env: { NEXT_PUBLIC_BUILD_ID: buildId, NEXT_PUBLIC_BUILD_TIME: buildTime },
   reactStrictMode: true,
   transpilePackages: ["@glamouroso/shared"],
   turbopack: {

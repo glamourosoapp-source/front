@@ -41,9 +41,19 @@
 }
 
 .pos-brand-label {
+  display: flex;
+  flex-direction: column;
   padding-left: 12px;
   border-left: 1px solid var(--border);
   font-size: 15px;
+  line-height: 1.2;
+}
+
+.pos-version {
+  font-size: 11px;
+  white-space: nowrap;
+  font-weight: 500;
+  color: var(--muted);
 }
 
 .pos-branch-chip {

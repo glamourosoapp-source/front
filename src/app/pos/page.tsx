@@ -103,6 +103,12 @@ type QuantityIntent =
   | { mode: "editLine"; key: string; allowDecimals: boolean; current: number }
   | { mode: "bulk"; line: PosCatalogLine };
 
+/** Los 7 primeros caracteres del commit del deploy (fijado en `next.config.ts`). */
+const POS_VERSION = (process.env.NEXT_PUBLIC_BUILD_ID ?? "dev").slice(0, 7);
+const POS_VERSION_TITLE = process.env.NEXT_PUBLIC_BUILD_TIME
+  ? `Versión publicada el ${new Date(process.env.NEXT_PUBLIC_BUILD_TIME).toLocaleString("es-MX", { timeZone: "America/Mexico_City" })}`
+  : "Versión de la caja";
+
 export default function PosPage() {
   const user = useAuthStore((s) => s.user);
   const { can } = usePermissions();
@@ -1015,7 +1021,13 @@ export default function PosPage() {
             height={117}
             priority
           />
-          <span className="pos-brand-label">Punto de venta</span>
+          <span className="pos-brand-label">
+            Punto de venta
+            {/* Para saber de un vistazo (o por AnyDesk) si la caja ya tomó el último deploy. */}
+            <span className="pos-version" title={POS_VERSION_TITLE}>
+              Versión {POS_VERSION}
+            </span>
+          </span>
         </span>
         <span className="pos-branch-chip">
           <Store size={13} />
