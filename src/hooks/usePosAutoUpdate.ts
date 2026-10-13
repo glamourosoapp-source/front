@@ -2,6 +2,7 @@
 
 import { useEffect } from "react";
 import { usePosStore } from "@/stores/pos.store";
+import { posSync } from "@/lib/pos-offline/sync";
 
 const CHECK_EVERY_MS = 5 * 60_000;
 const TICK_MS = 30_000;
@@ -10,14 +11,16 @@ const IDLE_MS = 60_000;
 
 /**
  * La caja se queda abierta todo el día y nunca recarga, así que sin esto un
- * deploy solo llega cuando alguien presiona F5. Cada 5 minutos (y al volver a
+ * deploy solo llega cuando alguien recarga (Ctrl+R; F5 es "Cambiar cantidad"). Cada 5 minutos (y al volver a
  * la ventana) pregunta a `/version` qué build sirve el servidor; si cambió,
  * espera un momento seguro y recarga.
  *
  * Momento seguro: en la pantalla de venta, con internet, el ticket activo
- * vacío, ningún diálogo abierto y un minuto sin actividad. Recargar no pierde
- * nada aunque haya pendientes: los tickets viven en `localStorage` y las ventas
- * sin subir en la cola de IndexedDB.
+ * vacío, ningún diálogo abierto, un minuto sin actividad y sin ventas por subir.
+ * Esto último no es porque se pierdan (viven en la cola de IndexedDB, y los
+ * tickets pendientes en `localStorage`): con ventas en cola la caja registra un
+ * `beforeunload`, y recargar dejaría el diálogo "¿Deseas volver a cargar?" en
+ * pantalla esperando al cajero.
  */
 export function usePosAutoUpdate() {
   useEffect(() => {
@@ -50,6 +53,7 @@ export function usePosAutoUpdate() {
       if (window.location.pathname !== "/pos") return false;
       if (!navigator.onLine) return false;
       if (Date.now() - lastActivity < IDLE_MS) return false;
+      if (posSync.getStatus().pendingCount > 0) return false;
       // El candado de abrir/cerrar tienda (`.pos-store-gate`) no estorba: si nadie
       // ha tecleado en un minuto, recargar solo lo vuelve a mostrar.
       if (document.querySelector('.MuiDialog-root, [role="dialog"]:not(.pos-store-gate)')) return false;
