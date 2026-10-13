@@ -7,11 +7,12 @@ import { RealtimeProvider } from "@/components/realtime/RealtimeProvider";
 import { useAuthStore } from "@/stores/auth.store";
 import { usePermissions } from "@/lib/permissions";
 import { startCapturingInstallPrompt } from "@/lib/pwa-install";
+import { usePosAutoUpdate } from "@/hooks/usePosAutoUpdate";
 import "./pos.css";
 
 /**
- * Envoltorio de las pantallas de caja: sesión, permiso de POS, service worker y
- * captura del evento de instalación.
+ * Envoltorio de las pantallas de caja: sesión, permiso de POS, service worker,
+ * captura del evento de instalación y recarga sola tras un deploy.
  *
  * Es un componente cliente aparte del `layout.tsx` (que sí es de servidor) solo
  * para que el layout pueda exportar `metadata`: el título del documento es el
@@ -25,6 +26,7 @@ export default function PosShell({ children }: { children: ReactNode }) {
   const user = useAuthStore((s) => s.user);
   const { can } = usePermissions();
   const [checked, setChecked] = useState(false);
+  usePosAutoUpdate();
 
   useEffect(() => {
     void Promise.resolve(hydrate()).finally(() => setChecked(true));

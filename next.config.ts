@@ -10,7 +10,16 @@ const sharedAliases = {
   "@glamouroso/shared/schemas": path.join(sharedSrc, "schemas/index.ts"),
 };
 
+// Identifica el build: la caja lo compara con `/version` para recargarse sola tras
+// un deploy. Railway da el commit; fuera de Railway basta la hora del build. Se
+// guarda en `process.env` para que los workers del build (que vuelven a cargar
+// este archivo) hereden el mismo valor y cliente y servidor no difieran: si
+// difirieran, la caja creería que siempre hay versión nueva.
+process.env.NEXT_PUBLIC_BUILD_ID ||= process.env.RAILWAY_GIT_COMMIT_SHA || String(Date.now());
+const buildId = process.env.NEXT_PUBLIC_BUILD_ID;
+
 const nextConfig: NextConfig = {
+  env: { NEXT_PUBLIC_BUILD_ID: buildId },
   reactStrictMode: true,
   transpilePackages: ["@glamouroso/shared"],
   turbopack: {
