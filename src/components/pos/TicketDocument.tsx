@@ -7,6 +7,7 @@ import { POS_PAYMENT_METHODS, posPaymentMethodLabel } from "@glamouroso/shared/c
 import { ticketColumns } from "@/lib/print/escpos";
 import { encodeCode39 } from "@/lib/print/code39";
 import type { PosSale, PosSaleItem } from "@/types";
+import { deliveryTicketLines, isHomeDeliverySale } from "@/lib/pos/delivery-ticket";
 
 /**
  * El ticket dibujado en HTML.
@@ -129,6 +130,11 @@ export function TicketDocument({
       </div>
 
       <div style={{ overflow: "hidden", whiteSpace: "nowrap" }}>{separator}</div>
+      {isHomeDeliverySale(sale) ? (
+        <div style={{ ...emphasis("large"), textAlign: "center", background: "#000", color: "#fff" }}>
+          VENTA A DOMICILIO
+        </div>
+      ) : null}
       <div>Ticket: {sale.ticketNumber}</div>
       <div>
         Fecha:{" "}
@@ -139,6 +145,14 @@ export function TicketDocument({
         <div>Cliente: {sale.customer?.name || walkInCustomerName || "Mostrador"}</div>
       ) : null}
       {reprint ? <div style={{ fontWeight: 700 }}>** REIMPRESIÓN **</div> : null}
+      {deliveryTicketLines(sale).length ? (
+        <>
+          <div style={{ overflow: "hidden", whiteSpace: "nowrap" }}>{separator}</div>
+          {deliveryTicketLines(sale).map((line) => (
+            <div key={line}>{line}</div>
+          ))}
+        </>
+      ) : null}
       <div style={{ overflow: "hidden", whiteSpace: "nowrap" }}>{separator}</div>
 
       {(sale.items ?? []).map((item) => {

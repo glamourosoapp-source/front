@@ -13,7 +13,8 @@ import {
   Switch,
   Tooltip,
 } from "@mui/material";
-import { ChevronDown, CloudOff, PackageX, TriangleAlert } from "lucide-react";
+import { ChevronDown, CloudOff, PackageX, TriangleAlert, Truck } from "lucide-react";
+import { isHomeDeliverySale } from "@/lib/pos/delivery-ticket";
 import { POS_PAYMENT_METHODS, POS_SALE_STATUS, posPaymentMethodLabel } from "@glamouroso/shared/constants";
 import { DetailField } from "@/components/ui/DetailField";
 import { httpClient, getApiErrorMessage } from "@/services/http-client";
@@ -322,6 +323,19 @@ export function BranchSalesTab({ branchId }: { branchId: string }) {
                                 </span>
                               </Tooltip>
                             ) : null}
+                            {isHomeDeliverySale(sale) ? (
+                              <Tooltip
+                                title={
+                                  sale.deliveryOrder
+                                    ? `Venta a domicilio · pedido ${sale.deliveryOrder.orderNumber}. No descontó existencias: la surte la fábrica.`
+                                    : "Venta a domicilio: no descontó existencias"
+                                }
+                              >
+                                <span style={{ marginLeft: 6, color: "#1d4ed8", verticalAlign: "middle" }}>
+                                  <Truck size={13} />
+                                </span>
+                              </Tooltip>
+                            ) : null}
                             {sale.priceMismatch ? (
                               <Tooltip title="Alguna partida se cobró a un precio distinto al del catálogo">
                                 <span
@@ -411,6 +425,23 @@ export function BranchSalesTab({ branchId }: { branchId: string }) {
                 <DetailField label="Cajero" value={selected.cashier?.name ?? "—"} />
                 <DetailField label="Cliente" value={selected.customer?.name ?? "Mostrador"} />
                 <DetailField label="Forma de pago" value={posPaymentMethodLabel(selected.paymentMethod)} />
+                {isHomeDeliverySale(selected) ? (
+                  <>
+                    <DetailField
+                      label="Venta a domicilio"
+                      value={
+                        selected.deliveryOrder ? (
+                          <Link href={`/dashboard/orders/${selected.deliveryOrder.id}`}>
+                            Pedido {selected.deliveryOrder.orderNumber}
+                          </Link>
+                        ) : (
+                          "Sin pedido"
+                        )
+                      }
+                    />
+                    <DetailField label="Domicilio" value={selected.deliveryOrder?.deliveryAddress ?? "—"} />
+                  </>
+                ) : null}
                 {selected.paymentMethod === POS_PAYMENT_METHODS.CASH ? (
                   <DetailField
                     label="Pagó con / cambio"

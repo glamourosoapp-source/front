@@ -1,5 +1,5 @@
 import type ExcelJSTypes from "exceljs";
-import { POS_PAYMENT_METHOD_VALUES, posPaymentMethodLabel } from "@glamouroso/shared/constants";
+import { POS_PAYMENT_METHOD_VALUES, POS_SALE_KINDS, posPaymentMethodLabel } from "@glamouroso/shared/constants";
 import { formatMoney } from "@/lib/format-money";
 
 /**
@@ -16,17 +16,35 @@ export interface ReportSummary {
   avgTicket: number;
   /** Cuánto entró por cada forma de pago (efectivo = lo que hay en el cajón). */
   byPaymentMethod?: Array<{ paymentMethod: string; total: number; tickets: number }>;
+  /** Mostrador y venta a domicilio; la de domicilio ya va dentro del total. */
+  byKind?: Array<{ kind: string; total: number; tickets: number }>;
   products: Array<{ name: string; saleUnit: string; quantity: number; revenue: number; tickets: number }>;
 }
 
-/** "Efectivo $1,200.00 · Tarjeta $300.00": una línea, en el orden fijo de los métodos. */
-export function paymentBreakdownLabel(summary: Pick<ReportSummary, "byPaymentMethod">): string {
+/**
+ * "Efectivo $1,200.00 · Tarjeta $300.00": una línea, en el orden fijo de los
+ * métodos. Si hubo venta a domicilio se agrega cuánto fue (ya va en el total).
+ */
+export function paymentBreakdownLabel(summary: Pick<ReportSummary, "byPaymentMethod" | "byKind">): string {
   const rows = summary.byPaymentMethod ?? [];
   if (!rows.length) return "";
-  return POS_PAYMENT_METHOD_VALUES.map((method) => {
+  const methods = POS_PAYMENT_METHOD_VALUES.map((method) => {
     const row = rows.find((item) => item.paymentMethod === method);
     return `${posPaymentMethodLabel(method)} ${formatMoney(row?.total ?? 0)}`;
-  }).join(" · ");
+  });
+  const delivery = summary.byKind?.find((item) => item.kind === POS_SALE_KINDS.HOME_DELIVERY);
+  if (delivery?.tickets) methods.push(`a domicilio ${formatMoney(delivery.total)}`);
+  return methods.join(" · ");
+}
+
+/** Renglón "De ello, venta a domicilio" del corte; null si no hubo. */
+export function deliveryRowOf(summary: Pick<ReportSummary, "byKind">): [string, string] | null {
+  const row = summary.byKind?.find((item) => item.kind === POS_SALE_KINDS.HOME_DELIVERY);
+  if (!row || !row.tickets) return null;
+  return [
+    `De ello, venta a domicilio (${row.tickets} ${row.tickets === 1 ? "ticket" : "tickets"})`,
+    formatMoney(row.total),
+  ];
 }
 
 export interface BranchRow {
@@ -68,6 +86,8 @@ export async function exportPosReportToXlsx(params: {
   for (const row of params.summary.byPaymentMethod ?? []) {
     resumen.addRow([`Cobrado con ${posPaymentMethodLabel(row.paymentMethod).toLowerCase()}`, formatMoney(row.total)]);
   }
+  const deliveryRow = deliveryRowOf(params.summary);
+  if (deliveryRow) resumen.addRow(deliveryRow);
 
   const porSucursal = workbook.addWorksheet("Por sucursal");
   porSucursal.columns = [{ width: 12 }, { width: 28 }, { width: 16 }, { width: 12 }, { width: 16 }];
@@ -134,6 +154,7 @@ export async function exportPosReportToPdf(params: {
         `Cobrado con ${posPaymentMethodLabel(row.paymentMethod).toLowerCase()}`,
         formatMoney(row.total),
       ]),
+      ...(deliveryRowOf(params.summary) ? [deliveryRowOf(params.summary)!] : []),
     ],
     headStyles: { fillColor: [38, 45, 96] },
     theme: "grid",

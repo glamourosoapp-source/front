@@ -46,8 +46,11 @@ export function paymentStatusLabel(value: string | null | undefined) {
 export function orderCreatorLabel(order: {
   source?: string;
   creator?: { name: string } | null;
+  posSale?: { branch?: { code: string; name: string } | null } | null;
 }) {
   if (order.source === "whatsapp") return "Agente IA";
+  // Venta a domicilio: el vendedor es la sucursal (su usuario de caja).
+  if (order.posSale?.branch) return `Sucursal ${order.posSale.branch.name}`;
   return order.creator?.name ?? "—";
 }
 

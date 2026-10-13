@@ -248,6 +248,36 @@ export const POS_SALE_STATUS = {
 } as const;
 
 /**
+ * Tipo de ticket:
+ * - `counter`: venta de mostrador; descuenta inventario de la sucursal.
+ * - `home_delivery`: venta a domicilio. Se cobra en la caja, pero la surte la
+ *   fábrica: NO toca el kardex y nace con un pedido del CRM ligado
+ *   (`orders.pos_sale_id`). Anular uno cancela el otro.
+ */
+export const POS_SALE_KINDS = {
+  COUNTER: "counter",
+  HOME_DELIVERY: "home_delivery",
+} as const;
+
+export const POS_SALE_KIND_LABELS: Record<string, string> = {
+  [POS_SALE_KINDS.COUNTER]: "Mostrador",
+  [POS_SALE_KINDS.HOME_DELIVERY]: "Venta a domicilio",
+};
+
+/** `source` de un pedido del CRM que nació de una venta a domicilio de la caja. */
+export const ORDER_SOURCE_POS = "pos";
+
+/**
+ * Forma de pago de la caja → la del pedido del CRM (los valores en español
+ * que usa el formulario de Pedidos).
+ */
+export const POS_TO_ORDER_PAYMENT_METHOD: Record<string, string> = {
+  cash: "efectivo",
+  card: "tarjeta",
+  transfer: "transferencia",
+};
+
+/**
  * Métodos de cobro en caja. Tarjeta y transferencia son declarativos: el
  * cajero dice cómo pagó el cliente y el ticket lo registra; no hay terminal ni
  * conciliación bancaria conectadas. Con tarjeta o transferencia se cobra el
@@ -426,6 +456,7 @@ export type NotificationEntityType =
 export type PricingTier = (typeof PRICING_TIERS)[keyof typeof PRICING_TIERS];
 export type BranchType = (typeof BRANCH_TYPES)[keyof typeof BRANCH_TYPES];
 export type PosSaleStatus = (typeof POS_SALE_STATUS)[keyof typeof POS_SALE_STATUS];
+export type PosSaleKind = (typeof POS_SALE_KINDS)[keyof typeof POS_SALE_KINDS];
 export type PosPaymentMethod = (typeof POS_PAYMENT_METHODS)[keyof typeof POS_PAYMENT_METHODS];
 export type PosSaleUnit = (typeof POS_SALE_UNITS)[keyof typeof POS_SALE_UNITS];
 export type InventoryMovementType =

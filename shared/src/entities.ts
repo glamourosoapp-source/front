@@ -5,6 +5,7 @@ import type {
   InventoryMovementType,
   NotificationType,
   PosPaymentMethod,
+  PosSaleKind,
   PosSaleStatus,
   PosSaleUnit,
   PricingTier,
@@ -219,6 +220,14 @@ export interface Order {
   deleter?: { id: string; name: string } | null;
   /** Estado al que vuelve el pedido si se restaura. */
   deletedFromStatus?: string | null;
+  /** Ticket de la caja del que nació (venta a domicilio); null = pedido del CRM o del agente. */
+  posSaleId?: string | null;
+  posSale?: {
+    id: string;
+    ticketNumber: string;
+    status: PosSaleStatus;
+    branch?: { id: string; code: string; name: string } | null;
+  } | null;
   customer?: Customer;
   items?: Array<{
     id: string;
@@ -467,6 +476,17 @@ export interface PosSale {
   customerId?: string | null;
   customer?: Customer | null;
   status: PosSaleStatus;
+  /** Ausente en tickets viejos = mostrador. */
+  kind?: PosSaleKind;
+  /** Pedido del CRM de una venta a domicilio. */
+  deliveryOrder?: {
+    id: string;
+    orderNumber: string;
+    status: string;
+    deliveryAddress?: string | null;
+    scheduledDeliveryDate?: string | null;
+    customerNotes?: string | null;
+  } | null;
   subtotal: string | number;
   discount: string | number;
   total: string | number;

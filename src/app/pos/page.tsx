@@ -32,6 +32,7 @@ import {
   TriangleAlert,
   Undo2,
   DoorClosed,
+  Truck,
 } from "lucide-react";
 import { httpClient, getApiErrorMessage } from "@/services/http-client";
 import { useAuthStore } from "@/stores/auth.store";
@@ -79,6 +80,7 @@ import { PosDaySalesDialog } from "@/components/pos/PosDaySalesDialog";
 import { PosTicketSheet } from "@/components/pos/PosTicketSheet";
 import { PosFactoryReturnDialog } from "@/components/pos/PosFactoryReturnDialog";
 import { FactoryReturnSheet } from "@/components/pos/FactoryReturnSheet";
+import { PosDeliveryDialog } from "@/components/pos/PosDeliveryDialog";
 import {
   PRICING_TIERS,
   POS_PAYMENT_METHODS,
@@ -97,7 +99,7 @@ import type { Customer, FactoryReturn } from "@/types";
 import { toast } from "sonner";
 
 type DialogName =
-  "search" | "stock" | "customer" | "charge" | "daySales" | "return" | null;
+  "search" | "stock" | "customer" | "charge" | "daySales" | "return" | "delivery" | null;
 type QuantityIntent =
   | { mode: "multi" }
   | { mode: "editLine"; key: string; allowDecimals: boolean; current: number }
@@ -127,6 +129,7 @@ export default function PosPage() {
     setLastSale,
     newTicket,
     openReturnTicket,
+    openDeliveryTicket,
     closeTicket,
     selectTicket,
     updateTicket,
@@ -142,6 +145,7 @@ export default function PosPage() {
   const ticket =
     tickets.find((row) => row.id === activeTicketId) ?? tickets[0]!;
   const isReturn = ticket.kind === "return";
+  const isDelivery = ticket.kind === "delivery";
   const codeRef = useRef<HTMLInputElement>(null);
   /** Versión del catálogo que ya tiene la caja: si no cambió, no se transfiere. */
   const catalogVersionRef = useRef<string | null>(null);
@@ -225,6 +229,12 @@ export default function PosPage() {
    * que F12 registra en vez de cobrar. Sin cliente, sin mayoreo, sin dinero.
    */
   const canReturn = can("posReturns", "create");
+  /**
+   * Venta a domicilio: la puede hacer cualquiera que cobre. Se captura como una
+   * venta, pero la surte la fábrica (no descuenta existencias) y crea un pedido
+   * del CRM con el cliente y su domicilio. Necesita red.
+   */
+  const canDeliver = can("pos", "create");
 
   useEffect(() => {
     catalogVersionRef.current = catalog?.version ?? null;
@@ -339,12 +349,21 @@ export default function PosPage() {
     [addOrIncrement, tier, focusCode],
   );
 
+  /** Un pedido del CRM va por producto del catálogo: la venta a domicilio no lleva litros sueltos. */
+  const deliveryRejectsLiters = useCallback(() => {
+    toast.info("La venta a domicilio no lleva litros sueltos: agrega el envase (garrafa, bidón).");
+  }, []);
+
   const addBulk = useCallback(
     (line: PosCatalogLine, liters: number) => {
+      if (usePosStore.getState().activeTicket().kind === "delivery") {
+        deliveryRejectsLiters();
+        return;
+      }
       addLine(lineFromBulk(line, tier, liters));
       focusCode();
     },
-    [addLine, tier, focusCode],
+    [addLine, tier, focusCode, deliveryRejectsLiters],
   );
 
   /**
@@ -478,6 +497,10 @@ export default function PosPage() {
   }, [selectedLine, removeLine, focusCode]);
 
   const openBulkForSelected = useCallback(() => {
+    if (isDelivery) {
+      deliveryRejectsLiters();
+      return;
+    }
     // F7: litros sueltos de la línea del producto seleccionado, o de la primera
     // línea que coincida con lo escrito en el campo de código.
     const fromSelected = selectedLine?.lineId
@@ -492,7 +515,7 @@ export default function PosPage() {
       return;
     }
     setQuantityIntent({ mode: "bulk", line });
-  }, [selectedLine, catalog]);
+  }, [selectedLine, catalog, isDelivery, deliveryRejectsLiters]);
 
   const editQuantity = useCallback(() => {
     if (!selectedLine) {
@@ -743,13 +766,80 @@ export default function PosPage() {
    */
   const startCharge = useCallback(() => {
     if (!ticket.lines.length) return;
+    // Venta a domicilio: cliente y domicilio son obligatorios (van al pedido).
+    if (ticket.kind === "delivery") {
+      setDialog(ticket.customerId && ticket.delivery ? "charge" : "delivery");
+      return;
+    }
     if (ticket.customerId) {
       setDialog("charge");
       return;
     }
     setCustomerIntent("charge");
     setDialog("customer");
-  }, [ticket.lines.length, ticket.customerId]);
+  }, [ticket.lines.length, ticket.customerId, ticket.kind, ticket.delivery]);
+
+  /**
+   * Cobra una venta a domicilio. A diferencia del cobro de mostrador va directo
+   * al servidor (el pedido del CRM y el domicilio viven allá): sin red no se
+   * cobra y el ticket se queda en su pestaña. El folio lo sigue poniendo la
+   * caja, y la misma clave al reintentar devuelve el mismo ticket. No baja la
+   * existencia local: la mercancía la surte la fábrica.
+   */
+  const chargeDelivery = useCallback(
+    async ({ paymentMethod, amountTendered, print, notes }: PosChargeParams) => {
+      if (!session?.branch.code) return;
+      if (!ticket.customerId || !ticket.delivery) {
+        setDialog("delivery");
+        return;
+      }
+      setCharging(true);
+      try {
+        const idempotencyKey = ticket.idempotencyKey ?? crypto.randomUUID();
+        if (!ticket.idempotencyKey) updateTicket(ticket.id, { idempotencyKey });
+        const ticketNumber = await nextFolio(session.branch.code, businessStamp(new Date()));
+        const sale = await httpClient.post<PosSale>("/pos/home-deliveries", {
+          idempotencyKey,
+          ticketNumber,
+          customerId: ticket.customerId,
+          customerLocationId: ticket.delivery.customerLocationId,
+          deliveryNotes: ticket.delivery.notes || null,
+          items: salePayload(ticket.lines),
+          discount: ticket.discount,
+          paymentMethod,
+          amountTendered,
+          notes: notes || null,
+        });
+
+        setDialog(null);
+        setLastSale(sale);
+        setSuccessChange({
+          change: Number(sale.changeAmount),
+          total: Number(sale.total),
+          paymentMethod: sale.paymentMethod,
+        });
+        window.setTimeout(() => setSuccessChange(null), 2600);
+        closeTicket(ticket.id);
+        toast.success(
+          sale.deliveryOrder
+            ? `Venta a domicilio cobrada: pedido ${sale.deliveryOrder.orderNumber}`
+            : "Venta a domicilio cobrada",
+        );
+        if (print) void printSale(sale);
+        focusCode();
+      } catch (error) {
+        toast.error(
+          getApiErrorMessage(
+            error,
+            "No se pudo cobrar la venta a domicilio. Necesita internet: revisa la conexión y vuelve a intentar.",
+          ),
+        );
+      } finally {
+        setCharging(false);
+      }
+    },
+    [session, ticket, updateTicket, setLastSale, closeTicket, printSale, focusCode],
+  );
 
   /**
    * Cobra: escribe el ticket en la PC, imprime y lo encola para subir.
@@ -781,6 +871,10 @@ export default function PosPage() {
         toast.error(
           "La caja todavía no sabe de qué sucursal es. Espera a que abra.",
         );
+        return;
+      }
+      if (ticket.kind === "delivery") {
+        await chargeDelivery({ paymentMethod, amountTendered, print, notes });
         return;
       }
 
@@ -857,6 +951,7 @@ export default function PosPage() {
       printSale,
       focusCode,
       deductLocalStock,
+      chargeDelivery,
     ],
   );
 
@@ -933,6 +1028,11 @@ export default function PosPage() {
         F7: () => openBulkForSelected(),
         F8: () => {
           if (isReturn) return;
+          // En la venta a domicilio el cliente va con su domicilio.
+          if (isDelivery) {
+            setDialog("delivery");
+            return;
+          }
           setCustomerIntent("assign");
           setDialog("customer");
         },
@@ -999,6 +1099,7 @@ export default function PosPage() {
         moveSelection,
         bumpQuantity,
         isReturn,
+        isDelivery,
         canReturn,
         openReturnTicket,
       ],
@@ -1009,7 +1110,7 @@ export default function PosPage() {
   const canVoid = can("pos", "update");
 
   return (
-    <main className={`pos ${isReturn ? "pos-return-mode" : ""} ${noBranch ? "pos-has-banner" : ""}`}>
+    <main className={`pos ${isReturn ? "pos-return-mode" : ""} ${isDelivery ? "pos-delivery-mode" : ""} ${noBranch ? "pos-has-banner" : ""}`}>
       {/* 1. Barra superior */}
       <header className="pos-topbar">
         <span className="pos-brand">
@@ -1126,7 +1227,11 @@ export default function PosPage() {
       {/* 2. Captura */}
       <section className="pos-capture">
         <div className="pos-capture-title">
-          {isReturn ? "Devolución a fábrica · lo roto o echado a perder que se lleva el transportista" : `Venta · ${ticket.label}`}
+          {isReturn
+            ? "Devolución a fábrica · lo roto o echado a perder que se lleva el transportista"
+            : isDelivery
+              ? "Venta a domicilio · la surte la fábrica, no sale de la tienda"
+              : `Venta · ${ticket.label}`}
         </div>
         <form className="pos-capture-body" onSubmit={submitCode}>
           <label className="pos-code-label" htmlFor="pos-code">
@@ -1192,13 +1297,22 @@ export default function PosPage() {
             <span className="pos-action-key">F11</span>
             <Tag size={14} /> Mayoreo
           </button>
-          <button className="pos-action" onClick={openBulkForSelected}>
+          <button
+            className="pos-action"
+            onClick={openBulkForSelected}
+            // La venta a domicilio va por envase: sin litros sueltos.
+            disabled={isDelivery}
+          >
             <span className="pos-action-key">F7</span>
             <Droplets size={14} /> Litros
           </button>
           <button
             className="pos-action"
             onClick={() => {
+              if (isDelivery) {
+                setDialog("delivery");
+                return;
+              }
               setCustomerIntent("assign");
               setDialog("customer");
             }}
@@ -1231,6 +1345,15 @@ export default function PosPage() {
               <Undo2 size={14} /> Devolución
             </button>
           ) : null}
+          {canDeliver ? (
+            <button
+              className="pos-action pos-action-delivery"
+              onClick={() => openDeliveryTicket()}
+              title="Se cobra aquí y la entrega la surte la fábrica: no descuenta existencias de la tienda"
+            >
+              <Truck size={14} /> Venta a domicilio
+            </button>
+          ) : null}
         </div>
       </section>
 
@@ -1239,10 +1362,16 @@ export default function PosPage() {
         {tickets.map((row) => (
           <button
             key={row.id}
-            className={`pos-tab ${row.id === activeTicketId ? "active" : ""} ${row.kind === "return" ? "pos-tab-return" : ""}`}
+            className={`pos-tab ${row.id === activeTicketId ? "active" : ""} ${row.kind === "return" ? "pos-tab-return" : ""} ${row.kind === "delivery" ? "pos-tab-delivery" : ""}`}
             onClick={() => selectTicket(row.id)}
           >
-            {row.kind === "return" ? <Undo2 size={13} /> : <Receipt size={13} />}
+            {row.kind === "return" ? (
+              <Undo2 size={13} />
+            ) : row.kind === "delivery" ? (
+              <Truck size={13} />
+            ) : (
+              <Receipt size={13} />
+            )}
             {row.label}
             {row.lines.length ? (
               <span className="pos-tab-count">{row.lines.length}</span>
@@ -1276,6 +1405,10 @@ export default function PosPage() {
         {isReturn ? (
           <div className="pos-watermark" aria-hidden>
             DEVOLUCIÓN
+          </div>
+        ) : isDelivery ? (
+          <div className="pos-watermark pos-watermark-delivery" aria-hidden>
+            A DOMICILIO
           </div>
         ) : null}
         <table className="pos-grid">
@@ -1423,7 +1556,16 @@ export default function PosPage() {
             >
               <Ban size={14} /> Eliminar venta
             </button>
-            {isReturn ? null : (
+            {isReturn ? null : isDelivery ? (
+              <span className="pos-count" title={ticket.delivery?.addressLabel ?? undefined}>
+                Entregar a:{" "}
+                <strong>
+                  {ticket.customerName && ticket.delivery
+                    ? `${ticket.customerName} · ${ticket.delivery.addressLabel}`
+                    : "falta cliente y domicilio (F8)"}
+                </strong>
+              </span>
+            ) : (
               <span className="pos-count">
                 Cliente: <strong>{ticket.customerName ?? walkInName}</strong>
               </span>
@@ -1444,7 +1586,8 @@ export default function PosPage() {
               onClick={() => startCharge()}
               disabled={!ticket.lines.length}
             >
-              <span className="pos-action-key">F12</span> Cobrar
+              <span className="pos-action-key">F12</span>{" "}
+              {isDelivery ? "Cobrar a domicilio" : "Cobrar"}
             </button>
           )}
 
@@ -1554,7 +1697,11 @@ export default function PosPage() {
         open={dialog === "charge"}
         total={total}
         linesCount={totals.linesCount}
-        customerName={ticket.customerName ?? walkInName}
+        customerName={
+          isDelivery
+            ? `${ticket.customerName ?? "—"} · a domicilio`
+            : (ticket.customerName ?? walkInName)
+        }
         charging={charging}
         printerReady={printerOnline}
         onClose={() => {
@@ -1562,6 +1709,36 @@ export default function PosPage() {
           focusCode();
         }}
         onCharge={charge}
+      />
+
+      <PosDeliveryDialog
+        open={dialog === "delivery" && isDelivery}
+        initialCustomer={
+          ticket.customerId && ticket.customerName
+            ? { id: ticket.customerId, name: ticket.customerName }
+            : null
+        }
+        initialDelivery={ticket.delivery ?? null}
+        onClose={() => {
+          setDialog(null);
+          focusCode();
+        }}
+        onConfirm={({ customer, delivery }) => {
+          updateTicket(ticket.id, {
+            customerId: customer.id,
+            customerName: customer.name,
+            customerTier:
+              (customer.pricingTier as typeof PRICING_TIERS.RETAIL) ??
+              PRICING_TIERS.RETAIL,
+            delivery,
+          });
+          // Con productos capturados, sigue directo al cobro.
+          if (ticket.lines.length) setDialog("charge");
+          else {
+            setDialog(null);
+            focusCode();
+          }
+        }}
       />
 
       <PosDaySalesDialog

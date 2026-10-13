@@ -3,6 +3,7 @@ import { FACTORY_RETURN_REASON_LABELS } from "@glamouroso/shared/constants";
 import type { TicketEmphasis, TicketSettings } from "@glamouroso/shared";
 import { ticketFooterLines, ticketHeaderBlock } from "@glamouroso/shared";
 import { POS_PAYMENT_METHODS, posPaymentMethodLabel } from "@glamouroso/shared/constants";
+import { deliveryTicketLines, isHomeDeliverySale } from "@/lib/pos/delivery-ticket";
 
 /**
  * Ticket térmico en comandos ESC/POS.
@@ -247,6 +248,13 @@ function appendTicket(
   for (const headerLine of header.lines) builder.line(headerLine);
   builder.separator();
 
+  // Venta a domicilio: la franja dice que esta mercancía no sale de la tienda.
+  if (isHomeDeliverySale(sale)) {
+    builder.align("center").bold(true).invert(true).size("large");
+    builder.line(" VENTA A DOMICILIO ");
+    builder.invert(false).size("normal").bold(false);
+  }
+
   builder.align("left");
   builder.line(`Ticket: ${sale.ticketNumber}`);
   builder.line(
@@ -258,6 +266,11 @@ function appendTicket(
   }
   if (options.reprint) builder.line("** REIMPRESION **");
   if (copyLabel) builder.line(copyLabel);
+  const delivery = deliveryTicketLines(sale);
+  if (delivery.length) {
+    builder.separator();
+    for (const line of delivery) builder.line(line);
+  }
   builder.separator();
 
   for (const item of items) {

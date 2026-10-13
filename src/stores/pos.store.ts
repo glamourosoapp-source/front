@@ -18,9 +18,20 @@ export interface PosTicket {
   idempotencyKey: string | null;
   /**
    * `return` = devolución a fábrica (F9): se captura igual que una venta, pero
-   * F12 la registra en vez de cobrarla. Ausente en los tickets guardados antes.
+   * F12 la registra en vez de cobrarla. `delivery` = venta a domicilio: se
+   * cobra igual, pero la surte la fábrica (no descuenta inventario) y crea un
+   * pedido del CRM. Ausente en los tickets guardados antes.
    */
-  kind?: "sale" | "return";
+  kind?: "sale" | "return" | "delivery";
+  /** Venta a domicilio: domicilio elegido del cliente y nota para el repartidor. */
+  delivery?: PosTicketDelivery | null;
+}
+
+export interface PosTicketDelivery {
+  customerLocationId: string;
+  /** Dirección legible, para el pie de la caja y el diálogo de cobro. */
+  addressLabel: string;
+  notes: string;
 }
 
 interface PosState {
@@ -39,6 +50,8 @@ interface PosState {
   newTicket: () => void;
   /** Abre (o vuelve a) la pestaña de devolución a fábrica: solo hay una a la vez. */
   openReturnTicket: () => void;
+  /** Abre (o vuelve a) la pestaña de venta a domicilio: solo hay una a la vez. */
+  openDeliveryTicket: () => void;
   closeTicket: (id: string) => void;
   selectTicket: (id: string) => void;
   updateTicket: (id: string, patch: Partial<PosTicket>) => void;
@@ -111,6 +124,23 @@ function persist(tickets: PosTicket[], activeTicketId: string): void {
   }
 }
 
+/** Pestaña especial (devolución o venta a domicilio): una a la vez; si ya está, se vuelve a ella. */
+function openSpecialTicket(
+  state: Pick<PosState, "tickets">,
+  kind: "return" | "delivery",
+  label: string
+): Partial<PosState> {
+  const existing = state.tickets.find((ticket) => ticket.kind === kind);
+  if (existing) {
+    persist(state.tickets, existing.id);
+    return { activeTicketId: existing.id, selectedLineKey: null };
+  }
+  const ticket: PosTicket = { ...emptyTicket(0), label, kind };
+  const tickets = [...state.tickets, ticket];
+  persist(tickets, ticket.id);
+  return { tickets, activeTicketId: ticket.id, selectedLineKey: null };
+}
+
 const initial = loadTickets();
 
 export const usePosStore = create<PosState>((set, get) => ({
@@ -141,18 +171,9 @@ export const usePosStore = create<PosState>((set, get) => ({
       return { tickets, activeTicketId: ticket.id, selectedLineKey: null };
     }),
 
-  openReturnTicket: () =>
-    set((state) => {
-      const existing = state.tickets.find((ticket) => ticket.kind === "return");
-      if (existing) {
-        persist(state.tickets, existing.id);
-        return { activeTicketId: existing.id, selectedLineKey: null };
-      }
-      const ticket: PosTicket = { ...emptyTicket(0), label: "Devolución", kind: "return" };
-      const tickets = [...state.tickets, ticket];
-      persist(tickets, ticket.id);
-      return { tickets, activeTicketId: ticket.id, selectedLineKey: null };
-    }),
+  openReturnTicket: () => set((state) => openSpecialTicket(state, "return", "Devolución")),
+
+  openDeliveryTicket: () => set((state) => openSpecialTicket(state, "delivery", "A domicilio")),
 
   closeTicket: (id) =>
     set((state) => {
@@ -252,7 +273,10 @@ export const usePosStore = create<PosState>((set, get) => ({
   finishActiveTicket: () => {
     const { tickets, activeTicketId } = get();
     const spare = tickets.find(
-      (ticket) => ticket.id !== activeTicketId && ticket.kind !== "return" && !ticket.lines.length
+      (ticket) =>
+        ticket.id !== activeTicketId &&
+        (ticket.kind ?? "sale") === "sale" &&
+        !ticket.lines.length
     );
     if (!spare) {
       get().clearActiveTicket();
@@ -267,7 +291,7 @@ export const usePosStore = create<PosState>((set, get) => ({
     set((state) => {
       const tickets = state.tickets.map((ticket) =>
         ticket.id === state.activeTicketId
-          ? { ...ticket, lines: [], discount: 0, notes: "", idempotencyKey: null, customerId: null, customerName: null, customerTier: PRICING_TIERS.RETAIL }
+          ? { ...ticket, lines: [], discount: 0, notes: "", idempotencyKey: null, customerId: null, customerName: null, customerTier: PRICING_TIERS.RETAIL, delivery: null }
           : ticket
       );
       persist(tickets, state.activeTicketId);

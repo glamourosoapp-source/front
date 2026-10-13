@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { Button } from "@mui/material";
-import { ChevronDown, ExternalLink, Store } from "lucide-react";
+import { ChevronDown, ExternalLink, Store, Truck } from "lucide-react";
 import { BRANCH_TYPES, POS_PAYMENT_METHODS, posPaymentMethodLabel } from "@glamouroso/shared/constants";
 import { httpClient, getApiErrorMessage } from "@/services/http-client";
 import { formatMoney, formatQuantity } from "@/lib/format-money";
@@ -22,6 +22,9 @@ interface BranchDayRow {
   tickets: number;
   items: number;
   voided: number;
+  /** De lo anterior, lo que fue venta a domicilio (ya va dentro de total y tickets). */
+  deliveryTotal?: number;
+  deliveryTickets?: number;
 }
 
 interface CutTotals {
@@ -30,6 +33,9 @@ interface CutTotals {
   items: number;
   voided: number;
   byPayment: Record<string, number>;
+  /** Venta a domicilio: renglón aparte, ya incluido en el total. */
+  delivery: number;
+  deliveryTickets: number;
 }
 
 interface BranchCut {
@@ -62,13 +68,23 @@ const PAYMENT_SEGMENTS = [
 /** Más días que esto y el detalle de cada sucursal se agrupa por semana vie–jue. */
 const MAX_DAY_ROWS = 62;
 
-const emptyTotals = (): CutTotals => ({ total: 0, tickets: 0, items: 0, voided: 0, byPayment: {} });
+const emptyTotals = (): CutTotals => ({
+  total: 0,
+  tickets: 0,
+  items: 0,
+  voided: 0,
+  byPayment: {},
+  delivery: 0,
+  deliveryTickets: 0,
+});
 
 function addRow(target: CutTotals, row: BranchDayRow) {
   target.total += row.total;
   target.tickets += row.tickets;
   target.items += row.items;
   target.voided += row.voided;
+  target.delivery += row.deliveryTotal ?? 0;
+  target.deliveryTickets += row.deliveryTickets ?? 0;
   if (row.total) target.byPayment[row.paymentMethod] = (target.byPayment[row.paymentMethod] ?? 0) + row.total;
 }
 
@@ -111,6 +127,11 @@ function PayBreakdown({ totals, caption }: { totals: CutTotals; caption: string 
             </span>
           ) : null,
         )}
+        {totals.delivery ? (
+          <span className="is-delivery" title="Ya incluido en el total: la surte la fábrica">
+            <Truck size={12} /> A domicilio {formatMoney(totals.delivery)} ({totals.deliveryTickets})
+          </span>
+        ) : null}
         {!totals.total ? <span>Sin ventas</span> : null}
         {totals.voided ? (
           <span className="is-voided">
@@ -434,6 +455,9 @@ export function BranchCutRows({
                               {posPaymentMethodLabel(segment.key)}
                             </th>
                           ))}
+                          <th style={{ textAlign: "right" }} title="Ya incluido en las formas de pago y el total">
+                            A domicilio
+                          </th>
                           <th style={{ textAlign: "right" }}>Tickets</th>
                           <th style={{ textAlign: "right" }}>Productos</th>
                           <th style={{ textAlign: "right" }}>Anulados</th>
@@ -461,6 +485,9 @@ export function BranchCutRows({
                                   {totals.byPayment[segment.key] ? formatMoney(totals.byPayment[segment.key]) : "—"}
                                 </td>
                               ))}
+                              <td style={{ textAlign: "right", color: totals.delivery ? "#1d4ed8" : undefined }}>
+                                {totals.delivery ? formatMoney(totals.delivery) : "—"}
+                              </td>
                               <td style={{ textAlign: "right" }}>{totals.tickets}</td>
                               <td style={{ textAlign: "right" }}>{formatQuantity(totals.items)}</td>
                               <td style={{ textAlign: "right", color: totals.voided ? "#c62828" : undefined }}>

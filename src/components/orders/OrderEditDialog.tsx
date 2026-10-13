@@ -71,7 +71,12 @@ export function OrderEditDialog({ open, order, onClose, onSaved }: OrderEditDial
     void loadItems(orderId);
   }, [orderId, loadItems]);
 
-  const canEditItems = can("orders", "update");
+  /**
+   * Venta a domicilio de una sucursal: los productos y el total se cobraron en
+   * la caja y no se reescriben aquí. Cancelar sí se puede, y anula el ticket.
+   */
+  const fromPos = Boolean(order?.posSaleId);
+  const canEditItems = can("orders", "update") && !fromPos;
   const totals = orderTotals(lineItems);
 
   async function save(event: FormEvent<HTMLFormElement>) {
@@ -113,6 +118,15 @@ export function OrderEditDialog({ open, order, onClose, onSaved }: OrderEditDial
       <form onSubmit={save}>
         <DialogTitle>Editar pedido {order?.orderNumber}</DialogTitle>
         <DialogContent dividers>
+          {fromPos ? (
+            <Alert severity="info" sx={{ mb: 2 }}>
+              Venta a domicilio de la sucursal{" "}
+              <strong>{order?.posSale?.branch?.name ?? order?.posSale?.branch?.code ?? ""}</strong>
+              {order?.posSale ? ` (ticket ${order.posSale.ticketNumber})` : ""}: se cobró en la caja, así
+              que sus productos y su total no se editan aquí. Cancelar el pedido anula el ticket de la
+              caja.
+            </Alert>
+          ) : null}
           <Box className="form-grid">
             <TextField select name="status" label="Estado" defaultValue={order?.status || "new"} fullWidth>
               {ORDER_STATUS_OPTIONS.map((item) => (

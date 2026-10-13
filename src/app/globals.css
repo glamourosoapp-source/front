@@ -586,6 +586,12 @@ textarea {
   font-weight: 600;
 }
 
+/* Venta a domicilio: ya va dentro del total, se marca aparte. */
+.pos-day-paylegend .is-delivery {
+  color: #1d4ed8;
+  font-weight: 600;
+}
+
 .pos-day-stats {
   display: flex;
   align-items: stretch;

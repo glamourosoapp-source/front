@@ -20,6 +20,7 @@ import { businessStamp } from "@/lib/business-time";
 import { formatMoney } from "@/lib/format-money";
 import { POS_SALE_STATUS, posPaymentMethodLabel } from "@glamouroso/shared/constants";
 import type { PosSale } from "@/types";
+import { isHomeDeliverySale } from "@/lib/pos/delivery-ticket";
 import { toast } from "sonner";
 
 interface PosDaySalesDialogProps {
@@ -210,7 +211,12 @@ export function PosDaySalesDialog({
                     minute: "2-digit",
                   })}
                 </td>
-                <td>{sale.customer?.name || "Mostrador"}</td>
+                <td>
+                  {sale.customer?.name || "Mostrador"}
+                  {isHomeDeliverySale(sale) ? (
+                    <Chip label="A domicilio" size="small" color="info" variant="outlined" sx={{ ml: 0.75, height: 20 }} />
+                  ) : null}
+                </td>
                 <td>{posPaymentMethodLabel(sale.paymentMethod)}</td>
                 <td className="num">{formatMoney(sale.total)}</td>
                 <td>

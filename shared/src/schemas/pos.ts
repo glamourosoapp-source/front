@@ -3,6 +3,7 @@ import { paginationSchema } from "./common";
 import {
   FACTORY_RETURN_REASONS,
   POS_PAYMENT_METHOD_VALUES,
+  POS_SALE_KINDS,
   POS_SALE_STATUS,
   POS_SALE_UNITS,
   PRICING_TIERS,
@@ -94,6 +95,44 @@ export const createPosSaleSchema = z.object({
 });
 
 /**
+ * Venta a domicilio desde la caja: se cobra como cualquier venta, pero la
+ * surte la fábrica, así que no descuenta inventario de la sucursal y nace con
+ * un pedido del CRM ligado. Necesita red (el pedido y el cliente viven en el
+ * servidor), así que el folio lo pone la caja y viaja aquí como en la cola.
+ *
+ * Solo envases y piezas: un pedido del CRM va por producto del catálogo, y
+ * los litros sueltos de una línea no lo son.
+ */
+export const createPosHomeDeliverySchema = z.object({
+  /** Solo la manda un admin sin sucursal fija; el cajero la toma de su usuario. */
+  branchId: z.union([z.string().uuid(), z.null()]).optional(),
+  /** Reintentar con la misma clave devuelve el mismo ticket y el mismo pedido. */
+  idempotencyKey: z.string().min(8).max(120),
+  /** Folio que puso la caja (`SUC-YYYYMMDD-NNNN`); ausente = lo asigna el servidor. */
+  ticketNumber: z.union([z.string().min(3).max(40), z.null()]).optional(),
+  /** Cliente registrado: obligatorio, el pedido del CRM siempre lleva uno. */
+  customerId: z.string().uuid(),
+  /** Domicilio guardado del cliente adonde se entrega: obligatorio. */
+  customerLocationId: z.string().uuid(),
+  items: z
+    .array(
+      posSaleItemSchema.refine((item) => item.saleUnit === POS_SALE_UNITS.PIECE, {
+        message: "La venta a domicilio no acepta litros sueltos: solo envases y piezas",
+        path: ["saleUnit"],
+      })
+    )
+    .min(1)
+    .max(200),
+  discount: z.coerce.number().min(0).max(1_000_000).default(0),
+  paymentMethod: z.enum(POS_PAYMENT_METHOD_VALUES).default(POS_PAYMENT_METHOD_VALUES[0]),
+  amountTendered: z.coerce.number().min(0).max(1_000_000),
+  /** Notas del ticket (las del cobro, F4). */
+  notes: optionalString,
+  /** Nota para el repartidor: referencias, horario. Va al pedido. */
+  deliveryNotes: z.union([z.string().max(500), z.literal(""), z.null()]).optional(),
+});
+
+/**
  * Devolución a fábrica desde la caja: el producto roto o echado a perder que
  * se lleva el transportista. Las partidas se capturan como en una venta (así
  * descuentan lo mismo: litros de la línea, envase y tapa) y cada una lleva su
@@ -144,6 +183,13 @@ export const queryPosSalesSchema = paginationSchema.extend({
       z.null(),
     ])
     .optional(),
+  kind: z
+    .union([
+      z.enum([POS_SALE_KINDS.COUNTER, POS_SALE_KINDS.HOME_DELIVERY]),
+      z.literal(""),
+      z.null(),
+    ])
+    .optional(),
   /** Día de negocio (YYYY-MM-DD) en la zona de la organización. */
   date: z.union([z.string().regex(/^\d{4}-\d{2}-\d{2}$/), z.literal(""), z.null()]).optional(),
   from: z.union([z.string(), z.literal(""), z.null()]).optional(),
@@ -181,5 +227,6 @@ export const lookupPosCustomerSchema = z.object({
 });
 
 export type CreatePosSaleInput = z.infer<typeof createPosSaleSchema>;
+export type CreatePosHomeDeliveryInput = z.infer<typeof createPosHomeDeliverySchema>;
 export type CreateFactoryReturnInput = z.infer<typeof createFactoryReturnSchema>;
 export type PosSaleItemInput = z.infer<typeof posSaleItemSchema>;
