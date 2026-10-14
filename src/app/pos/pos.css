@@ -774,7 +774,7 @@
   color: var(--muted);
 }
 
-/* --- Devolución a fábrica (F9) ---
+/* --- Devolución a fábrica (menú "Más") ---
    La pestaña de devolución se captura igual que una venta, pero toda la caja
    se tiñe de rojo y lleva la marca de agua: nadie la confunde con un cobro. */
 .pos-action-return {

@@ -33,7 +33,10 @@ import {
   Undo2,
   DoorClosed,
   Truck,
+  Ellipsis,
+  Factory,
 } from "lucide-react";
+import { Menu, MenuItem, ListItemIcon, ListItemText } from "@mui/material";
 import { httpClient, getApiErrorMessage } from "@/services/http-client";
 import { useAuthStore } from "@/stores/auth.store";
 import { usePermissions } from "@/lib/permissions";
@@ -221,6 +224,8 @@ export default function PosPage() {
    */
   const [noBranch, setNoBranch] = useState(false);
   const [closeStoreOpen, setCloseStoreOpen] = useState(false);
+  /** Menú "Más" de la barra superior: lo que se usa poco (devolución a fábrica). */
+  const [moreAnchor, setMoreAnchor] = useState<HTMLElement | null>(null);
   /**
    * Apertura y cierre de tienda: sin "Abrir tienda" la caja no cobra, y después
    * de "Cerré la tienda" tampoco hasta reabrir o hasta mañana. Un usuario sin
@@ -261,7 +266,7 @@ export default function PosPage() {
   const canSeeStock = can("posInventory", "view");
   const canSeeDaySales = can("posReports", "view");
   /**
-   * Devolución a fábrica (F9): una pestaña que se captura como una venta pero
+   * Devolución a fábrica (menú "Más"): una pestaña que se captura como una venta pero
    * que F12 registra en vez de cobrar. Sin cliente, sin mayoreo, sin dinero.
    */
   const canReturn = can("posReturns", "create");
@@ -1202,9 +1207,6 @@ export default function PosPage() {
           setCustomerIntent("assign");
           setDialog("customer");
         },
-        F9: () => {
-          if (canReturn) openReturnTicket();
-        },
         F10: () => {
           // Con algo escrito en el código, F10 arranca la búsqueda con ese texto.
           setSearchTerm(code.trim());
@@ -1266,8 +1268,6 @@ export default function PosPage() {
         bumpQuantity,
         isReturn,
         isDelivery,
-        canReturn,
-        openReturnTicket,
         canCustomerReturn,
         openCustomerReturn,
       ],
@@ -1370,6 +1370,46 @@ export default function PosPage() {
             <Settings size={14} />
             Configuración
           </Link>
+          {/*
+            Devolución a fábrica: solo cuando llega el transportista. Vive en
+            "Más" para que en la barra de acciones "Devolución" sea siempre la
+            del cliente y nadie las confunda.
+          */}
+          {canReturn ? (
+            <>
+              <button
+                className="pos-action"
+                onClick={(event) => setMoreAnchor(event.currentTarget)}
+                aria-haspopup="menu"
+                aria-expanded={Boolean(moreAnchor)}
+              >
+                <Ellipsis size={14} />
+                Más
+              </button>
+              <Menu
+                anchorEl={moreAnchor}
+                open={Boolean(moreAnchor)}
+                onClose={() => setMoreAnchor(null)}
+                anchorOrigin={{ vertical: "bottom", horizontal: "right" }}
+                transformOrigin={{ vertical: "top", horizontal: "right" }}
+              >
+                <MenuItem
+                  onClick={() => {
+                    setMoreAnchor(null);
+                    openReturnTicket();
+                  }}
+                >
+                  <ListItemIcon>
+                    <Factory size={16} />
+                  </ListItemIcon>
+                  <ListItemText
+                    primary="Devolución a fábrica"
+                    secondary="Lo roto o echado a perder que se lleva el transportista"
+                  />
+                </MenuItem>
+              </Menu>
+            </>
+          ) : null}
           {session?.branch.code && !noBranch ? (
             <button
               className="pos-action"
@@ -1503,16 +1543,6 @@ export default function PosPage() {
               <span className="pos-action-key">F3</span> Existencias
             </button>
           ) : null}
-          {canReturn ? (
-            <button
-              className="pos-action pos-action-return"
-              onClick={() => openReturnTicket()}
-              title="Producto roto o echado a perder que se regresa a fábrica"
-            >
-              <span className="pos-action-key">F9</span>
-              <Undo2 size={14} /> Devolución a fábrica
-            </button>
-          ) : null}
           {canCustomerReturn ? (
             <button
               className="pos-action pos-action-return"
@@ -1520,7 +1550,7 @@ export default function PosPage() {
               title="El cliente regresa producto de un ticket de esta sucursal: se le devuelve su dinero"
             >
               <span className="pos-action-key">F2</span>
-              <Undo2 size={14} /> Devolución de cliente
+              <Undo2 size={14} /> Devolución
             </button>
           ) : null}
           {canDeliver ? (

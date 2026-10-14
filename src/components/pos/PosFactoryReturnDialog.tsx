@@ -34,7 +34,7 @@ function orderLabel(order: ReturnableOrder): string {
 
 /**
  * Registra la devolución a fábrica que se capturó en la pestaña Devolución
- * (F9 → captura → F12). Se liga al pedido que acaba de llegar con el
+ * (Más → Devolución a fábrica → captura → F12). Se liga al pedido que acaba de llegar con el
  * transportista (el primero de la lista) y cada partida lleva su motivo.
  *
  * A diferencia del cobro, necesita red: la devolución vive ligada a un pedido

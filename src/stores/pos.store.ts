@@ -17,7 +17,7 @@ export interface PosTicket {
   /** Se genera al abrir el cobro; reintentar con la misma clave no duplica. */
   idempotencyKey: string | null;
   /**
-   * `return` = devolución a fábrica (F9): se captura igual que una venta, pero
+   * `return` = devolución a fábrica (menú "Más"): se captura igual que una venta, pero
    * F12 la registra en vez de cobrarla. `delivery` = venta a domicilio: se
    * cobra igual, pero la surte la fábrica (no descuenta inventario) y crea un
    * pedido del CRM. Ausente en los tickets guardados antes.
@@ -171,7 +171,7 @@ export const usePosStore = create<PosState>((set, get) => ({
       return { tickets, activeTicketId: ticket.id, selectedLineKey: null };
     }),
 
-  openReturnTicket: () => set((state) => openSpecialTicket(state, "return", "Devolución")),
+  openReturnTicket: () => set((state) => openSpecialTicket(state, "return", "Devolución a fábrica")),
 
   openDeliveryTicket: () => set((state) => openSpecialTicket(state, "delivery", "A domicilio")),
 
