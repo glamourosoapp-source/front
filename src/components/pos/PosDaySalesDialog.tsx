@@ -10,7 +10,7 @@ import {
   DialogTitle,
   TextField,
 } from "@mui/material";
-import { Printer, Ban } from "lucide-react";
+import { Printer, Ban, Undo2 } from "lucide-react";
 import { httpClient, getApiErrorMessage } from "@/services/http-client";
 import { localSales, saveSale, type LocalSale } from "@/lib/pos-offline/store";
 import { posSync } from "@/lib/pos-offline/sync";
@@ -26,9 +26,13 @@ import { toast } from "sonner";
 interface PosDaySalesDialogProps {
   open: boolean;
   canVoid: boolean;
+  /** Puede hacer devoluciones de cliente (`posCustomerReturns.create`). */
+  canReturn: boolean;
   onClose: () => void;
   onReprint: (sale: PosSale) => void;
   onVoided: () => void;
+  /** Abre la devolución de cliente con este ticket. */
+  onReturn: (sale: PosSale) => void;
 }
 
 interface SalesResponse {
@@ -40,9 +44,11 @@ interface SalesResponse {
 export function PosDaySalesDialog({
   open,
   canVoid,
+  canReturn,
   onClose,
   onReprint,
   onVoided,
+  onReturn,
 }: PosDaySalesDialogProps) {
   const [sales, setSales] = useState<PosSale[]>([]);
   const [meta, setMeta] = useState({ pageTotal: 0, pageTickets: 0 });
@@ -53,6 +59,8 @@ export function PosDaySalesDialog({
   const today = new Date().toLocaleDateString("en-CA");
   /** Tickets que todavía viven solo en esta PC, por folio. */
   const [pendingByTicket, setPendingByTicket] = useState<Map<string, LocalSale>>(new Map());
+  /** Tickets con devoluciones de cliente (del servidor o de esta caja): ya no se anulan. */
+  const [returnedTickets, setReturnedTickets] = useState<Set<string>>(new Set());
 
   /**
    * El día se arma con lo de la PC y lo del servidor.
@@ -92,6 +100,12 @@ export function PosDaySalesDialog({
       const all = [...remote, ...onlyLocal].sort((a, b) => b.soldAt.localeCompare(a.soldAt));
 
       setSales(all);
+      setReturnedTickets(
+        new Set([
+          ...remote.filter((sale) => sale.returns?.length).map((sale) => sale.ticketNumber),
+          ...local.filter((row) => row.returns?.length).map((row) => row.ticketNumber),
+        ])
+      );
       const active = all.filter((sale) => sale.status !== "voided");
       setMeta({
         pageTickets: active.length,
@@ -222,6 +236,8 @@ export function PosDaySalesDialog({
                 <td>
                   {sale.status === POS_SALE_STATUS.VOIDED ? (
                     <Chip label="Anulado" size="small" color="error" />
+                  ) : returnedTickets.has(sale.ticketNumber) ? (
+                    <Chip label="Con devolución" size="small" color="warning" />
                   ) : (
                     <Chip label="Cobrado" size="small" color="primary" />
                   )}
@@ -230,7 +246,17 @@ export function PosDaySalesDialog({
                   <Button size="small" startIcon={<Printer size={14} />} onClick={() => onReprint(sale)}>
                     Reimprimir
                   </Button>
-                  {canVoid && sale.status !== POS_SALE_STATUS.VOIDED ? (
+                  {canReturn && sale.status !== POS_SALE_STATUS.VOIDED && !isHomeDeliverySale(sale) ? (
+                    <Button
+                      size="small"
+                      color="warning"
+                      startIcon={<Undo2 size={14} />}
+                      onClick={() => onReturn(sale)}
+                    >
+                      Devolver
+                    </Button>
+                  ) : null}
+                  {canVoid && sale.status !== POS_SALE_STATUS.VOIDED && !returnedTickets.has(sale.ticketNumber) ? (
                     <Button
                       size="small"
                       color="error"

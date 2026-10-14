@@ -995,3 +995,43 @@
   font-size: 12px;
   color: #687084;
 }
+
+/* --- Devolución de cliente (F2) ---
+   Diálogo sobre un ticket ya cobrado: por renglón, cuánto regresa, por qué y
+   si vuelve al anaquel. El overlay final dice cuánto entregar, en rojo. */
+.pos-return-table td {
+  vertical-align: middle;
+}
+
+.pos-return-table .pos-qty-input {
+  width: 64px;
+}
+
+.pos-return-table tr.is-done td {
+  color: #94a3b8;
+}
+
+.pos-return-summary {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  margin-top: 14px;
+  padding: 12px 14px;
+  border: 1px solid #fecaca;
+  border-radius: 10px;
+  background: #fef2f2;
+}
+
+.pos-return-summary .pos-total-value {
+  color: #b91c1c;
+}
+
+.pos-return-summary p {
+  margin: 0;
+  color: #7f1d1d;
+  font-size: 13px;
+}
+
+.pos-success.pos-success-refund {
+  background: rgba(127, 29, 29, 0.92);
+}

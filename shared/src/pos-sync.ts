@@ -1,4 +1,4 @@
-import type { PosPaymentMethod, PosSaleUnit, PricingTier } from "./constants";
+import type { PosPaymentMethod, PosReturnReason, PosSaleUnit, PricingTier } from "./constants";
 
 /**
  * Contrato de la caja *local-first*: todo lo que ocurre en el mostrador es un
@@ -30,6 +30,8 @@ export const POS_SYNC_EVENT_TYPES = {
   STORE_OPENED: "store.opened",
   /** "Cerré la tienda": la caja no cobra hasta el día siguiente o reabrir. */
   STORE_CLOSED: "store.closed",
+  /** Devolución de cliente: regresa dinero y, si se elige, producto al anaquel. */
+  RETURN_CREATED: "return.created",
 } as const;
 
 export type PosSyncEventType = (typeof POS_SYNC_EVENT_TYPES)[keyof typeof POS_SYNC_EVENT_TYPES];
@@ -104,6 +106,42 @@ export interface PosVoidEventPayload {
   voidedAt: string;
 }
 
+/**
+ * Partida devuelta. Se identifica por lo que se vendió (producto o línea y el
+ * precio unitario con que se cobró), no por el id de la partida en el servidor:
+ * sin red la caja no lo conoce, porque la venta pudo no haber subido aún.
+ */
+export interface PosReturnEventItem {
+  saleUnit: PosSaleUnit;
+  productId?: string | null;
+  lineId?: string | null;
+  quantity: number;
+  /** Precio unitario con que se vendió: distingue dos partidas del mismo producto. */
+  saleUnitPrice: number;
+  /** Lo que se le regresó al cliente por esta partida (lo que dice el papel). */
+  refund: number;
+  reason: PosReturnReason;
+  /** true = vuelve al inventario; false = merma (los litros sueltos, siempre merma). */
+  restock: boolean;
+}
+
+export interface PosReturnEventPayload {
+  /** Folio de la devolución, asignado por la caja: `DCL-SUC01-20261014-0001`. */
+  returnNumber: string;
+  /** Hora en que se devolvió (ISO). */
+  returnedAt: string;
+  /** Folio del ticket original: la caja lo conoce aunque la venta no haya subido. */
+  saleTicketNumber: string;
+  /** Id del ticket en el servidor, si ya subió (informativo). */
+  saleId?: string | null;
+  items: PosReturnEventItem[];
+  /** Total regresado; sale por la misma forma de pago con que se cobró. */
+  total: number;
+  paymentMethod: PosPaymentMethod;
+  notes?: string | null;
+  recordedOffline: boolean;
+}
+
 export interface PosCustomerEventPayload {
   localId: string;
   name: string;
@@ -148,7 +186,8 @@ export type PosSyncEventPayload =
   | PosSaleEventPayload
   | PosVoidEventPayload
   | PosCustomerEventPayload
-  | PosStoreEventPayload;
+  | PosStoreEventPayload
+  | PosReturnEventPayload;
 
 export interface PosSyncEvent<T extends PosSyncEventPayload = PosSyncEventPayload> {
   /** uuid generado en la caja: es la clave de idempotencia del evento. */
@@ -216,6 +255,8 @@ export interface PosSyncState {
   businessDate: string;
   /** Último consecutivo usado ESE día según el servidor; 0 si no hay ventas. */
   lastTicketSeq: number;
+  /** Lo mismo para la serie de devoluciones de cliente (`DCL-`). Ausente en servidores viejos. */
+  lastReturnSeq?: number;
   catalogVersion: string;
   /** Cursor de clientes (ISO de `updatedAt`) para pedir solo el delta. */
   customersCursor: string | null;

@@ -6,7 +6,8 @@ import type {
   PosSyncEventResult,
   PosSyncState,
 } from "@glamouroso/shared/pos-sync";
-import { POS_SYNC_STATUSES } from "@glamouroso/shared/pos-sync";
+import { POS_SYNC_EVENT_TYPES, POS_SYNC_STATUSES } from "@glamouroso/shared/pos-sync";
+import type { PosReturnEventPayload } from "@glamouroso/shared/pos-sync";
 import type { PosCatalog } from "@/types";
 import { toast } from "sonner";
 import {
@@ -18,6 +19,7 @@ import {
   pruneSales,
   readMeta,
   reconcileFolio,
+  reconcileReturnFolio,
   saveCustomers,
   saveSale,
   writeCatalog,
@@ -251,6 +253,15 @@ class PosSyncEngine {
       }
 
       if (result.status === POS_SYNC_STATUSES.REJECTED) {
+        // El dinero de una devolución ya salió del cajón: el cajero tiene que
+        // saber que el sistema no la aceptó, para avisarle a un administrador.
+        if (entry.event.type === POS_SYNC_EVENT_TYPES.RETURN_CREATED) {
+          const payload = entry.event.payload as PosReturnEventPayload;
+          toast.error(
+            `La devolución ${payload.returnNumber} no se pudo registrar: ${result.message ?? "rechazada"}. Avísale a un administrador.`,
+            { duration: 15000 }
+          );
+        }
         // Ya está en la bandeja del administrador: dejarlo en la cola solo
         // taparía las ventas que vienen detrás.
         done.push(entry.id);
@@ -291,6 +302,7 @@ class PosSyncEngine {
     // El servidor puede tener folios que esta PC no conoce (navegador limpiado,
     // PC reinstalada): el consecutivo solo avanza, nunca retrocede.
     await reconcileFolio(response.state.businessDate, response.state.lastTicketSeq);
+    await reconcileReturnFolio(response.state.businessDate, response.state.lastReturnSeq ?? 0);
     await pruneSales();
   }
 

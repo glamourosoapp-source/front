@@ -196,6 +196,23 @@ export const queryPosSalesSchema = paginationSchema.extend({
   to: z.union([z.string(), z.literal(""), z.null()]).optional(),
 });
 
+/**
+ * Ticket por folio para devolverlo desde la caja: el escáner lee el folio
+ * impreso, o el cajero lo teclea. Solo de la sucursal de la caja.
+ */
+export const lookupPosSaleSchema = z.object({
+  ticketNumber: z.string().trim().min(5).max(40),
+  branchId: z.union([z.string().uuid(), z.literal(""), z.null()]).optional(),
+});
+
+/** Devoluciones de cliente para el panel: por sucursal, rango de días o ticket. */
+export const queryPosReturnsSchema = paginationSchema.extend({
+  branchId: z.union([z.string().uuid(), z.literal(""), z.null()]).optional(),
+  saleId: z.union([z.string().uuid(), z.literal(""), z.null()]).optional(),
+  from: z.union([z.string().regex(/^\d{4}-\d{2}-\d{2}$/), z.literal(""), z.null()]).optional(),
+  to: z.union([z.string().regex(/^\d{4}-\d{2}-\d{2}$/), z.literal(""), z.null()]).optional(),
+});
+
 export const queryPosCatalogSchema = z.object({
   branchId: z.union([z.string().uuid(), z.literal(""), z.null()]).optional(),
   /** Versión que ya tiene la caja: si coincide, el server responde sin cuerpo. */

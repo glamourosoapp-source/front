@@ -1,6 +1,7 @@
 import { z } from "zod";
 import {
   POS_PAYMENT_METHOD_VALUES,
+  POS_RETURN_REASON_VALUES,
   POS_SALE_UNITS,
   PRICING_TIERS,
 } from "../constants";
@@ -61,6 +62,33 @@ export const posSyncVoidPayloadSchema = z.object({
   voidedAt: isoDate,
 });
 
+/**
+ * Partida de una devolución de cliente: lo que se vendió (producto o línea y
+ * precio con que se cobró), cuánto regresa y si vuelve al anaquel.
+ */
+export const posSyncReturnItemSchema = z.object({
+  saleUnit: z.enum([POS_SALE_UNITS.PIECE, POS_SALE_UNITS.LITER]),
+  productId: z.union([z.string().uuid(), z.null()]).optional(),
+  lineId: z.union([z.string().uuid(), z.null()]).optional(),
+  quantity: z.coerce.number().positive().max(100_000),
+  saleUnitPrice: z.coerce.number().min(0).max(1_000_000),
+  refund: z.coerce.number().min(0).max(10_000_000),
+  reason: z.enum(POS_RETURN_REASON_VALUES),
+  restock: z.boolean(),
+});
+
+export const posSyncReturnPayloadSchema = z.object({
+  returnNumber: z.string().min(5).max(40),
+  returnedAt: isoDate,
+  saleTicketNumber: z.string().min(5).max(40),
+  saleId: z.union([z.string().uuid(), z.null()]).optional(),
+  items: z.array(posSyncReturnItemSchema).min(1).max(200),
+  total: z.coerce.number().min(0).max(10_000_000),
+  paymentMethod: z.enum(POS_PAYMENT_METHOD_VALUES),
+  notes: z.union([z.string().max(500), z.literal(""), z.null()]).optional(),
+  recordedOffline: z.boolean().default(false),
+});
+
 /** Lectura del reloj interno de la caja (`performance.now()` + carga de la página). */
 export const posMonotonicClockSchema = z.object({
   bootId: z.string().min(8).max(64),
@@ -103,6 +131,12 @@ export const posSyncEventSchema = z.discriminatedUnion("type", [
     type: z.literal(POS_SYNC_EVENT_TYPES.STORE_CLOSED),
     occurredAt: isoDate,
     payload: posSyncStorePayloadSchema,
+  }),
+  z.object({
+    id: z.string().uuid(),
+    type: z.literal(POS_SYNC_EVENT_TYPES.RETURN_CREATED),
+    occurredAt: isoDate,
+    payload: posSyncReturnPayloadSchema,
   }),
 ]);
 

@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { Button } from "@mui/material";
-import { ChevronDown, ExternalLink, Store, Truck } from "lucide-react";
+import { ChevronDown, ExternalLink, Store, Truck, Undo2 } from "lucide-react";
 import { BRANCH_TYPES, POS_PAYMENT_METHODS, posPaymentMethodLabel } from "@glamouroso/shared/constants";
 import { httpClient, getApiErrorMessage } from "@/services/http-client";
 import { formatMoney, formatQuantity } from "@/lib/format-money";
@@ -25,6 +25,9 @@ interface BranchDayRow {
   /** De lo anterior, lo que fue venta a domicilio (ya va dentro de total y tickets). */
   deliveryTotal?: number;
   deliveryTickets?: number;
+  /** Devoluciones de cliente de ese día y forma de pago (ya restadas de total). */
+  returnsTotal?: number;
+  returns?: number;
 }
 
 interface CutTotals {
@@ -36,6 +39,9 @@ interface CutTotals {
   /** Venta a domicilio: renglón aparte, ya incluido en el total. */
   delivery: number;
   deliveryTickets: number;
+  /** Devoluciones de cliente: ya restadas del total y de cada forma de pago. */
+  returns: number;
+  returnsCount: number;
 }
 
 interface BranchCut {
@@ -76,6 +82,8 @@ const emptyTotals = (): CutTotals => ({
   byPayment: {},
   delivery: 0,
   deliveryTickets: 0,
+  returns: 0,
+  returnsCount: 0,
 });
 
 function addRow(target: CutTotals, row: BranchDayRow) {
@@ -85,6 +93,8 @@ function addRow(target: CutTotals, row: BranchDayRow) {
   target.voided += row.voided;
   target.delivery += row.deliveryTotal ?? 0;
   target.deliveryTickets += row.deliveryTickets ?? 0;
+  target.returns += row.returnsTotal ?? 0;
+  target.returnsCount += row.returns ?? 0;
   if (row.total) target.byPayment[row.paymentMethod] = (target.byPayment[row.paymentMethod] ?? 0) + row.total;
 }
 
@@ -113,7 +123,7 @@ function PayBreakdown({ totals, caption }: { totals: CutTotals; caption: string 
       <span className="pos-day-paybar">
         {PAYMENT_SEGMENTS.map((segment) =>
           totals.byPayment[segment.key] ? (
-            <span key={segment.key} style={{ flexGrow: totals.byPayment[segment.key], background: segment.color }} />
+            <span key={segment.key} style={{ flexGrow: Math.max(0, totals.byPayment[segment.key]), background: segment.color }} />
           ) : null,
         )}
       </span>
@@ -133,6 +143,11 @@ function PayBreakdown({ totals, caption }: { totals: CutTotals; caption: string 
           </span>
         ) : null}
         {!totals.total ? <span>Sin ventas</span> : null}
+        {totals.returnsCount ? (
+          <span className="is-voided" title="Ya restado del total y de cada forma de pago">
+            <Undo2 size={12} /> Devoluciones -{formatMoney(totals.returns)} ({totals.returnsCount})
+          </span>
+        ) : null}
         {totals.voided ? (
           <span className="is-voided">
             {totals.voided} {totals.voided === 1 ? "anulado" : "anulados"}
@@ -461,6 +476,9 @@ export function BranchCutRows({
                           <th style={{ textAlign: "right" }}>Tickets</th>
                           <th style={{ textAlign: "right" }}>Productos</th>
                           <th style={{ textAlign: "right" }}>Anulados</th>
+                          <th style={{ textAlign: "right" }} title="Devoluciones de cliente: ya restadas de las formas de pago y el total">
+                            Devoluciones
+                          </th>
                           <th style={{ textAlign: "right" }}>Total</th>
                         </tr>
                       </thead>
@@ -492,6 +510,9 @@ export function BranchCutRows({
                               <td style={{ textAlign: "right" }}>{formatQuantity(totals.items)}</td>
                               <td style={{ textAlign: "right", color: totals.voided ? "#c62828" : undefined }}>
                                 {totals.voided || "—"}
+                              </td>
+                              <td style={{ textAlign: "right", color: totals.returns ? "#c62828" : undefined }}>
+                                {totals.returns ? `-${formatMoney(totals.returns)}` : "—"}
                               </td>
                               <td style={{ textAlign: "right", fontWeight: 700 }}>{formatMoney(totals.total)}</td>
                             </tr>

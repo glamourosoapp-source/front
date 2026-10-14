@@ -1,5 +1,6 @@
 import type { FactoryReturn, PosSale, PosSaleItem } from "@/types";
-import { FACTORY_RETURN_REASON_LABELS } from "@glamouroso/shared/constants";
+import { FACTORY_RETURN_REASON_LABELS, POS_RETURN_REASON_LABELS } from "@glamouroso/shared/constants";
+import type { CustomerReturnTicket } from "@/lib/pos/customer-return";
 import type { TicketEmphasis, TicketSettings } from "@glamouroso/shared";
 import { ticketFooterLines, ticketHeaderBlock } from "@glamouroso/shared";
 import { POS_PAYMENT_METHODS, posPaymentMethodLabel } from "@glamouroso/shared/constants";
@@ -421,5 +422,86 @@ export function buildFactoryReturnEscPos(
   const builder = new EscPosBuilder(settings);
   appendFactoryReturn(builder, ret, settings, options, "ORIGINAL - SUCURSAL");
   appendFactoryReturn(builder, ret, settings, options, "COPIA - TRANSPORTISTA");
+  return builder.build();
+}
+
+/** Franja de la devolución de cliente: igual que la de fábrica, con otro rótulo. */
+function customerReturnBanner(builder: EscPosBuilder): void {
+  builder.align("center").bold(true).invert(true).size("xlarge");
+  builder.line(" DEVOLUCION ");
+  builder.size("large");
+  builder.line(" DE CLIENTE ");
+  builder.invert(false).size("normal").bold(false);
+}
+
+function appendCustomerReturn(
+  builder: EscPosBuilder,
+  ret: CustomerReturnTicket,
+  settings: TicketSettings,
+  options: BuildTicketOptions,
+  copy: "client" | "branch"
+): void {
+  const header = ticketHeaderBlock(settings, ret.branch);
+  const dateTime = (iso: string) =>
+    new Date(iso).toLocaleString("es-MX", { dateStyle: "short", timeStyle: "short" });
+  builder.init();
+  customerReturnBanner(builder);
+  builder.line();
+  builder.bold(true).line(header.title).bold(false);
+  builder.separator();
+
+  builder.align("left");
+  builder.line(`Folio: ${ret.returnNumber}`);
+  builder.line(`Fecha: ${dateTime(ret.returnedAt)}`);
+  builder.line(`Ticket: ${ret.saleTicketNumber}`);
+  builder.line(`Compra: ${dateTime(ret.saleSoldAt)}`);
+  if (ret.branch) builder.line(`Sucursal: ${ret.branch.code} ${ret.branch.name}`);
+  if (ret.cashierName) builder.line(`Atendio: ${ret.cashierName}`);
+  builder.line(`Cliente: ${ret.customerName || options.walkInCustomerName || "Mostrador"}`);
+  if (options.reprint) builder.line("** REIMPRESION **");
+  builder.bold(true).line(copy === "client" ? "ORIGINAL - CLIENTE" : "COPIA - SUCURSAL").bold(false);
+  builder.separator();
+
+  for (const item of ret.items) {
+    const code = settings.showItemCodes && item.code ? `${item.code} ` : "";
+    builder.line(`${code}${item.name}`);
+    const unit = item.saleUnit === "liter" ? " L" : " pz";
+    const reason = POS_RETURN_REASON_LABELS[item.reason] ?? item.reason;
+    builder.row(`  ${quantity(item.quantity)}${unit} - ${reason}`, money(item.total));
+    if (copy === "branch") builder.line(item.restock ? "  Regresa al anaquel" : "  Merma");
+  }
+  builder.separator();
+  builder.bold(true).size("large").row("DEVUELTO", money(ret.total)).size("normal").bold(false);
+  builder.line(`Se regresa en: ${posPaymentMethodLabel(ret.paymentMethod)}`);
+  if (ret.notes) builder.line(`Nota: ${ret.notes}`);
+  builder.line();
+  if (copy === "branch") {
+    builder.line();
+    builder.line("______________________________");
+    builder.line(`Recibi ${money(ret.total)}`);
+    builder.line("Nombre y firma del cliente");
+  } else {
+    builder.align("center").line("Conserve este comprobante").align("left");
+  }
+  builder.line();
+  customerReturnBanner(builder);
+  if (settings.showFolioBarcode) builder.line().barcode(ret.returnNumber);
+  builder.feedAndCut();
+}
+
+/**
+ * Ticket de devolución de cliente: siempre dos ejemplares, el del cliente y el
+ * que firma de recibido y se queda en la sucursal. Abre el cajón solo si el
+ * dinero sale en efectivo.
+ */
+export function buildCustomerReturnEscPos(
+  ret: CustomerReturnTicket,
+  settings: TicketSettings,
+  options: BuildTicketOptions = {}
+): Uint8Array {
+  const builder = new EscPosBuilder(settings);
+  if (options.openDrawer && !options.reprint && ret.paymentMethod === POS_PAYMENT_METHODS.CASH) builder.openDrawer();
+  appendCustomerReturn(builder, ret, settings, options, "client");
+  appendCustomerReturn(builder, ret, settings, options, "branch");
   return builder.build();
 }

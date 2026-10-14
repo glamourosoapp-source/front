@@ -46,7 +46,15 @@ import { usePwaInstall } from "@/hooks/usePwaInstall";
 import { usePosOffline } from "@/hooks/usePosOffline";
 import { posSync } from "@/lib/pos-offline/sync";
 import { buildLocalSale, buildSaleEvent } from "@/lib/pos-offline/sale-event";
-import { nextFolio, readMeta, findSaleByEvent } from "@/lib/pos-offline/store";
+import {
+  nextFolio,
+  nextReturnFolio,
+  readMeta,
+  findSaleByEvent,
+  saveSale,
+  type LocalSale,
+} from "@/lib/pos-offline/store";
+import { buildCustomerReturn, type CustomerReturnTicket } from "@/lib/pos/customer-return";
 import { formatMoney, formatQuantity } from "@/lib/format-money";
 import { businessStamp } from "@/lib/business-time";
 import {
@@ -62,7 +70,11 @@ import {
   printRaw,
   type PrintAgentConfig,
 } from "@/lib/print/print-agent-client";
-import { buildFactoryReturnEscPos, buildTicketEscPos } from "@/lib/print/escpos";
+import {
+  buildCustomerReturnEscPos,
+  buildFactoryReturnEscPos,
+  buildTicketEscPos,
+} from "@/lib/print/escpos";
 import { rasterizeLogo } from "@/lib/print/logo-raster";
 import { PosQuantityDialog } from "@/components/pos/PosQuantityDialog";
 import { PosSearchDialog } from "@/components/pos/PosSearchDialog";
@@ -80,6 +92,11 @@ import { PosDaySalesDialog } from "@/components/pos/PosDaySalesDialog";
 import { PosTicketSheet } from "@/components/pos/PosTicketSheet";
 import { PosFactoryReturnDialog } from "@/components/pos/PosFactoryReturnDialog";
 import { FactoryReturnSheet } from "@/components/pos/FactoryReturnSheet";
+import {
+  PosCustomerReturnDialog,
+  type CustomerReturnRequest,
+} from "@/components/pos/PosCustomerReturnDialog";
+import { CustomerReturnSheet } from "@/components/pos/CustomerReturnSheet";
 import { PosDeliveryDialog } from "@/components/pos/PosDeliveryDialog";
 import {
   PRICING_TIERS,
@@ -87,7 +104,7 @@ import {
   posPaymentMethodLabel,
 } from "@glamouroso/shared/constants";
 import { POS_CLOCK_SKEW_WARN_MS } from "@glamouroso/shared/pos-sync";
-import { DEFAULT_TICKET_SETTINGS } from "@glamouroso/shared";
+import { DEFAULT_TICKET_SETTINGS, isAdminRole } from "@glamouroso/shared";
 import type {
   PosCatalog,
   PosCatalogLine,
@@ -99,7 +116,15 @@ import type { Customer, FactoryReturn } from "@/types";
 import { toast } from "sonner";
 
 type DialogName =
-  "search" | "stock" | "customer" | "charge" | "daySales" | "return" | "delivery" | null;
+  | "search"
+  | "stock"
+  | "customer"
+  | "charge"
+  | "daySales"
+  | "return"
+  | "delivery"
+  | "customerReturn"
+  | null;
 type QuantityIntent =
   | { mode: "multi" }
   | { mode: "editLine"; key: string; allowDecimals: boolean; current: number }
@@ -180,6 +205,15 @@ export default function PosPage() {
   /** La hoja de respaldo también tiene que decir que es reimpresión. */
   const [sheetReprint, setSheetReprint] = useState(false);
   const [sheetReturn, setSheetReturn] = useState<FactoryReturn | null>(null);
+  const [sheetCustomerReturn, setSheetCustomerReturn] = useState<CustomerReturnTicket | null>(null);
+  /** Folio con el que abre la devolución de cliente ("Devolver" en Ventas del día). */
+  const [customerReturnTicket, setCustomerReturnTicket] = useState<string | null>(null);
+  const [returning, setReturning] = useState(false);
+  /** Overlay tras devolver: cuánto entregarle al cliente y por dónde. */
+  const [successRefund, setSuccessRefund] = useState<{
+    total: number;
+    paymentMethod: PosSale["paymentMethod"];
+  } | null>(null);
   const [clock, setClock] = useState("");
   /**
    * El servidor contestó que este usuario no tiene sucursal: la caja no puede
@@ -237,6 +271,12 @@ export default function PosPage() {
    * del CRM con el cliente y su domicilio. Necesita red.
    */
   const canDeliver = can("pos", "create");
+  /**
+   * Devolución de cliente (F2): de un ticket de esta sucursal, hasta 7 días
+   * después (un administrador, cualquiera). Funciona sin red, como el cobro.
+   */
+  const canCustomerReturn = can("posCustomerReturns", "create");
+  const isAdmin = isAdminRole(user?.role);
 
   useEffect(() => {
     catalogVersionRef.current = catalog?.version ?? null;
@@ -715,6 +755,7 @@ export default function PosPage() {
       }
       // Respaldo: hoja térmica por el diálogo del navegador.
       setSheetReturn(null);
+      setSheetCustomerReturn(null);
       setSheetReprint(reprint);
       setSheetSale(sale);
       window.setTimeout(() => {
@@ -739,11 +780,131 @@ export default function PosPage() {
         }
       }
       setSheetSale(null);
+      setSheetCustomerReturn(null);
       setSheetReturn(ret);
       window.setTimeout(() => window.print(), 150);
     },
     [printConfig, printerOnline, ticketSettings],
   );
+
+  /** Devolución de cliente: dos ejemplares (cliente y sucursal); abre el cajón si es efectivo. */
+  const printCustomerReturn = useCallback(
+    async (ret: CustomerReturnTicket) => {
+      if (printConfig.printerName && printerOnline) {
+        try {
+          await printRaw(
+            printConfig,
+            buildCustomerReturnEscPos(ret, ticketSettings, {
+              openDrawer: true,
+              walkInCustomerName: walkInName,
+            }),
+          );
+          return;
+        } catch (error) {
+          toast.error(
+            `${getApiErrorMessage(error, "La impresora no respondió")}. Se abrirá el diálogo del navegador.`,
+          );
+        }
+      }
+      setSheetSale(null);
+      setSheetReturn(null);
+      setSheetCustomerReturn(ret);
+      window.setTimeout(() => window.print(), 150);
+    },
+    [printConfig, printerOnline, ticketSettings, walkInName],
+  );
+
+  /**
+   * Registra una devolución de cliente como el cobro: en la PC primero, con
+   * folio de la caja, y la sube la cola. No espera al servidor, así que
+   * funciona sin red mientras el ticket esté guardado aquí.
+   */
+  const registerCustomerReturn = useCallback(
+    async (request: CustomerReturnRequest) => {
+      if (storeLocked) {
+        toast.error("Abre la tienda antes de hacer una devolución.");
+        return;
+      }
+      if (storageReady === false) {
+        toast.error(
+          "Este navegador no puede guardar las devoluciones. Abre la caja en Chrome, fuera de una ventana privada.",
+        );
+        return;
+      }
+      if (!session?.branch.code) {
+        toast.error("La caja todavía no sabe de qué sucursal es. Espera a que abra.");
+        return;
+      }
+      setReturning(true);
+      try {
+        const returnedAt = new Date();
+        const returnNumber = await nextReturnFolio(session.branch.code, businessStamp(returnedAt));
+        const eventId = crypto.randomUUID();
+        const { event, record, ticket: paper, total: refunded } = buildCustomerReturn(
+          {
+            sale: request.sale,
+            rows: request.rows,
+            selections: request.selections,
+            returnNumber,
+            returnedAt,
+            notes: request.notes,
+            recordedOffline: !posSync.getStatus().online,
+            serverSaleId: request.serverSaleId,
+          },
+          eventId,
+        );
+        const printable: CustomerReturnTicket = {
+          ...paper,
+          branch: { code: session.branch.code, name: session.branch.name },
+          cashierName: session.cashier.name,
+        };
+
+        // Lo devuelto se anota junto al ticket: la caja no deja devolver dos
+        // veces lo mismo aunque no haya red para preguntarle al servidor.
+        const sale = request.sale;
+        const stored: LocalSale = request.local ?? {
+          localId: `srv-${sale.id}`,
+          eventId: `srv-${sale.id}`,
+          ticketNumber: sale.ticketNumber,
+          soldAt: sale.soldAt,
+          total: Number(sale.total),
+          paymentMethod: sale.paymentMethod,
+          amountTendered: Number(sale.amountTendered),
+          changeAmount: Number(sale.changeAmount),
+          itemsCount: Number(sale.itemsCount),
+          customerName: sale.customer?.name ?? null,
+          cashierName: sale.cashier?.name ?? null,
+          status: "completed",
+          recordedOffline: Boolean(sale.recordedOffline),
+          serverId: sale.id,
+          syncStatus: "synced",
+          sale,
+        };
+        await saveSale({ ...stored, returns: [...(stored.returns ?? []), record] });
+        await posSync.push(event);
+        void backup();
+
+        setDialog(null);
+        setCustomerReturnTicket(null);
+        setSuccessRefund({ total: refunded, paymentMethod: sale.paymentMethod });
+        window.setTimeout(() => setSuccessRefund(null), 3200);
+        toast.success(`Devolución ${returnNumber} registrada`);
+        void printCustomerReturn(printable);
+        void loadCatalog();
+        focusCode();
+      } catch (error) {
+        toast.error(getApiErrorMessage(error, "No se pudo guardar la devolución en esta computadora"));
+      } finally {
+        setReturning(false);
+      }
+    },
+    [storeLocked, storageReady, session, backup, printCustomerReturn, loadCatalog, focusCode],
+  );
+
+  const openCustomerReturn = useCallback((ticketNumber: string | null = null) => {
+    setCustomerReturnTicket(ticketNumber);
+    setDialog("customerReturn");
+  }, []);
 
   /** La devolución quedó registrada: imprime, baja la existencia local y cierra la pestaña. */
   const onReturnRegistered = useCallback(
@@ -1016,6 +1177,9 @@ export default function PosPage() {
       () => ({
         // F3 y F4 se registran igual sin permiso, con handler vacío: así la tecla
         // no se le escapa al navegador (F3 abre su buscador) en plena venta.
+        F2: () => {
+          if (canCustomerReturn) openCustomerReturn();
+        },
         F3: () => {
           if (canSeeStock) setDialog("stock");
         },
@@ -1104,6 +1268,8 @@ export default function PosPage() {
         isDelivery,
         canReturn,
         openReturnTicket,
+        canCustomerReturn,
+        openCustomerReturn,
       ],
     ),
     shortcutsEnabled,
@@ -1344,7 +1510,17 @@ export default function PosPage() {
               title="Producto roto o echado a perder que se regresa a fábrica"
             >
               <span className="pos-action-key">F9</span>
-              <Undo2 size={14} /> Devolución
+              <Undo2 size={14} /> Devolución a fábrica
+            </button>
+          ) : null}
+          {canCustomerReturn ? (
+            <button
+              className="pos-action pos-action-return"
+              onClick={() => openCustomerReturn()}
+              title="El cliente regresa producto de un ticket de esta sucursal: se le devuelve su dinero"
+            >
+              <span className="pos-action-key">F2</span>
+              <Undo2 size={14} /> Devolución de cliente
             </button>
           ) : null}
           {canDeliver ? (
@@ -1746,11 +1922,13 @@ export default function PosPage() {
       <PosDaySalesDialog
         open={dialog === "daySales" && canSeeDaySales}
         canVoid={canVoid}
+        canReturn={canCustomerReturn}
         onClose={() => {
           setDialog(null);
           focusCode();
         }}
         onReprint={(sale) => void printSale(sale, true)}
+        onReturn={(sale) => openCustomerReturn(sale.ticketNumber)}
         onVoided={() => {
           void loadCatalog();
           void loadSession();
@@ -1818,6 +1996,20 @@ export default function PosPage() {
         </div>
       ) : null}
 
+      {successRefund !== null ? (
+        <div className="pos-success pos-success-refund" onClick={() => setSuccessRefund(null)}>
+          <div>
+            <div className="pos-total-label" style={{ color: "#ffe443" }}>
+              {successRefund.paymentMethod === POS_PAYMENT_METHODS.CASH
+                ? "Entrega al cliente"
+                : `Regresa por ${posPaymentMethodLabel(successRefund.paymentMethod).toLowerCase()}`}
+            </div>
+            <div className="change">{formatMoney(successRefund.total)}</div>
+            <p style={{ opacity: 0.8 }}>Pide que firme la copia de la sucursal · Toca para continuar</p>
+          </div>
+        </div>
+      ) : null}
+
       <PosFactoryReturnDialog
         open={dialog === "return" && isReturn}
         lines={ticket.lines}
@@ -1829,6 +2021,23 @@ export default function PosPage() {
       />
 
       <FactoryReturnSheet ret={sheetReturn} settings={ticketSettings} />
+
+      <PosCustomerReturnDialog
+        open={dialog === "customerReturn" && canCustomerReturn}
+        initialTicket={customerReturnTicket}
+        branchCode={session?.branch.code ?? null}
+        branchId={session?.branch.id ?? null}
+        isAdmin={isAdmin}
+        saving={returning}
+        onClose={() => {
+          setDialog(null);
+          setCustomerReturnTicket(null);
+          focusCode();
+        }}
+        onSubmit={(request) => void registerCustomerReturn(request)}
+      />
+
+      <CustomerReturnSheet ret={sheetCustomerReturn} settings={ticketSettings} walkInName={walkInName} />
 
       <PosTicketSheet
         sale={sheetSale}

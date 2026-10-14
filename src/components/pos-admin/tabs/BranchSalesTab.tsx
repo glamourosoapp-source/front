@@ -15,7 +15,12 @@ import {
 } from "@mui/material";
 import { ChevronDown, CloudOff, PackageX, TriangleAlert, Truck } from "lucide-react";
 import { isHomeDeliverySale } from "@/lib/pos/delivery-ticket";
-import { POS_PAYMENT_METHODS, POS_SALE_STATUS, posPaymentMethodLabel } from "@glamouroso/shared/constants";
+import {
+  POS_PAYMENT_METHODS,
+  POS_RETURN_REASON_LABELS,
+  POS_SALE_STATUS,
+  posPaymentMethodLabel,
+} from "@glamouroso/shared/constants";
 import { DetailField } from "@/components/ui/DetailField";
 import { httpClient, getApiErrorMessage } from "@/services/http-client";
 import { formatMoney, formatQuantity } from "@/lib/format-money";
@@ -393,6 +398,8 @@ export function BranchSalesTab({ branchId }: { branchId: string }) {
                           <td>
                             {voided ? (
                               <Chip label="Anulado" size="small" color="error" />
+                            ) : sale.returns?.length ? (
+                              <Chip label="Con devolución" size="small" color="warning" />
                             ) : (
                               <Chip label="Cobrado" size="small" color="success" />
                             )}
@@ -498,6 +505,29 @@ export function BranchSalesTab({ branchId }: { branchId: string }) {
                   Anulado {formatDateTime(selected.voidedAt)}
                   {selected.voidReason ? `: ${selected.voidReason}` : ""}
                 </p>
+              ) : null}
+              {selected.returns?.length ? (
+                <div className="page-stack" style={{ gap: 6 }}>
+                  <strong style={{ color: "#c62828" }}>Devoluciones de cliente</strong>
+                  {[...selected.returns]
+                    .sort((a, b) => a.returnedAt.localeCompare(b.returnedAt))
+                    .map((ret) => (
+                    <div key={ret.id} className="page-kicker" style={{ margin: 0, color: "#7f1d1d" }}>
+                      <b>{ret.returnNumber}</b> · {formatDateTime(ret.returnedAt)} · regresó{" "}
+                      {formatMoney(ret.total)} en {posPaymentMethodLabel(ret.paymentMethod).toLowerCase()}
+                      {(ret.items ?? []).map((item) => (
+                        <div key={item.id} style={{ marginLeft: 12 }}>
+                          {formatQuantity(item.quantity)} {item.productName} ·{" "}
+                          {POS_RETURN_REASON_LABELS[item.reason] ?? item.reason} ·{" "}
+                          {item.restock ? "volvió al anaquel" : "merma"}
+                        </div>
+                      ))}
+                    </div>
+                  ))}
+                  <p className="page-kicker" style={{ margin: 0 }}>
+                    El ticket no cambia: lo devuelto resta en Cortes el día en que se devolvió.
+                  </p>
+                </div>
               ) : null}
               {selected.recordedOffline ? (
                 <p className="page-kicker" style={{ color: "#b45309" }}>

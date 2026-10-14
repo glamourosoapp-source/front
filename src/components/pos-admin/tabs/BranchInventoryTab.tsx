@@ -48,6 +48,7 @@ const MOVEMENT_LABELS: Record<string, string> = {
   sale: "Venta",
   sale_void: "Anulación",
   factory_return: "Devolución a fábrica",
+  customer_return: "Devolución de cliente",
   restock_in: "Surtido recibido",
   adjustment: "Ajuste",
   initial: "Carga inicial",

@@ -7,6 +7,7 @@ import type {
   PosPaymentMethod,
   PosSaleKind,
   PosSaleStatus,
+  PosReturnReason,
   PosSaleUnit,
   PricingTier,
   RestockItemUnit,
@@ -515,6 +516,69 @@ export interface PosSale {
   clockSkewMs?: number | null;
   deviceId?: string | null;
   items?: PosSaleItem[];
+  /** Devoluciones de cliente de este ticket (sin orden garantizado: ordenar por `returnedAt`). */
+  returns?: PosReturn[];
+}
+
+/** Partida de una devolución de cliente, ligada a la partida del ticket original. */
+export interface PosReturnItem {
+  id: string;
+  returnId: string;
+  saleItemId: string;
+  productId?: string | null;
+  lineId?: string | null;
+  productName: string;
+  sku?: string | null;
+  saleUnit: PosSaleUnit;
+  quantity: string | number;
+  /** Lo regresado por unidad (precio pagado, con el descuento del ticket repartido). */
+  unitPrice: string | number;
+  /** Lo regresado por la partida: lo que dice el papel que firmó el cliente. */
+  total: string | number;
+  /** Lo que calculó el servidor cuando difiere de lo que regresó la caja. */
+  serverTotal?: string | number | null;
+  reason: PosReturnReason;
+  /** true = volvió al inventario de la sucursal; false = merma. */
+  restock: boolean;
+  /** Sobre qué cayó la entrada al inventario (solo si `restock`). */
+  inventoryProductId?: string | null;
+  inventoryLineId?: string | null;
+  inventoryQuantity?: string | number | null;
+  containerProductId?: string | null;
+  capProductId?: string | null;
+}
+
+/**
+ * Devolución de cliente: regresa dinero por la misma forma de pago del ticket
+ * y, por partida, producto al anaquel o a merma. Resta en Cortes el día en que
+ * se devolvió; la venta original no cambia.
+ */
+export interface PosReturn {
+  id: string;
+  organizationId?: string;
+  branchId: string;
+  branch?: Branch | null;
+  saleId: string;
+  sale?: Pick<PosSale, "id" | "ticketNumber" | "soldAt" | "total"> | null;
+  /** `DCL-SUC01-20261014-0001` */
+  returnNumber: string;
+  cashierUserId: string;
+  cashier?: { id: string; name: string } | null;
+  customerId?: string | null;
+  customer?: Customer | null;
+  paymentMethod: PosPaymentMethod;
+  total: string | number;
+  itemsCount: string | number;
+  notes?: string | null;
+  returnedAt: string;
+  /** Id del evento de la caja con que subió: la caja lo usa para no contarla dos veces. */
+  clientEventId?: string | null;
+  recordedOffline?: boolean;
+  /** Lo que regresó la caja difiere de lo que calcula el servidor (se guarda lo de la caja). */
+  refundMismatch?: boolean;
+  syncConflict?: Record<string, unknown> | null;
+  items?: PosReturnItem[];
+  createdAt?: string;
 }
 
 /**

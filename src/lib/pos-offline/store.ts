@@ -4,6 +4,8 @@ import type { PosCatalog, PosSale } from "@/types";
 import type { PosPaymentMethod } from "@glamouroso/shared/constants";
 import type { PosSyncEvent, PosSaleEventPayload } from "@glamouroso/shared/pos-sync";
 import { posTicketNumber } from "@glamouroso/shared/pos-sync";
+import { posReturnNumber } from "@glamouroso/shared/pos-returns";
+import type { LocalReturnRecord } from "@/lib/pos/customer-return";
 import {
   STORES,
   getAll,
@@ -26,6 +28,8 @@ import {
 export const KEYS = {
   CATALOG: "catalog",
   COUNTER: "counter",
+  /** Consecutivo de las devoluciones de cliente (`DCL-`), aparte del de ventas. */
+  RETURN_COUNTER: "returnCounter",
   SESSION: "session",
   META: "meta",
 } as const;
@@ -53,6 +57,8 @@ export interface LocalSale {
   syncStatus: "pending" | "synced" | "rejected";
   /** El ticket completo tal como se imprimió, para reimprimir sin servidor. */
   sale: PosSale;
+  /** Devoluciones de cliente hechas en esta caja sobre este ticket. */
+  returns?: LocalReturnRecord[];
 }
 
 /** Cliente de la sucursal, con lo mínimo para encontrarlo por teléfono. */
@@ -129,6 +135,13 @@ export async function saveSale(sale: LocalSale): Promise<void> {
 export async function localSales(): Promise<LocalSale[]> {
   const rows = await getAll<LocalSale>(STORES.SALES);
   return rows.sort((a, b) => b.soldAt.localeCompare(a.soldAt));
+}
+
+/** El ticket guardado en la PC con ese folio (lo que trae el cliente para devolver). */
+export async function findSaleByTicket(ticketNumber: string): Promise<LocalSale | null> {
+  const wanted = ticketNumber.trim().toUpperCase();
+  const rows = await getAll<LocalSale>(STORES.SALES);
+  return rows.find((row) => row.ticketNumber.toUpperCase() === wanted) ?? null;
 }
 
 export async function findSaleByEvent(eventId: string): Promise<LocalSale | null> {
@@ -230,6 +243,23 @@ export async function reconcileFolio(businessDate: string, serverSeq: number): P
   const localSeq = counter && counter.businessDate === businessDate ? counter.seq : 0;
   if (serverSeq > localSeq) {
     await writeKey<FolioCounter>(KEYS.COUNTER, { businessDate, seq: serverSeq });
+  }
+}
+
+/** Siguiente folio de devolución de cliente: misma idea que `nextFolio`, serie propia. */
+export async function nextReturnFolio(branchCode: string, businessDate: string): Promise<string> {
+  const counter = await readKey<FolioCounter>(KEYS.RETURN_COUNTER);
+  const seq = counter && counter.businessDate === businessDate ? counter.seq + 1 : 1;
+  await writeKey<FolioCounter>(KEYS.RETURN_COUNTER, { businessDate, seq });
+  return posReturnNumber(branchCode, businessDate, seq);
+}
+
+/** Igual que `reconcileFolio`, para la serie de devoluciones. */
+export async function reconcileReturnFolio(businessDate: string, serverSeq: number): Promise<void> {
+  const counter = await readKey<FolioCounter>(KEYS.RETURN_COUNTER);
+  const localSeq = counter && counter.businessDate === businessDate ? counter.seq : 0;
+  if (serverSeq > localSeq) {
+    await writeKey<FolioCounter>(KEYS.RETURN_COUNTER, { businessDate, seq: serverSeq });
   }
 }
 

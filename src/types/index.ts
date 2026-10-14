@@ -31,6 +31,8 @@ export type {
   UnlinkedRestockItem,
   FactoryReturn,
   FactoryReturnItem,
+  PosReturn,
+  PosReturnItem,
   BranchStats,
   BranchSalesPeriod,
   BranchOverview,

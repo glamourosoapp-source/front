@@ -10,12 +10,23 @@ import { formatMoney } from "@/lib/format-money";
  */
 
 export interface ReportSummary {
+  /** Neto: lo vendido menos las devoluciones de cliente del periodo. */
   total: number;
+  /** Lo vendido sin restar devoluciones (ausente en cortes congelados antes de 2026-10-14). */
+  grossTotal?: number;
+  /** Devoluciones de cliente hechas en el periodo (restan el día en que se devolvió). */
+  returns?: { total: number; count: number };
   ticketsCount: number;
   itemsCount: number;
   avgTicket: number;
   /** Cuánto entró por cada forma de pago (efectivo = lo que hay en el cajón). */
-  byPaymentMethod?: Array<{ paymentMethod: string; total: number; tickets: number }>;
+  byPaymentMethod?: Array<{
+    paymentMethod: string;
+    total: number;
+    tickets: number;
+    /** Devuelto por esa forma de pago (ya restado de `total`). */
+    returnsTotal?: number;
+  }>;
   /** Mostrador y venta a domicilio; la de domicilio ya va dentro del total. */
   byKind?: Array<{ kind: string; total: number; tickets: number }>;
   products: Array<{ name: string; saleUnit: string; quantity: number; revenue: number; tickets: number }>;
@@ -25,7 +36,9 @@ export interface ReportSummary {
  * "Efectivo $1,200.00 · Tarjeta $300.00": una línea, en el orden fijo de los
  * métodos. Si hubo venta a domicilio se agrega cuánto fue (ya va en el total).
  */
-export function paymentBreakdownLabel(summary: Pick<ReportSummary, "byPaymentMethod" | "byKind">): string {
+export function paymentBreakdownLabel(
+  summary: Pick<ReportSummary, "byPaymentMethod" | "byKind" | "returns">
+): string {
   const rows = summary.byPaymentMethod ?? [];
   if (!rows.length) return "";
   const methods = POS_PAYMENT_METHOD_VALUES.map((method) => {
@@ -34,7 +47,22 @@ export function paymentBreakdownLabel(summary: Pick<ReportSummary, "byPaymentMet
   });
   const delivery = summary.byKind?.find((item) => item.kind === POS_SALE_KINDS.HOME_DELIVERY);
   if (delivery?.tickets) methods.push(`a domicilio ${formatMoney(delivery.total)}`);
+  // Las formas de pago ya vienen netas: se dice cuánto se devolvió.
+  if (summary.returns?.count) methods.push(`devoluciones -${formatMoney(summary.returns.total)}`);
   return methods.join(" · ");
+}
+
+/** Renglones "Vendido" y "Devoluciones de cliente" del corte; vacío si no hubo devoluciones. */
+export function returnsRowsOf(summary: Pick<ReportSummary, "returns" | "grossTotal">): Array<[string, string]> {
+  const returns = summary.returns;
+  if (!returns?.count) return [];
+  return [
+    ["Vendido (antes de devoluciones)", formatMoney(summary.grossTotal ?? 0)],
+    [
+      `Devoluciones de cliente (${returns.count})`,
+      `-${formatMoney(returns.total)}`,
+    ],
+  ];
 }
 
 /** Renglón "De ello, venta a domicilio" del corte; null si no hubo. */
@@ -79,6 +107,7 @@ export async function exportPosReportToXlsx(params: {
   resumen.addRow(["Sucursal", params.branchLabel]);
   resumen.addRow([]);
   headerRow(resumen, ["Concepto", "Valor"]);
+  for (const row of returnsRowsOf(params.summary)) resumen.addRow(row);
   resumen.addRow(["Total vendido", formatMoney(params.summary.total)]);
   resumen.addRow(["Tickets", params.summary.ticketsCount]);
   resumen.addRow(["Ticket promedio", formatMoney(params.summary.avgTicket)]);
@@ -146,6 +175,7 @@ export async function exportPosReportToPdf(params: {
     startY: 86,
     head: [["Concepto", "Valor"]],
     body: [
+      ...returnsRowsOf(params.summary),
       ["Total vendido", formatMoney(params.summary.total)],
       ["Tickets", String(params.summary.ticketsCount)],
       ["Ticket promedio", formatMoney(params.summary.avgTicket)],

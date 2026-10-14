@@ -326,6 +326,8 @@ export const INVENTORY_MOVEMENT_TYPES = {
   INITIAL: "initial",
   /** Producto roto o echado a perder que la sucursal le regresa a fábrica. */
   FACTORY_RETURN: "factory_return",
+  /** Lo que un cliente regresó en buen estado y vuelve al anaquel. */
+  CUSTOMER_RETURN: "customer_return",
 } as const;
 
 /**
@@ -343,6 +345,34 @@ export const FACTORY_RETURN_REASON_LABELS: Record<FactoryReturnReason, string> =
   broken: "Roto",
   spoiled: "Echado a perder",
   expired: "Caducado",
+  other: "Otro",
+};
+
+/**
+ * Motivo de cada partida de una devolución de cliente. Se imprime en el ticket
+ * y en los reportes deja ver qué producto regresa la gente y por qué.
+ */
+export const POS_RETURN_REASONS = {
+  DEFECTIVE: "defective",
+  DAMAGED_CONTAINER: "damaged_container",
+  WRONG_PRODUCT: "wrong_product",
+  DISLIKED: "disliked",
+  OTHER: "other",
+} as const;
+
+export const POS_RETURN_REASON_VALUES = [
+  POS_RETURN_REASONS.DEFECTIVE,
+  POS_RETURN_REASONS.DAMAGED_CONTAINER,
+  POS_RETURN_REASONS.WRONG_PRODUCT,
+  POS_RETURN_REASONS.DISLIKED,
+  POS_RETURN_REASONS.OTHER,
+] as const;
+
+export const POS_RETURN_REASON_LABELS: Record<PosReturnReason, string> = {
+  defective: "Defectuoso",
+  damaged_container: "Envase dañado",
+  wrong_product: "Se equivocó de producto",
+  disliked: "No le gustó",
   other: "Otro",
 };
 
@@ -416,6 +446,7 @@ export const PERMISSION_MODULES = [
   { key: "posReports", label: "POS: cortes y reportes" },
   { key: "posRestock", label: "POS: faltantes y surtido" },
   { key: "posReturns", label: "POS: devoluciones a fábrica" },
+  { key: "posCustomerReturns", label: "POS: devoluciones de cliente" },
   { key: "factory", label: "Fábrica: pedidos por enviar" },
   { key: "franchise", label: "Franquicia: pedidos a fábrica" },
 ] as const;
@@ -467,6 +498,7 @@ export type RestockOrderStatus =
 export type RestockItemUnit = (typeof RESTOCK_ITEM_UNITS)[keyof typeof RESTOCK_ITEM_UNITS];
 export type TicketPaperWidth = (typeof TICKET_PAPER_WIDTHS)[number];
 export type FactoryReturnReason = (typeof FACTORY_RETURN_REASONS)[keyof typeof FACTORY_RETURN_REASONS];
+export type PosReturnReason = (typeof POS_RETURN_REASONS)[keyof typeof POS_RETURN_REASONS];
 
 /** Material del envase en que se vende una línea de líquido. */
 export const CONTAINER_MATERIALS = {
