@@ -2,12 +2,13 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { Button, FormControlLabel, Switch } from "@mui/material";
+import { Button, FormControlLabel, Switch, Tooltip } from "@mui/material";
 import { ChevronRight, Clock, PackageMinus, Plus, ShieldAlert, Store, Truck } from "lucide-react";
 import { BranchFormDialog } from "@/components/pos-admin/BranchFormDialog";
 import { BranchHealthChip } from "@/components/pos-admin/BranchHealthChip";
 import { BranchSyncCell } from "@/components/pos-admin/BranchSyncCell";
-import { BranchStoreTodayCell } from "@/components/pos-admin/BranchStoreTodayCell";
+import { BranchStoreTodayCell, storeTime } from "@/components/pos-admin/BranchStoreTodayCell";
+import type { StoreDayEvaluation } from "@glamouroso/shared";
 import { httpClient, getApiErrorMessage } from "@/services/http-client";
 import { formatMoney } from "@/lib/format-money";
 import { usePermissions } from "@/lib/permissions";
@@ -29,7 +30,33 @@ function RowStat({ label, value, note, total }: { label: string; value: string; 
   );
 }
 
-const ticketsLabel = (count: number) => `${count} ${count === 1 ? "ticket" : "tickets"}`;
+/**
+ * Foco de la tienda: verde con ondas mientras está abierta, rojo si no ha
+ * abierto o ya cerró. Es lo primero que se busca al recorrer la lista.
+ */
+function StoreLight({ day }: { day: StoreDayEvaluation }) {
+  const open = day.status === "open";
+  const label = open ? "Abierta" : day.status === "closed" ? "Cerrada" : "Sin abrir";
+  const title = open
+    ? `Abierta desde ${storeTime(day.openedAt)}`
+    : day.status === "closed"
+      ? `Cerró a las ${storeTime(day.closedAt)}`
+      : day.hours
+        ? `No ha abierto · abre ${day.hours.open}`
+        : "No ha abierto hoy";
+  return (
+    <Tooltip title={title}>
+      <span className={`store-light ${open ? "is-open" : "is-closed"}`}>
+        <span className="store-light-dot">
+          <Store size={16} />
+        </span>
+        <span className="store-light-label">{label}</span>
+      </span>
+    </Tooltip>
+  );
+}
+
+const ticketsLabel =(count: number) => `${count} ${count === 1 ? "ticket" : "tickets"}`;
 
 /**
  * Una sucursal (o franquicia) como tarjeta, igual que las de Cortes: a la
@@ -66,9 +93,13 @@ function BranchRow({
   return (
     <section className={`pos-day pos-cut pos-branch${row.isActive ? "" : " is-inactive"}`}>
       <Link href={href} className="pos-day-head">
-        <span className="pos-day-chevron" aria-hidden>
-          <Store size={17} />
-        </span>
+        {isFranchise || !row.isActive || !row.storeToday ? (
+          <span className="pos-day-chevron" aria-hidden>
+            <Store size={17} />
+          </span>
+        ) : (
+          <StoreLight day={row.storeToday} />
+        )}
         <span className="pos-day-date">
           <span className="pos-day-weekday">
             {row.name}

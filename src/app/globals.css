@@ -847,9 +847,96 @@ textarea {
   opacity: 0.7;
 }
 
-@media (max-width: 1100px) {
+/* Foco abierta/cerrada: un círculo de color con dos ondas que salen de él,
+   para encontrar de un vistazo qué tienda está atendiendo. */
+.store-light {
+  --light: #16a34a;
+  --light-soft: #dcfce7;
+  display: grid;
+  justify-items: center;
+  gap: 6px;
+  width: 64px;
+}
+
+.store-light.is-closed {
+  --light: #dc2626;
+  --light-soft: #fee2e2;
+}
+
+.store-light-dot {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  background: var(--light);
+  color: #fff;
+  box-shadow: 0 0 0 4px var(--light-soft);
+}
+
+.store-light-dot::before,
+.store-light-dot::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  border: 2px solid var(--light);
+  animation: store-light-wave 2.4s ease-out infinite;
+  pointer-events: none;
+}
+
+.store-light-dot::after {
+  animation-delay: 1.2s;
+}
+
+/* Cerrada late más despacio: llama la atención sin competir con las abiertas. */
+.store-light.is-closed .store-light-dot::before,
+.store-light.is-closed .store-light-dot::after {
+  animation-duration: 3.2s;
+}
+
+.store-light.is-closed .store-light-dot::after {
+  animation-delay: 1.6s;
+}
+
+.store-light-label {
+  color: var(--light);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+@keyframes store-light-wave {
+  0% {
+    transform: scale(1);
+    opacity: 0.7;
+  }
+  100% {
+    transform: scale(1.9);
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .store-light-dot::before,
+  .store-light-dot::after {
+    animation: none;
+    opacity: 0;
+  }
+}
+
+/* Se acomoda por el ancho de la tarjeta, no de la pantalla: con el menú
+   lateral abierto la tarjeta mide 300 px menos y las cifras se salían. */
+.pos-branch {
+  container-type: inline-size;
+}
+
+@container (max-width: 1080px) {
   .pos-branch .pos-day-head {
-    grid-template-columns: auto 1fr auto auto;
+    grid-template-columns: auto minmax(0, 1fr) auto auto;
   }
 
   .pos-branch .pos-branch-status {
@@ -858,15 +945,23 @@ textarea {
   }
 }
 
-@media (max-width: 640px) {
+@container (max-width: 720px) {
   .pos-branch .pos-day-head {
-    grid-template-columns: auto 1fr auto;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    gap: 12px;
+    padding: 14px;
   }
 
   .pos-branch .pos-branch-status,
   .pos-branch .pos-day-stats {
     grid-column: 1 / -1;
     grid-row: auto;
+  }
+
+  .pos-branch .pos-day-stat,
+  .pos-branch .pos-day-stat.is-total {
+    flex: 1;
+    min-width: 0;
   }
 
   .pos-branch-go {
