@@ -224,7 +224,7 @@ export default function PosPage() {
    */
   const [noBranch, setNoBranch] = useState(false);
   const [closeStoreOpen, setCloseStoreOpen] = useState(false);
-  /** Menú "Más" de la barra superior: lo que se usa poco (devolución a fábrica). */
+  /** Menú "Más" de la barra superior: lo que se usa poco (configuración, devolución a fábrica). */
   const [moreAnchor, setMoreAnchor] = useState<HTMLElement | null>(null);
   /**
    * Apertura y cierre de tienda: sin "Abrir tienda" la caja no cobra, y después
@@ -1362,54 +1362,50 @@ export default function PosPage() {
               Instalar en el {pwa.target}
             </button>
           ) : null}
-          <Link
-            href="/pos/configuracion"
-            className="pos-action"
-            style={{ textDecoration: "none" }}
-          >
-            <Settings size={14} />
-            Configuración
-          </Link>
           {/*
-            Devolución a fábrica: solo cuando llega el transportista. Vive en
-            "Más" para que en la barra de acciones "Devolución" sea siempre la
-            del cliente y nadie las confunda.
+            Lo que se usa poco va en "Más": la configuración de la caja y la
+            devolución a fábrica (solo cuando llega el transportista). Así en
+            la barra de acciones "Devolución" es siempre la del cliente.
           */}
-          {canReturn ? (
-            <>
-              <button
-                className="pos-action"
-                onClick={(event) => setMoreAnchor(event.currentTarget)}
-                aria-haspopup="menu"
-                aria-expanded={Boolean(moreAnchor)}
+          <button
+            className="pos-action"
+            onClick={(event) => setMoreAnchor(event.currentTarget)}
+            aria-haspopup="menu"
+            aria-expanded={Boolean(moreAnchor)}
+          >
+            <Ellipsis size={14} />
+            Más
+          </button>
+          <Menu
+            anchorEl={moreAnchor}
+            open={Boolean(moreAnchor)}
+            onClose={() => setMoreAnchor(null)}
+            anchorOrigin={{ vertical: "bottom", horizontal: "right" }}
+            transformOrigin={{ vertical: "top", horizontal: "right" }}
+          >
+            {canReturn ? (
+              <MenuItem
+                onClick={() => {
+                  setMoreAnchor(null);
+                  openReturnTicket();
+                }}
               >
-                <Ellipsis size={14} />
-                Más
-              </button>
-              <Menu
-                anchorEl={moreAnchor}
-                open={Boolean(moreAnchor)}
-                onClose={() => setMoreAnchor(null)}
-                anchorOrigin={{ vertical: "bottom", horizontal: "right" }}
-                transformOrigin={{ vertical: "top", horizontal: "right" }}
-              >
-                <MenuItem
-                  onClick={() => {
-                    setMoreAnchor(null);
-                    openReturnTicket();
-                  }}
-                >
-                  <ListItemIcon>
-                    <Factory size={16} />
-                  </ListItemIcon>
-                  <ListItemText
-                    primary="Devolución a fábrica"
-                    secondary="Lo roto o echado a perder que se lleva el transportista"
-                  />
-                </MenuItem>
-              </Menu>
-            </>
-          ) : null}
+                <ListItemIcon>
+                  <Factory size={16} />
+                </ListItemIcon>
+                <ListItemText
+                  primary="Devolución a fábrica"
+                  secondary="Lo roto o echado a perder que se lleva el transportista"
+                />
+              </MenuItem>
+            ) : null}
+            <MenuItem component={Link} href="/pos/configuracion" onClick={() => setMoreAnchor(null)}>
+              <ListItemIcon>
+                <Settings size={16} />
+              </ListItemIcon>
+              <ListItemText primary="Configuración" secondary="Impresora y tickets de esta caja" />
+            </MenuItem>
+          </Menu>
           {session?.branch.code && !noBranch ? (
             <button
               className="pos-action"
