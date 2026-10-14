@@ -10,6 +10,8 @@ import { civilDateAndMinutes, WEEKDAY_KEYS, type WeekdayKey } from "./utils/deli
  *   cola de la caja como cualquier venta.
  * - Cada sucursal tiene horario por día de la semana; el panel marca abrió
  *   tarde, cerró temprano, no abrió y sin cierre, con 15 min de tolerancia.
+ * - A las 9:00 p.m. (2026-10-13) la tienda que siga abierta se cierra sola y
+ *   ya no se puede abrir ni reabrir hasta el día siguiente.
  *
  * Funciones puras: las usan la caja (¿está abierta hoy?), el back y el panel
  * (marcas del día). Detalle: docs/product-specs/pos-apertura-cierre.md
@@ -32,6 +34,13 @@ export const STORE_HOURS_TOLERANCE_MINUTES = 15;
 export const STORE_CLOCK_MOVED_MINUTES = 5;
 
 /**
+ * Hora del cierre automático, en la zona de la organización: la tienda que
+ * siga abierta se cierra sola y la caja no deja abrir ni reabrir hasta el día
+ * siguiente. Regla del negocio del 2026-10-13, igual para todas las sucursales.
+ */
+export const STORE_AUTO_CLOSE_TIME = "21:00";
+
+/**
  * De dónde salió la hora que guarda el servidor:
  * - `monotonic`: reloj interno de la caja contra el del servidor. Es exacta
  *   aunque hayan movido la hora de la PC.
@@ -40,8 +49,10 @@ export const STORE_CLOCK_MOVED_MINUTES = 5;
  *   regresaron antes de que volviera el internet.
  * - `client`: la hora de la PC tal cual (caja sin actualizar, o registros
  *   anteriores al 2026-10-13).
+ * - `auto`: el cierre automático de las 9:00 p.m.; lo registró el servidor,
+ *   no un cajero.
  */
-export type StoreEventTimeSource = "monotonic" | "offset" | "client";
+export type StoreEventTimeSource = "monotonic" | "offset" | "client" | "auto";
 
 /** Horario de un día: "HH:mm" en la zona de la organización. */
 export interface StoreDayHours {
@@ -58,11 +69,19 @@ export interface StoreEventLike {
   occurredAt: string;
   /** Hora que marcaba la PC al clic; si difiere de la real, se marca. */
   clientOccurredAt?: string | null;
+  /** Solo en el cierre automático de las 9:00 p.m. */
+  timeSource?: StoreEventTimeSource | null;
 }
 
 export type StoreDayStatus = "not_opened" | "open" | "closed";
 
-export type StoreDayFlagCode = "not_opened" | "late_open" | "early_close" | "no_close" | "clock_moved";
+export type StoreDayFlagCode =
+  | "not_opened"
+  | "late_open"
+  | "early_close"
+  | "no_close"
+  | "auto_close"
+  | "clock_moved";
 
 export interface StoreDayFlag {
   code: StoreDayFlagCode;
@@ -79,6 +98,8 @@ export interface StoreDayEvaluation {
   openedAt: string | null;
   /** Último cierre, solo si la tienda quedó cerrada (ISO). */
   closedAt: string | null;
+  /** El último cierre fue el automático de las 9:00 p.m. (el cajero no cerró). */
+  autoClosed: boolean;
   /** Veces que se reabrió después de cerrar. */
   reopenCount: number;
   /** Horario de ese día, o `null` si no abre. */
@@ -110,6 +131,53 @@ export function weekdayOfDate(date: string): WeekdayKey {
 export function storeCivilDate(at: Date, timeZone: string): string {
   const { year, month, day } = civilDateAndMinutes(at, timeZone);
   return `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+}
+
+/** Instante (Date) de una hora civil "HH:mm" del día dado en la zona dada. */
+export function storeCivilInstant(date: string, time: string, timeZone: string): Date {
+  const [y, m, d] = date.split("-").map(Number);
+  const target = storeTimeToMinutes(time);
+  const wanted = Date.UTC(y!, (m ?? 1) - 1, d ?? 1) / 60_000 + target;
+  // Se parte de la hora como si fuera UTC y se corrige por el desfase de la
+  // zona; dos vueltas bastan aunque el día tenga cambio de horario.
+  let guess = wanted * 60_000;
+  for (let i = 0; i < 2; i += 1) {
+    const civil = civilDateAndMinutes(new Date(guess), timeZone);
+    const seen = Date.UTC(civil.year, civil.month - 1, civil.day) / 60_000 + civil.minutes;
+    guess += (wanted - seen) * 60_000;
+  }
+  return new Date(guess);
+}
+
+/** Instante del cierre automático (9:00 p.m.) de ese día de negocio. */
+export function storeAutoCloseAt(date: string, timeZone: string): Date {
+  return storeCivilInstant(date, STORE_AUTO_CLOSE_TIME, timeZone);
+}
+
+/**
+ * Si a esa hora ya pasó el cierre automático del día: desde las 9:00 p.m. la
+ * caja no abre ni reabre, y la que siga abierta se cierra.
+ */
+export function isPastStoreAutoClose(date: string, now: Date, timeZone: string): boolean {
+  return now.getTime() >= storeAutoCloseAt(date, timeZone).getTime();
+}
+
+/**
+ * Quita el cierre automático que llegó cuando la tienda ya estaba cerrada: la
+ * caja sin internet pudo cerrar a las 8:50 y subirlo después de que el
+ * servidor la cerrara a las 9:00. Ese cierre del cajero es el que cuenta.
+ */
+function withoutRedundantAutoCloses<T extends StoreEventLike>(sorted: T[]): T[] {
+  let open = false;
+  return sorted.filter((event) => {
+    if (event.kind === STORE_EVENT_KINDS.OPENED) {
+      open = true;
+      return true;
+    }
+    const keep = open || event.timeSource !== "auto";
+    open = false;
+    return keep;
+  });
 }
 
 /** Horario de ese día; descarta horarios mal formados (cierre antes de abrir). */
@@ -147,6 +215,9 @@ function formatMinutes(total: number): string {
  * - `no_close`: quedó abierta y ya pasó el día (o, hoy, la hora de cierre +
  *   tolerancia).
  *
+ * - `auto_close`: la cerró el sistema a las 9:00 p.m.; reemplaza a "cerró
+ *   temprano" (la regla manda aunque el horario diga más tarde).
+ *
  * - `clock_moved`: la hora de la PC en algún clic difería de la real en
  *   `STORE_CLOCK_MOVED_MINUTES` o más (se marca también en días de descanso).
  *
@@ -163,7 +234,9 @@ export function evaluateStoreDay(input: {
   const { date, timeZone } = input;
   const now = input.now ?? new Date();
   const tolerance = input.toleranceMinutes ?? STORE_HOURS_TOLERANCE_MINUTES;
-  const events = [...input.events].sort((a, b) => a.occurredAt.localeCompare(b.occurredAt));
+  const events = withoutRedundantAutoCloses(
+    [...input.events].sort((a, b) => a.occurredAt.localeCompare(b.occurredAt))
+  );
   const hours = storeHoursFor(input.hours, date);
   const hasSchedule = WEEKDAY_KEYS.some((day) => {
     const value = input.hours?.[day];
@@ -175,6 +248,7 @@ export function evaluateStoreDay(input: {
   const closes = events.filter((event) => event.kind === STORE_EVENT_KINDS.CLOSED);
   const openedAt = opens[0]?.occurredAt ?? null;
   const closedAt = status === "closed" ? (closes.at(-1)?.occurredAt ?? null) : null;
+  const autoClosed = status === "closed" && closes.at(-1)?.timeSource === "auto";
   const reopenCount = Math.max(0, opens.length - 1);
 
   const today = storeCivilDate(now, timeZone);
@@ -194,7 +268,9 @@ export function evaluateStoreDay(input: {
     } else {
       const late = minutesOf(openedAt) - openAt;
       if (late > tolerance) flags.push({ code: "late_open", label: `Abrió ${formatMinutes(late)} tarde`, minutes: late });
-      if (closedAt) {
+      if (autoClosed) {
+        flags.push({ code: "auto_close", label: "Cierre automático" });
+      } else if (closedAt) {
         // Cerrar pasada la medianoche nunca es "temprano".
         const sameDay = storeCivilDate(new Date(closedAt), timeZone) === date;
         const early = sameDay ? closeAt - minutesOf(closedAt) : 0;
@@ -205,6 +281,8 @@ export function evaluateStoreDay(input: {
         flags.push({ code: "no_close", label: "Sin cierre" });
       }
     }
+  } else if (autoClosed) {
+    flags.push({ code: "auto_close", label: "Cierre automático" });
   } else if (openedAt && !closedAt && isPast) {
     flags.push({ code: "no_close", label: "Sin cierre" });
   }
@@ -218,7 +296,7 @@ export function evaluateStoreDay(input: {
     });
   }
 
-  return { date, status, openedAt, closedAt, reopenCount, hours, hasSchedule, flags };
+  return { date, status, openedAt, closedAt, autoClosed, reopenCount, hours, hasSchedule, flags };
 }
 
 /**

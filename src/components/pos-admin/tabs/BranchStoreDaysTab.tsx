@@ -150,9 +150,11 @@ export function BranchStoreDaysTab({ branch }: { branch: Branch }) {
                     {row.events
                       .map(
                         (event, index) =>
-                          `${event.kind === "opened" ? (index === 0 ? "Abrió" : "Reabrió") : "Cerró"} ${storeTime(event.occurredAt)}${pcTimeNote(event)}${
-                            event.user ? ` (${event.user.name})` : ""
-                          }${event.recordedOffline ? " · sin internet" : ""}`
+                          event.timeSource === "auto"
+                            ? `Se cerró sola ${storeTime(event.occurredAt)} (sistema)`
+                            : `${event.kind === "opened" ? (index === 0 ? "Abrió" : "Reabrió") : "Cerró"} ${storeTime(event.occurredAt)}${pcTimeNote(event)}${
+                                event.user ? ` (${event.user.name})` : ""
+                              }${event.recordedOffline ? " · sin internet" : ""}`
                       )
                       .join(" → ")}
                   </span>

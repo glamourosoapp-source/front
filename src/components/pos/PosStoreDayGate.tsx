@@ -22,12 +22,15 @@ function longDate(date: string): string {
 /**
  * Pantalla que tapa la caja mientras la tienda no esté abierta: a primera hora
  * ("Abrir tienda") y después de "Cerré la tienda" ("Reabrir"). Mientras se ve,
- * la caja no recibe clics ni atajos de teclado.
+ * la caja no recibe clics ni atajos de teclado. Desde las 9:00 p.m. no hay
+ * botón: la tienda se cerró sola (o ya no abre) y la caja vuelve mañana.
  */
 export function PosStoreDayGate({
   status,
   date,
   closedAt,
+  autoClosed,
+  canOpen,
   branchName,
   cashierName,
   onOpen,
@@ -35,6 +38,9 @@ export function PosStoreDayGate({
   status: StoreDayStatus;
   date: string;
   closedAt: string | null;
+  autoClosed: boolean;
+  /** false desde las 9:00 p.m.: ni abrir ni reabrir hasta mañana. */
+  canOpen: boolean;
   branchName: string;
   cashierName: string;
   onOpen: () => Promise<unknown>;
@@ -62,20 +68,30 @@ export function PosStoreDayGate({
         <p className="pos-store-gate-kicker">
           {branchName} · {longDate(date)}
         </p>
-        <h1 id="pos-store-gate-title">{closed ? "La tienda está cerrada" : "Abre la tienda para empezar"}</h1>
+        <h1 id="pos-store-gate-title">
+          {closed || !canOpen ? "La tienda está cerrada" : "Abre la tienda para empezar"}
+        </h1>
         <p className="pos-store-gate-text">
-          {closed
-            ? `Cerrada desde las ${time(closedAt)}: la caja vuelve a cobrar mañana, al abrir.`
-            : "Registra la apertura de hoy. La hora se toma de esta computadora al presionar el botón."}
+          {autoClosed
+            ? `Se cerró sola a las ${time(closedAt)}: a esa hora el sistema cierra la tienda que siga abierta. La caja vuelve a cobrar mañana, al abrir.`
+            : closed
+              ? `Cerrada desde las ${time(closedAt)}: la caja vuelve a cobrar mañana, al abrir.`
+              : !canOpen
+                ? "Ya pasaron las 9:00 p.m.: hoy ya no se puede abrir. La caja vuelve a cobrar mañana, al abrir."
+                : "Registra la apertura de hoy. La hora se toma de esta computadora al presionar el botón."}
         </p>
-        <button className="pos-store-gate-button" onClick={() => void open()} disabled={busy} autoFocus>
-          <DoorOpen size={20} />
-          {closed ? "Reabrir la tienda" : "Abrir tienda"}
-        </button>
+        {canOpen ? (
+          <button className="pos-store-gate-button" onClick={() => void open()} disabled={busy} autoFocus>
+            <DoorOpen size={20} />
+            {closed ? "Reabrir la tienda" : "Abrir tienda"}
+          </button>
+        ) : null}
         <p className="pos-store-gate-foot">
-          {closed
-            ? "Reabrir queda registrado con la hora en el panel."
-            : `Le atiende: ${cashierName}`}
+          {!canOpen
+            ? "Después de las 9:00 p.m. no se puede abrir ni reabrir."
+            : closed
+              ? "Reabrir queda registrado con la hora en el panel."
+              : `Le atiende: ${cashierName}`}
         </p>
       </div>
     </div>

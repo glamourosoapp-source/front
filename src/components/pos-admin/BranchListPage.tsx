@@ -40,7 +40,9 @@ function StoreLight({ day }: { day: StoreDayEvaluation }) {
   const title = open
     ? `Abierta desde ${storeTime(day.openedAt)}`
     : day.status === "closed"
-      ? `Cerró a las ${storeTime(day.closedAt)}`
+      ? day.autoClosed
+        ? `Se cerró sola a las ${storeTime(day.closedAt)}: el cajero no cerró`
+        : `Cerró a las ${storeTime(day.closedAt)}`
       : day.hours
         ? `No ha abierto · abre ${day.hours.open}`
         : "No ha abierto hoy";

@@ -1841,6 +1841,8 @@ export default function PosPage() {
           status={storeDay.status}
           date={storeDay.date}
           closedAt={storeDay.closedAt}
+          autoClosed={storeDay.autoClosed}
+          canOpen={storeDay.canOpen}
           branchName={session?.branch.name ?? ""}
           cashierName={user?.name ?? ""}
           onOpen={async () => {
