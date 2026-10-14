@@ -10,22 +10,38 @@ import { NotificationsMenu } from "@/components/notifications/NotificationsMenu"
 import { ForcePasswordChangeDialog } from "@/components/auth/ForcePasswordChangeDialog";
 import { RealtimeProvider } from "@/components/realtime/RealtimeProvider";
 import { useAuthStore } from "@/stores/auth.store";
-import { usePermissions } from "@/lib/permissions";
+import { landingRouteFor, usePermissions } from "@/lib/permissions";
 import "./shell.css";
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const hydrate = useAuthStore((s) => s.hydrate);
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
-  const mustChangePassword = useAuthStore((s) => s.user?.mustChangePassword ?? false);
-  const { can } = usePermissions();
+  const user = useAuthStore((s) => s.user);
+  const mustChangePassword = user?.mustChangePassword ?? false;
+  const { can, permissions } = usePermissions();
   const router = useRouter();
   const pathname = usePathname();
   // Drawer móvil (<=900px): el sidebar vive fuera de pantalla hasta abrirlo.
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
+  const [hydrated, setHydrated] = useState(false);
+
+  /**
+   * El panel es solo para quien aterriza en él. Un cajero (o la tablet de
+   * fábrica, o una franquicia) que escriba `/dashboard` a mano se regresa a su
+   * pantalla: su perfil trae lecturas que la caja necesita (clientes) y con
+   * eso el panel le enseñaba la lista de clientes.
+   */
+  const home = user ? landingRouteFor(permissions) : null;
+  const outsider = home !== null && home !== "/dashboard";
 
   useEffect(() => {
     hydrate();
+    setHydrated(true);
   }, [hydrate]);
+
+  useEffect(() => {
+    if (outsider && home) router.replace(home);
+  }, [outsider, home, router]);
 
   useEffect(() => {
     const token = localStorage.getItem("token");
@@ -40,6 +56,10 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     document.body.classList.toggle("nav-open", mobileNavOpen);
     return () => document.body.classList.remove("nav-open");
   }, [mobileNavOpen]);
+
+  // Sin pintar hasta saber quién es: las pantallas del panel piden datos al
+  // montarse y el cajero no debe llegar ni a pedirlos.
+  if (!hydrated || outsider) return null;
 
   return (
     <RealtimeProvider>
