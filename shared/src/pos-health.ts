@@ -1,5 +1,6 @@
 import { BRANCH_TYPES, type BranchType } from "./constants";
 import { POS_CLOCK_SKEW_WARN_MS, type BranchSyncState } from "./pos-sync";
+import { storeOpenHoursBetween, type BranchOpeningHours, type StoreDayEvaluation } from "./pos-store-hours";
 
 /**
  * Salud de una sucursal o franquicia, para la tabla y el detalle del panel.
@@ -33,6 +34,17 @@ export interface BranchHealthInput {
    * Ausente = la sucursal nunca usó la caja offline; no se mide.
    */
   syncState?: BranchSyncState | null;
+  /**
+   * Horario de la tienda y su día de hoy: con él, la caja callada y las ventas
+   * sin subir se miden en horas de tienda abierta, no de reloj (de noche o en
+   * descanso la PC apagada es lo normal). Ausente o sin horario capturado =
+   * tiempo corrido.
+   */
+  storeHours?: {
+    hours: BranchOpeningHours | null | undefined;
+    timeZone: string;
+    today?: StoreDayEvaluation | null;
+  } | null;
   /** "Ahora", inyectable para tests. */
   now?: Date;
 }
@@ -85,46 +97,89 @@ function agoLabel(hours: number): string {
   return `hace ${plural(Math.floor(hours / 24), "día", "días")}`;
 }
 
+const SYNC_PENDING_WARN_HOURS = 1;
+const SYNC_OFFLINE_WARN_HOURS = 2;
+/** Crítico en tiempo corrido: un día entero. */
+const SYNC_CRITICAL_HOURS = 24;
+/**
+ * Crítico en horas de tienda abierta: una jornada. 24 horas de horario serían
+ * dos o tres días de ventas fuera del sistema.
+ */
+const SYNC_CRITICAL_OPEN_HOURS = 8;
+
+/** Cuánto lleva algo de la caja esperando, en horas de tienda o de reloj. */
+interface SyncLapse {
+  hours: number;
+  /** true = medido en horas de tienda abierta (la sucursal tiene horario). */
+  openHours: boolean;
+  /** true = se descontó tiempo con la tienda cerrada: "hace N horas" mentiría. */
+  discounted: boolean;
+}
+
+function syncLapse(
+  iso: string | null | undefined,
+  now: Date,
+  store: BranchHealthInput["storeHours"]
+): SyncLapse | null {
+  const wall = hoursSince(iso, now);
+  if (wall === null) return null;
+  const open = store
+    ? storeOpenHoursBetween({ since: iso!, now, hours: store.hours, timeZone: store.timeZone, today: store.today })
+    : null;
+  if (open === null) return { hours: wall, openHours: false, discounted: false };
+  // Menos de media hora de diferencia: todo el lapso fue con la tienda abierta.
+  return { hours: open, openHours: true, discounted: wall - open >= 0.5 };
+}
+
+function lapseIsCritical(lapse: SyncLapse): boolean {
+  return lapse.hours >= (lapse.openHours ? SYNC_CRITICAL_OPEN_HOURS : SYNC_CRITICAL_HOURS);
+}
+
+/** " desde hace 3 horas", o ": 3 horas en horario de la tienda" si se descontó lo cerrado. */
+function lapseLabel(lapse: SyncLapse): string {
+  if (!lapse.discounted) return ` desde ${agoLabel(lapse.hours)}`;
+  const hours = lapse.hours < 1 ? "menos de una hora" : plural(Math.floor(lapse.hours), "hora", "horas");
+  return `: ${hours} en horario de la tienda`;
+}
+
 /**
  * Señales de la caja offline: ventas cobradas que siguen en la PC de la
  * sucursal y no en la base. Es lo único que el administrador no puede ver de
  * ninguna otra forma, porque esas ventas no existen todavía para el sistema.
  *
+ * Con horario, el tiempo cuenta solo con la tienda abierta: la venta de las
+ * 8:55 p.m. que no subió antes de apagar la PC no alarma en la noche.
+ *
  * Una franquicia no tiene caja, así que no se mide.
  */
-function syncSignals(sync: BranchSyncState, now: Date): BranchHealthSignal[] {
+function syncSignals(
+  sync: BranchSyncState,
+  now: Date,
+  store: BranchHealthInput["storeHours"]
+): BranchHealthSignal[] {
   const signals: BranchHealthSignal[] = [];
   const pending = sync.pendingCount ?? 0;
 
   if (pending > 0) {
-    const waiting = hoursSince(sync.oldestPendingAt, now);
-    if (waiting !== null && waiting >= 24) {
-      signals.push({
-        level: "critical",
-        code: "sync_pending",
-        message: `${plural(pending, "venta sin subir", "ventas sin subir")} desde ${agoLabel(waiting)}`,
-      });
-    } else if (waiting === null || waiting >= 1) {
+    const waiting = syncLapse(sync.oldestPendingAt, now, store);
+    const what = plural(pending, "venta sin subir", "ventas sin subir");
+    if (waiting !== null && lapseIsCritical(waiting)) {
+      signals.push({ level: "critical", code: "sync_pending", message: `${what}${lapseLabel(waiting)}` });
+    } else if (waiting === null || waiting.hours >= SYNC_PENDING_WARN_HOURS) {
       signals.push({
         level: "warning",
         code: "sync_pending",
-        message: `${plural(pending, "venta sin subir", "ventas sin subir")}${waiting === null ? "" : ` desde ${agoLabel(waiting)}`}`,
+        message: `${what}${waiting === null ? "" : lapseLabel(waiting)}`,
       });
     }
   }
 
-  const silence = hoursSince(sync.lastSeenAt, now);
-  if (silence !== null && silence >= 24) {
+  const silence = syncLapse(sync.lastSeenAt, now, store);
+  if (silence !== null && silence.hours >= SYNC_OFFLINE_WARN_HOURS) {
     signals.push({
-      level: "critical",
+      level: lapseIsCritical(silence) ? "critical" : "warning",
       code: "sync_offline",
-      message: `La caja no se comunica desde ${agoLabel(silence)}`,
-    });
-  } else if (silence !== null && silence >= 2) {
-    signals.push({
-      level: "warning",
-      code: "sync_offline",
-      message: `La caja no se comunica desde ${agoLabel(silence)}`,
+      message: `La caja no se comunica${lapseLabel(silence)}`,
     });
   }
 
@@ -235,7 +290,7 @@ export function computeBranchHealth(input: BranchHealthInput): BranchHealth {
 
   // La caja: ventas cobradas que aún viven en la PC de la sucursal.
   if (!isFranchise && input.syncState) {
-    signals.push(...syncSignals(input.syncState, now));
+    signals.push(...syncSignals(input.syncState, now, input.storeHours));
   }
 
   const level: BranchHealthLevel = signals.some((s) => s.level === "critical")

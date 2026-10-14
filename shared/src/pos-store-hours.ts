@@ -332,3 +332,78 @@ export interface StoreEventView {
 export interface StoreDayView extends StoreDayEvaluation {
   events: StoreEventView[];
 }
+
+/** Fecha civil "YYYY-MM-DD" desplazada `days` días. */
+function shiftCivilDate(date: string, days: number): string {
+  const [y, m, d] = date.split("-").map(Number);
+  return new Date(Date.UTC(y!, (m ?? 1) - 1, (d ?? 1) + days)).toISOString().slice(0, 10);
+}
+
+/** Días hacia atrás que se recorren como máximo; más allá ya es crítico de sobra. */
+const STORE_OPEN_HOURS_MAX_DAYS = 31;
+
+/**
+ * Horas de tienda abierta entre `since` y `now`: lo que mide la salud cuando
+ * la caja no se comunica o trae ventas sin subir. De noche, en día de descanso
+ * o con la tienda cerrada, la PC apagada es lo normal y no debe alarmar.
+ *
+ * - Días anteriores: el horario de ese día, sin pasar del cierre automático
+ *   de las 9:00 p.m.
+ * - Hoy, con `today` (la evaluación del día): si abrió, desde la apertura
+ *   hasta el cierre (o las 9:00 p.m. si sigue abierta); si no hay apertura, el
+ *   horario: una caja sin internet tampoco sube su apertura y ese silencio es
+ *   justo el que hay que avisar.
+ *
+ * `null` si la sucursal no tiene horario capturado: no hay con qué descontar
+ * y quien llama mide el tiempo corrido.
+ */
+export function storeOpenHoursBetween(input: {
+  since: string;
+  now: Date;
+  hours: BranchOpeningHours | null | undefined;
+  timeZone: string;
+  today?: Pick<StoreDayEvaluation, "date" | "status" | "openedAt" | "closedAt"> | null;
+}): number | null {
+  const { hours, timeZone, now, today } = input;
+  const hasSchedule = WEEKDAY_KEYS.some((day) => {
+    const value = hours?.[day];
+    return Boolean(value && isValidStoreTime(value.open) && isValidStoreTime(value.close));
+  });
+  if (!hasSchedule) return null;
+  const from = new Date(input.since).getTime();
+  const to = now.getTime();
+  if (!Number.isFinite(from) || from >= to) return 0;
+
+  const todayDate = storeCivilDate(now, timeZone);
+  const firstDate = storeCivilDate(new Date(from), timeZone);
+  let total = 0;
+  for (let i = 0; i <= STORE_OPEN_HOURS_MAX_DAYS; i += 1) {
+    const date = shiftCivilDate(todayDate, -i);
+    if (date < firstDate) break;
+    const window = storeOpenWindow(date, hours, timeZone, date === todayDate ? today : null);
+    if (!window) continue;
+    const start = Math.max(window.start, from);
+    const end = Math.min(window.end, to);
+    if (end > start) total += end - start;
+  }
+  return total / 3_600_000;
+}
+
+function storeOpenWindow(
+  date: string,
+  hours: BranchOpeningHours | null | undefined,
+  timeZone: string,
+  today: Pick<StoreDayEvaluation, "status" | "openedAt" | "closedAt"> | null | undefined
+): { start: number; end: number } | null {
+  const autoClose = storeAutoCloseAt(date, timeZone).getTime();
+  if (today && today.status !== "not_opened" && today.openedAt) {
+    const end = today.status === "closed" && today.closedAt ? new Date(today.closedAt).getTime() : autoClose;
+    return { start: new Date(today.openedAt).getTime(), end };
+  }
+  const day = storeHoursFor(hours, date);
+  if (!day) return null;
+  return {
+    start: storeCivilInstant(date, day.open, timeZone).getTime(),
+    end: Math.min(storeCivilInstant(date, day.close, timeZone).getTime(), autoClose),
+  };
+}
