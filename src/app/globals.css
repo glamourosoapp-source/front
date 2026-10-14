@@ -784,6 +784,97 @@ textarea {
   font-weight: 600;
 }
 
+/* ---- Lista de sucursales y franquicias ----
+
+   Misma tarjeta que Cortes por sucursal: quién es y su salud, cómo va la
+   operación (caja, tienda, surtido) y las cifras. La tarjeta es un link al
+   detalle, no se despliega. */
+.pos-branch .pos-day-head {
+  grid-template-columns: auto minmax(200px, 1fr) minmax(260px, 1.3fr) auto auto;
+  text-decoration: none;
+}
+
+.pos-branch .pos-day-head:hover .pos-day-chevron {
+  background: var(--glam-navy);
+  color: #fff;
+}
+
+.pos-branch .pos-day-chevron {
+  transform: none;
+}
+
+.pos-branch-health {
+  display: flex;
+  margin-top: 4px;
+}
+
+.pos-branch-status {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+  font-size: 13px;
+}
+
+.pos-branch-status > span {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  min-width: 0;
+}
+
+/* Los íconos de tienda y surtido van en gris: el color lo ponen las alertas. */
+.pos-branch-status-icon {
+  flex: 0 0 auto;
+  margin-top: 1px;
+  color: var(--muted);
+}
+
+.pos-branch-muted {
+  color: var(--muted);
+}
+
+.pos-branch-go {
+  color: var(--muted);
+  transition: transform 140ms ease, color 140ms ease;
+}
+
+.pos-branch .pos-day-head:hover .pos-branch-go {
+  color: var(--glam-navy);
+  transform: translateX(2px);
+}
+
+.pos-branch.is-inactive {
+  opacity: 0.7;
+}
+
+@media (max-width: 1100px) {
+  .pos-branch .pos-day-head {
+    grid-template-columns: auto 1fr auto auto;
+  }
+
+  .pos-branch .pos-branch-status {
+    grid-column: 2 / -1;
+    grid-row: 2;
+  }
+}
+
+@media (max-width: 640px) {
+  .pos-branch .pos-day-head {
+    grid-template-columns: auto 1fr auto;
+  }
+
+  .pos-branch .pos-branch-status,
+  .pos-branch .pos-day-stats {
+    grid-column: 1 / -1;
+    grid-row: auto;
+  }
+
+  .pos-branch-go {
+    grid-row: 1;
+    grid-column: 3;
+  }
+}
+
 /* ---- Barra de filtros (pantallas del punto de venta) ----
 
    `.toolbar` reparte a sus hijos con `space-between`: con tres controles los

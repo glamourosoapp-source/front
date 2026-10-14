@@ -1,10 +1,9 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { useRouter } from "next/navigation";
-import { Button, Chip, FormControlLabel, Switch } from "@mui/material";
-import { Plus, ShieldAlert, Store } from "lucide-react";
-import { DataTable } from "@/components/ui/DataTable";
+import Link from "next/link";
+import { Button, FormControlLabel, Switch } from "@mui/material";
+import { ChevronRight, Clock, PackageMinus, Plus, ShieldAlert, Store, Truck } from "lucide-react";
 import { BranchFormDialog } from "@/components/pos-admin/BranchFormDialog";
 import { BranchHealthChip } from "@/components/pos-admin/BranchHealthChip";
 import { BranchSyncCell } from "@/components/pos-admin/BranchSyncCell";
@@ -19,13 +18,139 @@ import { toast } from "sonner";
 import { FilterBar, FilterMeta, FilterSearch } from "./FilterBar";
 import { BRANCH_TYPE_COPY, WEEKDAY_LABELS, relativeDays } from "./pos-labels";
 
+/** Bloque de cifra de la tarjeta: etiqueta, valor grande y una nota debajo. */
+function RowStat({ label, value, note, total }: { label: string; value: string; note?: string; total?: boolean }) {
+  return (
+    <span className={`pos-day-stat${total ? " is-total" : ""}`}>
+      <small>{label}</small>
+      <b>{value}</b>
+      {note ? <em>{note}</em> : null}
+    </span>
+  );
+}
+
+const ticketsLabel = (count: number) => `${count} ${count === 1 ? "ticket" : "tickets"}`;
+
 /**
- * Tabla de sucursales o de franquicias. Es la misma pantalla para las dos:
- * cambian las columnas (una franquicia no vende ni lleva inventario aquí) y
- * la copia. Clic en la fila abre el detalle.
+ * Una sucursal (o franquicia) como tarjeta, igual que las de Cortes: a la
+ * izquierda quién es y su salud, en medio cómo va su operación (caja, tienda,
+ * surtido) y a la derecha las cifras. Toda la tarjeta abre el detalle.
+ */
+function BranchRow({
+  row,
+  href,
+  isFranchise,
+  seesSales,
+  seesInventory,
+}: {
+  row: BranchStats;
+  href: string;
+  isFranchise: boolean;
+  seesSales: boolean;
+  seesInventory: boolean;
+}) {
+  const sales = row.sales;
+  const belowMin = row.inventory?.belowMinCount ?? 0;
+  const subline = [
+    row.code,
+    row.city,
+    row.usersCount ? `${row.usersCount} ${row.usersCount === 1 ? "usuario" : "usuarios"}` : "sin usuarios",
+    !isFranchise && sales ? `última venta ${relativeDays(sales.lastSaleAt)}` : null,
+  ].filter(Boolean);
+  const restockNote = isFranchise
+    ? `${row.restock.monthCount} este mes · último ${relativeDays(row.restock.lastOrderAt)}`
+    : row.restockCutoffDow == null
+      ? "corte manual"
+      : `corte ${WEEKDAY_LABELS[row.restockCutoffDow].toLowerCase()}`;
+
+  return (
+    <section className={`pos-day pos-cut pos-branch${row.isActive ? "" : " is-inactive"}`}>
+      <Link href={href} className="pos-day-head">
+        <span className="pos-day-chevron" aria-hidden>
+          <Store size={17} />
+        </span>
+        <span className="pos-day-date">
+          <span className="pos-day-weekday">
+            {row.name}
+            {row.isActive ? null : <span className="pos-day-badge is-muted">Inactiva</span>}
+          </span>
+          <span className="pos-day-fulldate">{subline.join(" · ")}</span>
+          <span className="pos-branch-health">
+            <BranchHealthChip health={row.health} />
+          </span>
+        </span>
+        <span className="pos-branch-status">
+          <span>
+            <BranchSyncCell stats={row} />
+          </span>
+          {!isFranchise && row.storeToday ? (
+            <span>
+              <Clock size={15} className="pos-branch-status-icon" />
+              <BranchStoreTodayCell day={row.storeToday} />
+            </span>
+          ) : null}
+          <span>
+            <Truck size={15} className="pos-branch-status-icon" />
+            <span>
+              {row.restock.openCount ? (
+                <strong style={{ color: "var(--glam-navy)" }}>
+                  {row.restock.openCount} {isFranchise ? "pedido" : "surtido"}
+                  {row.restock.openCount === 1 ? "" : "s"} por enviar
+                </strong>
+              ) : (
+                <span>{isFranchise ? "Pedidos al día" : "Surtido al día"}</span>
+              )}
+              <span className="pos-branch-muted"> · {restockNote}</span>
+            </span>
+          </span>
+          {!isFranchise && seesInventory && belowMin ? (
+            <span>
+              <PackageMinus size={15} className="pos-branch-status-icon" />
+              <span>
+                {belowMin} {belowMin === 1 ? "producto" : "productos"} bajo su stock
+              </span>
+            </span>
+          ) : null}
+        </span>
+        {isFranchise ? (
+          <span className="pos-day-stats">
+            <RowStat label="Por enviar" value={String(row.restock.openCount)} note="pedidos" />
+            <RowStat label="Este mes" value={String(row.restock.monthCount)} note="pedidos" total />
+          </span>
+        ) : seesSales ? (
+          <span className="pos-day-stats">
+            <RowStat
+              label="Hoy"
+              value={formatMoney(sales?.today.total ?? 0)}
+              note={ticketsLabel(sales?.today.tickets ?? 0)}
+            />
+            <RowStat
+              label="Semana"
+              value={formatMoney(sales?.week.total ?? 0)}
+              note={ticketsLabel(sales?.week.tickets ?? 0)}
+            />
+            <RowStat
+              label="Mes"
+              value={formatMoney(sales?.month.total ?? 0)}
+              note={`prom. ${formatMoney(sales?.month.avgTicket ?? 0)}`}
+              total
+            />
+          </span>
+        ) : (
+          <span />
+        )}
+        <ChevronRight size={18} className="pos-branch-go" aria-hidden />
+      </Link>
+    </section>
+  );
+}
+
+/**
+ * Lista de sucursales o de franquicias. Es la misma pantalla para las dos:
+ * cambian las cifras (una franquicia no vende ni lleva inventario aquí) y la
+ * copia. Clic en la tarjeta abre el detalle.
  */
 export function BranchListPage({ type }: { type: BranchType }) {
-  const router = useRouter();
   const { can } = usePermissions();
   const { subscribe } = useRealtime();
   const copy = BRANCH_TYPE_COPY[type];
@@ -98,122 +223,6 @@ export function BranchListPage({ type }: { type: BranchType }) {
       </div>
     );
   }
-
-  const columns = [
-    {
-      key: "code",
-      label: "Código",
-      render: (row: BranchStats) => (
-        <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
-          <Store size={14} style={{ color: "var(--glam-blue)" }} />
-          <strong>{row.code}</strong>
-        </span>
-      ),
-    },
-    {
-      key: "name",
-      label: "Nombre",
-      render: (row: BranchStats) => (
-        <div>
-          <div style={{ fontWeight: 600, color: "var(--glam-navy)" }}>{row.name}</div>
-          {row.city ? (
-            <div className="page-kicker" style={{ margin: 0 }}>
-              {row.city}
-            </div>
-          ) : null}
-        </div>
-      ),
-    },
-    { key: "health", label: "Salud", render: (row: BranchStats) => <BranchHealthChip health={row.health} /> },
-    {
-      key: "sync",
-      label: "Caja",
-      // Ventas cobradas que todavía viven en la PC de la sucursal: es lo único
-      // de la operación del día que no se puede ver por ningún otro lado.
-      render: (row: BranchStats) => <BranchSyncCell stats={row} />,
-    },
-    ...(!isFranchise
-      ? [
-          {
-            key: "storeToday",
-            label: "Hoy",
-            // Apertura y cierre que registró el cajero, contra el horario.
-            render: (row: BranchStats) => <BranchStoreTodayCell day={row.storeToday} />,
-          },
-        ]
-      : []),
-    ...(!isFranchise && seesSales
-      ? [
-          {
-            key: "month",
-            label: "Ventas del mes",
-            render: (row: BranchStats) => (
-              <div>
-                <strong>{formatMoney(row.sales?.month.total ?? 0)}</strong>
-                <div className="page-kicker" style={{ margin: 0 }}>
-                  {row.sales?.month.tickets ?? 0} tickets · hoy {formatMoney(row.sales?.today.total ?? 0)}
-                </div>
-              </div>
-            ),
-          },
-          {
-            key: "avg",
-            label: "Ticket promedio",
-            render: (row: BranchStats) => formatMoney(row.sales?.month.avgTicket ?? 0),
-          },
-          {
-            key: "lastSale",
-            label: "Última venta",
-            render: (row: BranchStats) => relativeDays(row.sales?.lastSaleAt),
-          },
-        ]
-      : []),
-    ...(!isFranchise && seesInventory
-      ? [
-          {
-            key: "belowMin",
-            label: "Bajo su stock",
-            render: (row: BranchStats) =>
-              row.inventory?.belowMinCount ? (
-                row.inventory.belowMinCount
-              ) : (
-                "—"
-              ),
-          },
-        ]
-      : []),
-    {
-      key: "restock",
-      label: isFranchise ? "Pedidos a fábrica" : "Surtido",
-      render: (row: BranchStats) => (
-        <div>
-          {row.restock.openCount ? (
-            <strong style={{ color: "var(--glam-navy)" }}>{row.restock.openCount} por enviar</strong>
-          ) : (
-            <span>Al día</span>
-          )}
-          <div className="page-kicker" style={{ margin: 0 }}>
-            {isFranchise
-              ? `${row.restock.monthCount} este mes · último ${relativeDays(row.restock.lastOrderAt)}`
-              : row.restockCutoffDow == null
-                ? "Corte manual"
-                : `Corte ${WEEKDAY_LABELS[row.restockCutoffDow]}`}
-          </div>
-        </div>
-      ),
-    },
-    { key: "users", label: "Usuarios", render: (row: BranchStats) => row.usersCount || "—" },
-    {
-      key: "status",
-      label: "Estado",
-      render: (row: BranchStats) =>
-        row.isActive ? (
-          <Chip label="Activa" size="small" color="primary" />
-        ) : (
-          <Chip label="Inactiva" size="small" />
-        ),
-    },
-  ];
 
   return (
     <div className="page-stack">
@@ -288,14 +297,16 @@ export function BranchListPage({ type }: { type: BranchType }) {
         </FilterMeta>
       </FilterBar>
 
-      {visible.length ? (
-      <DataTable
-        rows={visible}
-        getKey={(row: BranchStats) => row.branchId}
-        onRowClick={(row: BranchStats) => router.push(`${copy.listHref}/${row.branchId}`)}
-        columns={columns}
-      />
-      ) : null}
+      {visible.map((row) => (
+        <BranchRow
+          key={row.branchId}
+          row={row}
+          href={`${copy.listHref}/${row.branchId}`}
+          isFranchise={isFranchise}
+          seesSales={seesSales}
+          seesInventory={seesInventory}
+        />
+      ))}
 
       {loading ? <p className="page-kicker">Cargando...</p> : null}
       {!loading && !rows.length ? (
