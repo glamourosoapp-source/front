@@ -10,6 +10,7 @@ import {
 } from "@glamouroso/shared";
 import { posSync } from "@/lib/pos-offline/sync";
 import { readKey, writeKey } from "@/lib/pos-offline/db";
+import { monotonicNow } from "@/lib/pos-offline/clock";
 import { businessTimeZone } from "@/lib/business-time";
 
 /** Lo que la PC recuerda del día: sobrevive a reinicios y a días sin red. */
@@ -72,6 +73,9 @@ export function useStoreDay(serverDay: StoreDayEvaluation | null | undefined) {
 
   const record = useCallback(
     async (kind: "opened" | "closed") => {
+      // La hora de la PC es para la pantalla; la que cuenta la calcula el
+      // servidor con el reloj interno (`clock`), por si movieron el de Windows.
+      const clock = monotonicNow();
       const at = new Date();
       const date = current.date;
       const next: LocalStoreDay = {
@@ -84,7 +88,7 @@ export function useStoreDay(serverDay: StoreDayEvaluation | null | undefined) {
         id: crypto.randomUUID(),
         type: kind === "opened" ? POS_SYNC_EVENT_TYPES.STORE_OPENED : POS_SYNC_EVENT_TYPES.STORE_CLOSED,
         occurredAt: at.toISOString(),
-        payload: { businessDate: date, recordedOffline: !posSync.getStatus().online },
+        payload: { businessDate: date, recordedOffline: !posSync.getStatus().online, clock },
       };
       // Primero la PC (lo que bloquea o libera la caja) y luego la cola.
       setLocal(next);

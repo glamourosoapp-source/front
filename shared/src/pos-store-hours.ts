@@ -25,6 +25,24 @@ export type StoreEventKind = (typeof STORE_EVENT_KINDS)[keyof typeof STORE_EVENT
 /** Minutos de gracia antes de marcar "abrió tarde" o "cerró temprano". */
 export const STORE_HOURS_TOLERANCE_MINUTES = 15;
 
+/**
+ * Diferencia entre la hora de la PC y la real a partir de la cual se marca
+ * "Reloj movido". Un reloj de Windows se desvía uno o dos minutos solo.
+ */
+export const STORE_CLOCK_MOVED_MINUTES = 5;
+
+/**
+ * De dónde salió la hora que guarda el servidor:
+ * - `monotonic`: reloj interno de la caja contra el del servidor. Es exacta
+ *   aunque hayan movido la hora de la PC.
+ * - `offset`: hora de la PC corregida con su desfase al subir (la página se
+ *   recargó entre el clic y la subida). Falla solo si movieron el reloj y lo
+ *   regresaron antes de que volviera el internet.
+ * - `client`: la hora de la PC tal cual (caja sin actualizar, o registros
+ *   anteriores al 2026-10-13).
+ */
+export type StoreEventTimeSource = "monotonic" | "offset" | "client";
+
 /** Horario de un día: "HH:mm" en la zona de la organización. */
 export interface StoreDayHours {
   open: string;
@@ -36,17 +54,20 @@ export type BranchOpeningHours = Partial<Record<WeekdayKey, StoreDayHours | null
 
 export interface StoreEventLike {
   kind: StoreEventKind;
+  /** Hora real del clic (la calcula el servidor). */
   occurredAt: string;
+  /** Hora que marcaba la PC al clic; si difiere de la real, se marca. */
+  clientOccurredAt?: string | null;
 }
 
 export type StoreDayStatus = "not_opened" | "open" | "closed";
 
-export type StoreDayFlagCode = "not_opened" | "late_open" | "early_close" | "no_close";
+export type StoreDayFlagCode = "not_opened" | "late_open" | "early_close" | "no_close" | "clock_moved";
 
 export interface StoreDayFlag {
   code: StoreDayFlagCode;
   label: string;
-  /** Minutos de diferencia contra el horario (tarde / temprano). */
+  /** Minutos de diferencia contra el horario (tarde / temprano) o del reloj movido. */
   minutes?: number;
 }
 
@@ -126,6 +147,9 @@ function formatMinutes(total: number): string {
  * - `no_close`: quedó abierta y ya pasó el día (o, hoy, la hora de cierre +
  *   tolerancia).
  *
+ * - `clock_moved`: la hora de la PC en algún clic difería de la real en
+ *   `STORE_CLOCK_MOVED_MINUTES` o más (se marca también en días de descanso).
+ *
  * Un día sin horario (descanso) no marca nada salvo `no_close` de días pasados.
  */
 export function evaluateStoreDay(input: {
@@ -185,13 +209,43 @@ export function evaluateStoreDay(input: {
     flags.push({ code: "no_close", label: "Sin cierre" });
   }
 
+  const skew = clockSkewMinutes(events);
+  if (Math.abs(skew) >= STORE_CLOCK_MOVED_MINUTES) {
+    flags.push({
+      code: "clock_moved",
+      label: `Reloj de la PC ${skew > 0 ? "adelantado" : "atrasado"} ${formatMinutes(Math.abs(skew))}`,
+      minutes: Math.abs(skew),
+    });
+  }
+
   return { date, status, openedAt, closedAt, reopenCount, hours, hasSchedule, flags };
+}
+
+/**
+ * El desfase más grande del día entre la hora de la PC y la real, en minutos:
+ * positivo = la PC iba adelantada, negativo = atrasada. 0 si no hay con qué
+ * comparar.
+ */
+export function clockSkewMinutes(events: StoreEventLike[]): number {
+  let worst = 0;
+  for (const event of events) {
+    if (!event.clientOccurredAt) continue;
+    const diff = Math.round(
+      (new Date(event.clientOccurredAt).getTime() - new Date(event.occurredAt).getTime()) / 60_000
+    );
+    if (Number.isFinite(diff) && Math.abs(diff) > Math.abs(worst)) worst = diff;
+  }
+  return worst;
 }
 
 /** Un evento del día como lo ve el panel: quién y a qué hora. */
 export interface StoreEventView {
   kind: StoreEventKind;
+  /** Hora real del clic. */
   occurredAt: string;
+  /** Hora que marcaba la PC (`null` en registros anteriores al 2026-10-13). */
+  clientOccurredAt: string | null;
+  timeSource: StoreEventTimeSource | null;
   recordedOffline: boolean;
   user: { id: string; name: string } | null;
 }

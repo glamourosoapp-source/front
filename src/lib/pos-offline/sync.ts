@@ -26,6 +26,7 @@ import {
   type OutboxEntry,
 } from "./store";
 import { withTabLock } from "./sync-lock";
+import { monotonicNow } from "./clock";
 
 /**
  * Motor de sincronización de la caja.
@@ -179,6 +180,9 @@ class PosSyncEngine {
       }>("/pos/sync", {
         deviceId: meta.deviceId,
         clockOffsetMs: meta.clockOffsetMs,
+        // Con estos dos el servidor saca la hora real de cada apertura y cierre.
+        sentAt: new Date().toISOString(),
+        clock: monotonicNow(),
         events: batch.map((entry) => entry.event),
         heartbeat: {
           pendingCount: queue.length,

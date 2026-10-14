@@ -4,7 +4,13 @@ import { useCallback, useEffect, useState } from "react";
 import { Button } from "@mui/material";
 import { RefreshCw } from "lucide-react";
 import { toast } from "sonner";
-import { WEEKDAY_KEYS, type Branch, type StoreDayView } from "@glamouroso/shared";
+import {
+  STORE_CLOCK_MOVED_MINUTES,
+  WEEKDAY_KEYS,
+  type Branch,
+  type StoreDayView,
+  type StoreEventView,
+} from "@glamouroso/shared";
 import { DataTable } from "@/components/ui/DataTable";
 import { httpClient, getApiErrorMessage } from "@/services/http-client";
 import { StoreDayFlags, storeTime } from "../BranchStoreTodayCell";
@@ -19,6 +25,13 @@ const WEEKDAY_SHORT: Record<string, string> = {
   friday: "Vie",
   saturday: "Sáb",
 };
+
+/** " (la PC decía 9:00)" cuando la hora de la PC no era la real. */
+function pcTimeNote(event: StoreEventView): string {
+  if (!event.clientOccurredAt) return "";
+  const diff = Math.abs(new Date(event.clientOccurredAt).getTime() - new Date(event.occurredAt).getTime());
+  return diff >= STORE_CLOCK_MOVED_MINUTES * 60_000 ? ` (la PC decía ${storeTime(event.clientOccurredAt)})` : "";
+}
 
 function dayLabel(date: string): string {
   const [y, m, d] = date.split("-").map(Number);
@@ -137,7 +150,7 @@ export function BranchStoreDaysTab({ branch }: { branch: Branch }) {
                     {row.events
                       .map(
                         (event, index) =>
-                          `${event.kind === "opened" ? (index === 0 ? "Abrió" : "Reabrió") : "Cerró"} ${storeTime(event.occurredAt)}${
+                          `${event.kind === "opened" ? (index === 0 ? "Abrió" : "Reabrió") : "Cerró"} ${storeTime(event.occurredAt)}${pcTimeNote(event)}${
                             event.user ? ` (${event.user.name})` : ""
                           }${event.recordedOffline ? " · sin internet" : ""}`
                       )

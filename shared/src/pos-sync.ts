@@ -122,6 +122,26 @@ export interface PosStoreEventPayload {
   businessDate: string;
   /** true si ocurrió sin conexión. */
   recordedOffline: boolean;
+  /**
+   * Reloj interno al momento del clic. Con él el servidor saca la hora real
+   * aunque el reloj de la PC esté movido (ver `PosMonotonicClock`).
+   */
+  clock?: PosMonotonicClock | null;
+}
+
+/**
+ * Lectura del reloj interno del navegador (`performance.now()`): avanza igual
+ * aunque alguien cambie la hora de Windows. Dos lecturas solo se restan si son
+ * de la misma carga de la página (`bootId`); al recargar, el contador vuelve
+ * a cero.
+ *
+ * Así el servidor calcula la hora del clic con SU reloj: hora en que recibió
+ * el lote − (lectura al enviar − lectura al clic). Detalle:
+ * docs/product-specs/pos-apertura-cierre.md
+ */
+export interface PosMonotonicClock {
+  bootId: string;
+  monoMs: number;
 }
 
 export type PosSyncEventPayload =

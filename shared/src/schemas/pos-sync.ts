@@ -61,9 +61,16 @@ export const posSyncVoidPayloadSchema = z.object({
   voidedAt: isoDate,
 });
 
+/** Lectura del reloj interno de la caja (`performance.now()` + carga de la página). */
+export const posMonotonicClockSchema = z.object({
+  bootId: z.string().min(8).max(64),
+  monoMs: z.coerce.number().min(0).max(31_536_000_000),
+});
+
 export const posSyncStorePayloadSchema = z.object({
   businessDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
   recordedOffline: z.boolean().default(false),
+  clock: z.union([posMonotonicClockSchema, z.null()]).optional(),
 });
 
 export const posSyncEventSchema = z.discriminatedUnion("type", [
@@ -111,6 +118,10 @@ export const posSyncRequestSchema = z.object({
   branchId: z.union([z.string().uuid(), z.null()]).optional(),
   deviceId: z.string().min(8).max(64),
   clockOffsetMs: z.coerce.number().int().min(-31_536_000_000).max(31_536_000_000).optional(),
+  /** Hora de la PC al enviar el lote: contra la del servidor da el desfase. */
+  sentAt: isoDate.optional(),
+  /** Reloj interno al enviar el lote: con el del evento da cuánto pasó desde el clic. */
+  clock: posMonotonicClockSchema.optional(),
   /** Un lote vacío es válido: sirve de heartbeat cuando no hay nada que subir. */
   events: z.array(posSyncEventSchema).max(200).default([]),
   heartbeat: posSyncHeartbeatSchema.optional(),
