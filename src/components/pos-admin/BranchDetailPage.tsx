@@ -16,6 +16,7 @@ import { BranchHealthChip } from "./BranchHealthChip";
 import { BRANCH_TYPE_COPY } from "./pos-labels";
 import { BranchOverviewTab } from "./tabs/BranchOverviewTab";
 import { BranchSalesTab } from "./tabs/BranchSalesTab";
+import { BranchReturnsTab } from "./tabs/BranchReturnsTab";
 import { BranchRestockTab } from "./tabs/BranchRestockTab";
 import { BranchCutsTab } from "./tabs/BranchCutsTab";
 import { BranchInventoryTab } from "./tabs/BranchInventoryTab";
@@ -27,6 +28,7 @@ import { BranchStoreDaysTab } from "./tabs/BranchStoreDaysTab";
 type TabKey =
   | "resumen"
   | "ventas"
+  | "devoluciones"
   | "pedidos"
   | "cortes"
   | "inventario"
@@ -65,6 +67,7 @@ export function BranchDetailPage({ type }: { type: BranchType }) {
     : [
         { key: "resumen", label: "Resumen" },
         { key: "ventas", label: "Ventas" },
+        { key: "devoluciones", label: "Devoluciones" },
         { key: "pedidos", label: "Pedidos a fábrica" },
         { key: "cortes", label: "Cortes" },
         { key: "inventario", label: "Inventario y stock" },
@@ -215,6 +218,7 @@ export function BranchDetailPage({ type }: { type: BranchType }) {
 
       {tab === "resumen" ? <BranchOverviewTab branch={branch} stats={stats} /> : null}
       {tab === "ventas" ? <BranchSalesTab branchId={branch.id} /> : null}
+      {tab === "devoluciones" ? <BranchReturnsTab branchId={branch.id} /> : null}
       {tab === "pedidos" ? <BranchRestockTab branch={branch} /> : null}
       {tab === "cortes" ? <BranchCutsTab branchId={branch.id} /> : null}
       {tab === "inventario" ? (
