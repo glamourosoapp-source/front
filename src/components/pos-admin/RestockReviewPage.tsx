@@ -16,7 +16,22 @@ import {
   Tabs,
   TextField,
 } from "@mui/material";
-import { ArrowLeft, CheckCircle2, ClipboardCopy, Download, Eye, RotateCcw, Send, ShieldAlert, Truck } from "lucide-react";
+import {
+  ArrowLeft,
+  Boxes,
+  CheckCircle2,
+  ClipboardCopy,
+  Download,
+  Droplets,
+  Eye,
+  ListChecks,
+  Package,
+  ReceiptText,
+  RotateCcw,
+  Send,
+  ShieldAlert,
+  Truck,
+} from "lucide-react";
 import { toast } from "sonner";
 import type { FactoryForm } from "@glamouroso/shared";
 import { RESTOCK_ORDER_STATUS } from "@glamouroso/shared/constants";
@@ -34,16 +49,46 @@ import { RESTOCK_STATUS_LABELS, formatDateTime, relativeDays, restockOrderSheetH
 
 type View = "resumen" | "formato";
 
-/** Empaques por tipo: bidones (y garrafas), cajas y piezas sueltas. */
+/** Empaques por tipo (bidones y garrafas, cajas, piezas sueltas) y lo que equivalen. */
 function packCounts(captured: ReturnType<typeof capturedRows>) {
   return captured.reduce(
-    (acc, { row, packs }) => {
-      if (row.lineId) acc.bidones += packs;
-      else if (row.packSize > 1) acc.cajas += packs;
-      else acc.piezas += packs;
+    (acc, { row, packs, base }) => {
+      if (row.lineId) {
+        acc.bidones += packs;
+        acc.liters += base;
+      } else if (row.packSize > 1) {
+        acc.cajas += packs;
+        acc.boxPieces += base;
+      } else acc.piezas += packs;
       return acc;
     },
-    { bidones: 0, cajas: 0, piezas: 0 }
+    { bidones: 0, liters: 0, cajas: 0, boxPieces: 0, piezas: 0 }
+  );
+}
+
+/** Una cifra del encabezado: ícono, etiqueta, número grande y su equivalencia. */
+function Stat({
+  icon: Icon,
+  label,
+  value,
+  note,
+  total = false,
+}: {
+  icon: typeof Truck;
+  label: string;
+  value: string;
+  note?: string;
+  total?: boolean;
+}) {
+  return (
+    <div className={`restock-stat${total ? " is-total" : ""}`}>
+      <span className="restock-stat-head">
+        <Icon size={14} />
+        {label}
+      </span>
+      <b>{value}</b>
+      {note ? <small>{note}</small> : null}
+    </div>
   );
 }
 
@@ -254,22 +299,46 @@ export function RestockReviewPage() {
 
   return (
     <div className="page-stack msf-page">
-      <div className="toolbar" style={{ alignItems: "flex-start" }}>
-        <div>
-          <Link href={backHref} className="mb-2 inline-flex items-center gap-1 text-sm text-[var(--muted)] hover:text-[var(--glam-navy)]">
-            <ArrowLeft size={16} />
-            Volver a pedidos a fábrica
-          </Link>
-          <h1 className="page-title" style={{ display: "flex", alignItems: "center", gap: 10 }}>
-            <Truck size={22} style={{ color: "var(--glam-blue)", flex: "0 0 auto" }} />
-            <span>Pedido a fábrica{branchLabel ? ` · ${branchLabel}` : ""}</span>
-          </h1>
-          <p className="page-kicker" style={{ margin: 0 }}>
-            Viene con el faltante de hoy. Ajusta lo que quieras pedir y presiona <strong>Enviar a fábrica</strong>.
-          </p>
+      <Link href={backHref} className="inline-flex items-center gap-1 text-sm text-[var(--muted)] hover:text-[var(--glam-navy)]">
+        <ArrowLeft size={16} />
+        Volver a pedidos a fábrica
+      </Link>
+
+      <section className="pos-day pos-cut is-overall restock-review-head">
+        <div className="restock-review-top">
+          <div className="restock-review-title">
+            <span className="restock-review-icon">
+              <Truck size={20} />
+            </span>
+            <div>
+              <h1 className="page-title" style={{ margin: 0 }}>
+                Pedido a fábrica
+              </h1>
+              <p className="restock-review-branch">{branchLabel || "…"}</p>
+              <p className="page-kicker" style={{ margin: 0 }}>
+                Viene con el faltante de hoy. Ajusta lo que quieras pedir y presiona <strong>Enviar a fábrica</strong>.
+              </p>
+            </div>
+          </div>
+          <RestockSteps current="review" />
         </div>
-        <RestockSteps current="review" />
-      </div>
+
+        <div className={`restock-review-stats${canSeeCosts ? "" : " is-no-total"}`} aria-label="Totales del pedido">
+          <Stat icon={ListChecks} label="Productos" value={formatQuantity(captured.length)} note={changed ? `${changed} cambiado${changed === 1 ? "" : "s"}` : "igual al faltante"} />
+          <Stat icon={Droplets} label="Bidones" value={formatQuantity(counts.bidones)} note={`${formatQuantity(counts.liters)} L de líquidos`} />
+          <Stat icon={Package} label="Cajas" value={formatQuantity(counts.cajas)} note={`${formatQuantity(counts.boxPieces)} piezas`} />
+          <Stat icon={Boxes} label="Piezas sueltas" value={formatQuantity(counts.piezas)} />
+          {canSeeCosts ? (
+            <Stat
+              icon={ReceiptText}
+              label="Total con cargos"
+              value={formatMoney(grandTotal)}
+              note={`${formatMoney(totals.amount)} de producto + ${formatMoney(charges.total)} de cargos`}
+              total
+            />
+          ) : null}
+        </div>
+      </section>
 
       {inTransit ? (
         <Alert
@@ -282,28 +351,6 @@ export function RestockReviewPage() {
           {relativeDays(inTransit.createdAt)}). Se podrá enviar otro cuando ese se reciba o se cancele.
         </Alert>
       ) : null}
-
-      <div className="pos-day-stats restock-review-stats" aria-label="Totales del pedido">
-        <div className="pos-day-stat">
-          <small>Bidones</small>
-          <b>{formatQuantity(counts.bidones)}</b>
-        </div>
-        <div className="pos-day-stat">
-          <small>Cajas</small>
-          <b>{formatQuantity(counts.cajas)}</b>
-        </div>
-        <div className="pos-day-stat">
-          <small>Piezas</small>
-          <b>{formatQuantity(counts.piezas)}</b>
-        </div>
-        {canSeeCosts ? (
-          <div className="pos-day-stat is-total">
-            <small>Total</small>
-            <b>{formatMoney(grandTotal)}</b>
-            <em>con cargos</em>
-          </div>
-        ) : null}
-      </div>
 
       <Tabs value={view} onChange={(_e, next) => selectView(next as View)} sx={{ borderBottom: "1px solid var(--border)" }}>
         <Tab value="resumen" label={`Resumen · ${captured.length}`} />
