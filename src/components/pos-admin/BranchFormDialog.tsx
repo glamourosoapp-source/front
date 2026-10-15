@@ -39,13 +39,6 @@ interface BranchFormDialogProps {
   onSaved: () => void;
 }
 
-/**
- * Día de corte que se propone al dar de alta: el jueves, cierre de la semana del
- * punto de venta (viernes a jueves), que es cuando se saca el pedido a fábrica.
- * Solo a sucursales con caja: una franquicia no lleva inventario y no tiene faltante.
- */
-const DEFAULT_RESTOCK_CUTOFF_DOW = 4;
-
 /** Domingo primero, como el `restock_cutoff_dow` que guarda la base (0..6). */
 const WEEKDAYS = [
   { value: 0, label: "Domingo" },
@@ -189,15 +182,13 @@ export function BranchFormDialog({
             select
             name="restockCutoffDow"
             label="Día de corte de faltantes"
-            defaultValue={
-              branch
-                ? (branch.restockCutoffDow ?? "")
-                : defaultType === BRANCH_TYPES.FRANCHISE
-                  ? ""
-                  : DEFAULT_RESTOCK_CUTOFF_DOW
-            }
+            // Al dar de alta se propone sin corte: el pedido a fábrica se hace a mano
+            // (desde 2026-10-14 ninguna sucursal tiene corte automático).
+            defaultValue={branch?.restockCutoffDow ?? ""}
             fullWidth
-            helperText="Ese día se calcula el faltante y se genera el pedido a fábrica. Normalmente el jueves, al cerrar la semana."
+            SelectProps={{ displayEmpty: true }}
+            InputLabelProps={{ shrink: true }}
+            helperText="Si eliges un día, ese día se calcula el faltante y se genera solo el pedido a fábrica."
           >
             <MenuItem value="">Sin corte automático</MenuItem>
             {WEEKDAYS.map((day) => (
