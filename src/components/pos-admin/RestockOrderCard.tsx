@@ -1,6 +1,7 @@
 "use client";
 
 import { Button, Chip } from "@mui/material";
+import { config } from "@/config";
 import { Check, Eye, FileDown, Truck, X } from "lucide-react";
 import Link from "next/link";
 import {
@@ -41,6 +42,11 @@ function returnedLabel(line: ReturnedLine): string {
  */
 export function RestockOrderDetail({ order }: { order: RestockOrder }) {
   const isFranchise = order.origin === RESTOCK_ORIGIN.FRANCHISE;
+  // Con fábrica apagada nadie prepara ni despacha en el sistema: lo que se
+  // captura es lo que llegó a la sucursal.
+  const factoryOn = config.factoryModuleEnabled;
+  const showPrepared = factoryOn || isFranchise;
+  const columns = 3 + (isFranchise ? 1 : 0) + (showPrepared ? 1 : 0);
   const isSentOrReceived =
     order.status === RESTOCK_ORDER_STATUS.SENT || order.status === RESTOCK_ORDER_STATUS.RECEIVED;
   const items = order.items ?? [];
@@ -75,9 +81,9 @@ export function RestockOrderDetail({ order }: { order: RestockOrder }) {
             <tr>
               <th>Producto</th>
               <th style={{ textAlign: "right" }}>Pedido</th>
-              <th style={{ textAlign: "right" }}>Despachado</th>
+              <th style={{ textAlign: "right" }}>{factoryOn ? "Despachado" : "Llegó"}</th>
               {isFranchise ? <th style={{ textAlign: "right" }}>Precio mayoreo</th> : null}
-              <th>Preparado</th>
+              {showPrepared ? <th>Preparado</th> : null}
             </tr>
           </thead>
           <tbody>
@@ -119,13 +125,13 @@ export function RestockOrderDetail({ order }: { order: RestockOrder }) {
                       {item.unitPrice ? formatMoney(item.unitPrice) : "—"}
                     </td>
                   ) : null}
-                  <td>{item.prepared ? "Sí" : "—"}</td>
+                  {showPrepared ? <td>{item.prepared ? "Sí" : "—"}</td> : null}
                 </tr>
               );
             })}
             {returnedElsewhere.map((line) => (
               <tr key={line.id} style={{ background: "#fef2f2" }}>
-                <td colSpan={isFranchise ? 5 : 4} style={{ color: RETURN_RED, fontWeight: 600 }}>
+                <td colSpan={columns} style={{ color: RETURN_RED, fontWeight: 600 }}>
                   {returnedLabel(line)}
                   <span style={{ fontWeight: 400 }}> — no venía en este pedido</span>
                 </td>
@@ -142,7 +148,7 @@ export function RestockOrderDetail({ order }: { order: RestockOrder }) {
                   </div>
                 </td>
                 <td style={{ textAlign: "right", fontWeight: 700 }}>{formatMoney(order.total)}</td>
-                <td />
+                {showPrepared ? <td /> : null}
               </tr>
             </tfoot>
           ) : null}
@@ -178,7 +184,7 @@ export function RestockOrderDetail({ order }: { order: RestockOrder }) {
       ) : null}
       {order.dispatchNotes ? (
         <p className="page-kicker" style={{ marginBottom: 0, color: "#92400e" }}>
-          <strong>Nota de fábrica:</strong> {order.dispatchNotes}
+          <strong>{factoryOn ? "Nota de fábrica:" : "Nota de la llegada:"}</strong> {order.dispatchNotes}
         </p>
       ) : null}
     </>

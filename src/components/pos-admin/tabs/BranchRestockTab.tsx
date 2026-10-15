@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Button, IconButton, MenuItem, TextField, Tooltip } from "@mui/material";
-import { FileDown, Lock, PackagePlus, RefreshCw, Sheet, Truck } from "lucide-react";
+import { ChevronDown, FileDown, PackagePlus, RefreshCw, Sheet, Truck } from "lucide-react";
 import Link from "next/link";
 import { BRANCH_TYPES, RESTOCK_ORDER_STATUS } from "@glamouroso/shared/constants";
 import { httpClient, getApiErrorMessage } from "@/services/http-client";
@@ -15,7 +15,7 @@ import { RestockOrdersTable } from "../RestockOrdersTable";
 import { isAwaitingRestockOrder } from "../RestockOrderActions";
 import { RestockAwaitingDialog, blockingRestockOrder, isAwaitingOrderError } from "../RestockAwaitingDialog";
 import { FilterBar, FilterDateRange, FilterMeta, type DateRangeOption } from "../FilterBar";
-import { RESTOCK_STATUS_LABELS, formatDateTime, packQtyLabel, packTotals, unitLabel } from "../pos-labels";
+import { RESTOCK_STATUS_LABELS, packQtyLabel, packSummary, packTotals, unitLabel } from "../pos-labels";
 import { useFactoryFormDownload } from "../useFactoryFormDownload";
 
 /** Aquí sí hay "Todo": el historial completo de la sucursal es lo normal. */
@@ -50,13 +50,50 @@ function exportShortagesCsv(shortages: BranchShortage[], code: string) {
   URL.revokeObjectURL(url);
 }
 
+/** Faltante de hoy: lo que se pediría, contra la existencia y el stock. */
+function ShortagesTable({ shortages }: { shortages: BranchShortage[] }) {
+  return (
+    <div className="table-container-premium">
+      <table className="table">
+        <thead>
+          <tr>
+            <th>Producto</th>
+            <th style={{ textAlign: "right" }}>Pedir</th>
+            <th style={{ textAlign: "right" }}>Existencia</th>
+            <th style={{ textAlign: "right" }}>Stock</th>
+          </tr>
+        </thead>
+        <tbody>
+          {shortages.map((row) => (
+            <tr key={row.lineId ?? row.productId}>
+              <td>
+                <strong>{row.name}</strong>
+              </td>
+              <td style={{ textAlign: "right", fontWeight: 700, color: "var(--glam-navy)" }}>
+                {packQtyLabel(row.requestedQty, row.unit, row.unitsPerPackage, row.packLabel)}
+              </td>
+              <td style={{ textAlign: "right", color: row.stock < 0 ? "#ef4444" : undefined }}>
+                {formatQuantity(row.stock)} {row.unit === "bidon" ? "L" : "pz"}
+              </td>
+              <td style={{ textAlign: "right" }}>
+                {formatQuantity(row.minStock)} {row.unit === "bidon" ? "L" : "pz"}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
 /**
- * Pedidos a fábrica de la sucursal, en el orden en que se trabajan:
- * 1. **Faltante de hoy** → "Confirmar pedido a fábrica" (donde empieza el ciclo);
- * 2. **Por recibir**: lo pedido que no ha llegado, con "Registrar llegada";
- * 3. **Historial**: lo recibido y lo cancelado, con filtros.
- * La entrada sin pedido (llegó algo que nadie pidió) es la excepción y va
- * como botón secundario en "Por recibir".
+ * Pedidos a fábrica de la sucursal. Arriba va **el paso en que está**:
+ * - sin pedido en camino → **Faltante de hoy** con "Confirmar pedido a fábrica";
+ * - con pedido en camino → **Pedido en camino** con "Recibir", y el faltante
+ *   plegado: no descuenta lo que viene, así que mostrarlo abierto con un
+ *   candado parecía que no se había pedido nada.
+ * Abajo, el **Historial** (recibidos y cancelados). "Recibir algo que no se
+ * pidió" (la hoja en blanco) es la excepción y va como botón secundario.
  */
 export function BranchRestockTab({ branch }: { branch: Branch }) {
   const { can } = usePermissions();
@@ -78,6 +115,8 @@ export function BranchRestockTab({ branch }: { branch: Branch }) {
   const [generating, setGenerating] = useState(false);
   /** Pedido en camino que impide confirmar otro: abre el modal de alerta. */
   const [blockedBy, setBlockedBy] = useState<RestockOrder | null>(null);
+  /** Con un pedido en camino el faltante va plegado; se abre a mano. */
+  const [showShortages, setShowShortages] = useState(false);
   const { download: downloadForm, downloading: downloadingForm } = useFactoryFormDownload();
 
   const loadAwaiting = useCallback(async (): Promise<RestockOrder[]> => {
@@ -180,7 +219,7 @@ export function BranchRestockTab({ branch }: { branch: Branch }) {
         toast.info(result.message);
         return;
       }
-      toast.success("Pedido a fábrica confirmado: quedó en Por recibir");
+      toast.success("Pedido a fábrica confirmado: ya aparece como pedido en camino");
       reloadAll();
     } catch (error) {
       if (isAwaitingOrderError(error)) {
@@ -194,142 +233,160 @@ export function BranchRestockTab({ branch }: { branch: Branch }) {
     }
   }
 
+  // Llegó producto que no estaba en ningún pedido: la hoja en blanco.
+  const receiveBlankButton = canDispatch ? (
+    <Button
+      size="small"
+      variant="outlined"
+      startIcon={<PackagePlus size={14} />}
+      component={Link}
+      href={`/dashboard/pos/sucursales/${branch.id}/entrada?basis=blank`}
+      title="Llegó producto que no estaba en ningún pedido: se captura en la hoja en blanco"
+      sx={{ whiteSpace: "nowrap" }}
+    >
+      Recibir algo que no se pidió
+    </Button>
+  ) : null;
+
   return (
     <div className="page-stack">
       {!isFranchise ? (
+        blocking ? (
+          <section className="panel p-5">
+            <div className="toolbar" style={{ marginBottom: 8, alignItems: "flex-start" }}>
+              <div>
+                <h2 style={{ margin: 0, display: "flex", alignItems: "center", gap: 8 }}>
+                  <Truck size={20} style={{ color: "var(--glam-blue)" }} />
+                  {awaiting.length === 1 ? "Pedido en camino" : `${awaiting.length} pedidos en camino`}
+                </h2>
+                <p className="page-kicker" style={{ margin: 0 }}>
+                  Ya se pidió a fábrica. Cuando llegue, presiona <strong>Recibir</strong>: la hoja viene con lo pedido
+                  y solo corriges lo que llegó distinto. El siguiente pedido se podrá hacer cuando este se reciba.
+                </p>
+              </div>
+              {receiveBlankButton}
+            </div>
+            <RestockOrdersTable
+              orders={awaiting}
+              canUpdate={canUpdate}
+              canDispatch={canDispatch}
+              onChanged={reloadAll}
+              showAge
+              emptyText="Nada en camino."
+            />
+            {shortages?.length ? (
+              <div style={{ marginTop: 12 }}>
+                <Button
+                  size="small"
+                  color="inherit"
+                  onClick={() => setShowShortages((open) => !open)}
+                  endIcon={
+                    <ChevronDown
+                      size={16}
+                      style={{ transform: showShortages ? "rotate(180deg)" : undefined, transition: "transform .2s" }}
+                    />
+                  }
+                  aria-expanded={showShortages}
+                >
+                  Ver faltante de hoy ({packSummary(shortages)})
+                </Button>
+                {showShortages ? (
+                  <>
+                    <p className="page-kicker" style={{ margin: "4px 0 8px" }}>
+                      No descuenta lo que viene en camino: lo que llegue con este pedido ya no saldrá aquí.
+                    </p>
+                    <ShortagesTable shortages={shortages} />
+                  </>
+                ) : null}
+              </div>
+            ) : null}
+          </section>
+        ) : (
+          <section className="panel p-5">
+            <div className="toolbar" style={{ marginBottom: 8, alignItems: "flex-start" }}>
+              <div>
+                <h2 style={{ margin: 0 }}>Faltante de hoy</h2>
+                <p className="page-kicker" style={{ margin: 0 }}>
+                  Contra el stock que esta sucursal debe tener siempre: se pide un empaque completo por cada
+                  empaque del que ya se vendió la mitad.
+                </p>
+              </div>
+              <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap", justifyContent: "flex-end" }}>
+                <span className="page-kicker" style={{ margin: 0 }}>
+                  <strong style={{ color: "var(--glam-navy)" }}>{totals.bidones}</strong> bidones ·{" "}
+                  <strong style={{ color: "var(--glam-navy)" }}>{totals.cajas}</strong> cajas ·{" "}
+                  <strong style={{ color: "var(--glam-navy)" }}>{totals.piezas}</strong> piezas
+                </span>
+                <Tooltip title="Recalcular contra la existencia de ahorita">
+                  <IconButton size="small" aria-label="Recalcular faltante" onClick={() => void loadShortages()}>
+                    <RefreshCw size={16} />
+                  </IconButton>
+                </Tooltip>
+                <Button
+                  size="small"
+                  variant="outlined"
+                  startIcon={<Sheet size={14} />}
+                  disabled={!shortages?.length}
+                  onClick={() => exportShortagesCsv(shortages ?? [], branch.code)}
+                >
+                  CSV
+                </Button>
+                <Button
+                  size="small"
+                  variant="outlined"
+                  startIcon={<FileDown size={14} />}
+                  disabled={shortages === null || downloadingForm}
+                  onClick={() => void downloadForm(`/pos/restock/branches/${branch.id}/shortages/form`)}
+                  title="El faltante en la hoja del formato, para revisarlo: todavía no es un pedido"
+                >
+                  {downloadingForm ? "Generando..." : "Ver en formato"}
+                </Button>
+                {canCreate ? (
+                  <Button
+                    size="small"
+                    variant="contained"
+                    startIcon={<Truck size={14} />}
+                    disabled={!shortages?.length || generating}
+                    onClick={() => void generate()}
+                  >
+                    {generating ? "Confirmando..." : "Confirmar pedido a fábrica"}
+                  </Button>
+                ) : null}
+              </div>
+            </div>
+            {shortages?.length ? (
+              <ShortagesTable shortages={shortages} />
+            ) : (
+              <p className="page-kicker" style={{ margin: 0 }}>
+                {shortages === null ? "Calculando..." : "Está completa en su stock: no hay nada que pedir."}
+              </p>
+            )}
+            {receiveBlankButton ? <div style={{ marginTop: 12 }}>{receiveBlankButton}</div> : null}
+          </section>
+        )
+      ) : (
         <section className="panel p-5">
           <div className="toolbar" style={{ marginBottom: 8, alignItems: "flex-start" }}>
             <div>
-              <h2 style={{ margin: 0 }}>1 · Faltante de hoy</h2>
+              <h2 style={{ margin: 0 }}>Pedidos abiertos</h2>
               <p className="page-kicker" style={{ margin: 0 }}>
-                Contra el stock que esta sucursal debe tener siempre: se pide un empaque completo por cada
-                empaque del que ya se vendió la mitad.
+                Lo que la franquicia pidió y todavía no se le entrega.
               </p>
             </div>
-            <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap", justifyContent: "flex-end" }}>
-              <span className="page-kicker" style={{ margin: 0 }}>
-                <strong style={{ color: "var(--glam-navy)" }}>{totals.bidones}</strong> bidones ·{" "}
-                <strong style={{ color: "var(--glam-navy)" }}>{totals.cajas}</strong> cajas ·{" "}
-                <strong style={{ color: "var(--glam-navy)" }}>{totals.piezas}</strong> piezas
-              </span>
-              <Tooltip title="Recalcular contra la existencia de ahorita">
-                <IconButton size="small" aria-label="Recalcular faltante" onClick={() => void loadShortages()}>
-                  <RefreshCw size={16} />
-                </IconButton>
-              </Tooltip>
-              <Button
-                size="small"
-                variant="outlined"
-                startIcon={<Sheet size={14} />}
-                disabled={!shortages?.length}
-                onClick={() => exportShortagesCsv(shortages ?? [], branch.code)}
-              >
-                CSV
-              </Button>
-              <Button
-                size="small"
-                variant="outlined"
-                startIcon={<FileDown size={14} />}
-                disabled={shortages === null || downloadingForm}
-                onClick={() => void downloadForm(`/pos/restock/branches/${branch.id}/shortages/form`)}
-                title="El formato de pedido a fábrica en PDF, con los faltantes ya puestos"
-              >
-                {downloadingForm ? "Generando..." : "Descargar formato"}
-              </Button>
-              {canCreate ? (
-                <Button
-                  size="small"
-                  variant="contained"
-                  startIcon={blocking ? <Lock size={14} /> : <Truck size={14} />}
-                  disabled={!shortages?.length || generating}
-                  onClick={() => void generate()}
-                  title={blocking ? "Hay un pedido en camino: se podrá confirmar otro cuando se reciba" : undefined}
-                >
-                  {generating ? "Confirmando..." : "Confirmar pedido a fábrica"}
-                </Button>
-              ) : null}
-            </div>
           </div>
-          {blocking && shortages?.length ? (
-            <p className="page-kicker" style={{ margin: "0 0 8px", color: "#92400e", display: "flex", alignItems: "center", gap: 6 }}>
-              <Lock size={14} /> Hay un pedido del {formatDateTime(blocking.createdAt)} en camino: no se puede confirmar
-              otro hasta que ese se registre como recibido.
-            </p>
-          ) : null}
-          {shortages?.length ? (
-            <div className="table-container-premium">
-              <table className="table">
-                <thead>
-                  <tr>
-                    <th>Producto</th>
-                    <th style={{ textAlign: "right" }}>Pedir</th>
-                    <th style={{ textAlign: "right" }}>Existencia</th>
-                    <th style={{ textAlign: "right" }}>Stock</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {shortages.map((row) => (
-                    <tr key={row.lineId ?? row.productId}>
-                      <td>
-                        <strong>{row.name}</strong>
-                      </td>
-                      <td style={{ textAlign: "right", fontWeight: 700, color: "var(--glam-navy)" }}>
-                        {packQtyLabel(row.requestedQty, row.unit, row.unitsPerPackage, row.packLabel)}
-                      </td>
-                      <td style={{ textAlign: "right", color: row.stock < 0 ? "#ef4444" : undefined }}>
-                        {formatQuantity(row.stock)} {row.unit === "bidon" ? "L" : "pz"}
-                      </td>
-                      <td style={{ textAlign: "right" }}>
-                        {formatQuantity(row.minStock)} {row.unit === "bidon" ? "L" : "pz"}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          ) : (
-            <p className="page-kicker" style={{ margin: 0 }}>
-              {shortages === null ? "Calculando..." : "Está completa en su stock: no hay nada que pedir."}
-            </p>
-          )}
+          <RestockOrdersTable
+            orders={awaiting}
+            canUpdate={canUpdate}
+            canDispatch={canDispatch}
+            onChanged={reloadAll}
+            showAge
+            emptyText="Nada por recibir: no hay pedidos abiertos."
+          />
         </section>
-      ) : null}
-
-      <section className="panel p-5">
-        <div className="toolbar" style={{ marginBottom: 8, alignItems: "flex-start" }}>
-          <div>
-            <h2 style={{ margin: 0 }}>{isFranchise ? "Pedidos abiertos" : "2 · Por recibir"}</h2>
-            <p className="page-kicker" style={{ margin: 0 }}>
-              {isFranchise
-                ? "Lo que la franquicia pidió y todavía no se le entrega."
-                : "Lo que se pidió a fábrica y no ha llegado. Cuando llegue, \"Registrar llegada\" abre la hoja precargada con el pedido: se corrige con lo que de verdad llegó y sube al inventario."}
-            </p>
-          </div>
-          {canDispatch ? (
-            <Button
-              variant="outlined"
-              startIcon={<PackagePlus size={16} />}
-              component={Link}
-              href={`/dashboard/pos/sucursales/${branch.id}/entrada?basis=blank`}
-              title="Llegó producto que no estaba en ningún pedido: se captura en la hoja en blanco"
-              sx={{ whiteSpace: "nowrap" }}
-            >
-              Llegada sin pedido
-            </Button>
-          ) : null}
-        </div>
-        <RestockOrdersTable
-          orders={awaiting}
-          canUpdate={canUpdate}
-          canDispatch={canDispatch}
-          onChanged={reloadAll}
-          showAge
-          emptyText="Nada por recibir: no hay pedidos abiertos."
-        />
-      </section>
+      )}
 
       <section className="panel p-5" style={{ display: "grid", gap: 10 }}>
-        <h2 style={{ margin: 0 }}>{isFranchise ? "Historial" : "3 · Historial"}</h2>
+        <h2 style={{ margin: 0 }}>Historial</h2>
         <FilterBar>
           <FilterDateRange
             label="Fecha del pedido"

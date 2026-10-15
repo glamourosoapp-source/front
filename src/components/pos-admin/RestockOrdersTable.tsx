@@ -2,6 +2,7 @@
 
 import { Chip } from "@mui/material";
 import { useRouter } from "next/navigation";
+import { config } from "@/config";
 import { formatMoney } from "@/lib/format-money";
 import type { RestockOrder } from "@/types";
 import {
@@ -27,10 +28,10 @@ interface RestockOrdersTableProps {
   loading?: boolean;
 }
 
-/** "Llegó 28 sep" / "Enviado 12 sep" / "—". */
+/** "Recibido 28 sep" / "Salió 12 sep" / "—". */
 function arrivalLabel(order: RestockOrder): string {
   if (order.receivedAt) return `Recibido ${formatDateTime(order.receivedAt)}`;
-  if (order.sentAt) return `Enviado ${formatDateTime(order.sentAt)}`;
+  if (order.sentAt) return `${config.factoryModuleEnabled ? "Enviado" : "Salió"} ${formatDateTime(order.sentAt)}`;
   return "—";
 }
 
@@ -60,7 +61,7 @@ export function RestockOrdersTable({
             {showBranch ? <th>Sucursal</th> : null}
             <th>Pedido</th>
             <th>Estado</th>
-            <th style={{ textAlign: "right" }}>Partidas</th>
+            <th style={{ textAlign: "right" }}>Productos</th>
             <th style={{ textAlign: "right" }}>Total</th>
             <th>Llegada</th>
             <th style={{ textAlign: "right" }} aria-label="Acciones" />
@@ -121,7 +122,7 @@ export function RestockOrdersTable({
                   {items.length}
                   {shortItems ? (
                     <div className="page-kicker" style={{ margin: 0, color: "#92400e", whiteSpace: "nowrap" }}>
-                      {shortItems} incompleta{shortItems === 1 ? "" : "s"}
+                      {shortItems === 1 ? "1 llegó incompleto" : `${shortItems} llegaron incompletos`}
                     </div>
                   ) : null}
                 </td>

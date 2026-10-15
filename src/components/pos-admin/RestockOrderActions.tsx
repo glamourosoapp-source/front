@@ -62,11 +62,11 @@ interface RestockOrderActionsProps {
  * pedidos, en la tarjeta y en la hoja del pedido.
  *
  * Con fábrica apagada (lo normal hoy) el ciclo es pedido → llegada:
- * - abierto → **Registrar llegada** (la hoja de entrada precargada; el pedido
- *   queda recibido con lo que se capture y sube al inventario);
- * - enviado (los que se marcaron con el botón anterior) → **Confirmar llegada**,
+ * - abierto → **Recibir** (la hoja de entrada precargada; el pedido queda
+ *   recibido con lo que se capture y sube al inventario);
+ * - en camino (los que se marcaron con el botón anterior) → **Confirmar llegada**,
  *   que solo lo pasa a recibido: su inventario ya subió al enviarse;
- * - recibido → sin acción principal; "Corregir envío" en el menú.
+ * - recibido → sin acción principal; "Corregir lo recibido" en el menú.
  * No hay "Aprobar" ni "Enviado a sucursal": nadie actúa sobre un pedido
  * aprobado y los dos botones de entrada dejaban el pedido en estados distintos.
  * Con fábrica prendida se conserva el flujo de fábrica (aprobar y enviar).
@@ -143,9 +143,9 @@ export function RestockOrderActions({
         startIcon={<PackagePlus size={14} />}
         component={Link}
         href={restockArrivalHref(order)}
-        title="Captura lo que llegó en la hoja precargada con este pedido: queda recibido y sube al inventario"
+        title="Captura lo que llegó, precargado con este pedido: queda recibido y sube al inventario"
       >
-        Registrar llegada
+        Recibir
       </Button>
     );
   } else if (sent && canUpdate) {
@@ -183,7 +183,7 @@ export function RestockOrderActions({
         }}
       >
         <ListItemIcon><FileDown size={16} /></ListItemIcon>
-        <ListItemText>{downloading ? "Generando..." : "Descargar formato"}</ListItemText>
+        <ListItemText>{downloading ? "Generando..." : "Descargar PDF"}</ListItemText>
       </MenuItem>
     );
   }
@@ -214,7 +214,7 @@ export function RestockOrderActions({
       <MenuItem key="correct" component={Link} href={restockOrderSheetHref(order.id, true)} onClick={closeMenu}>
         <ListItemIcon><Pencil size={16} /></ListItemIcon>
         <ListItemText
-          primary="Corregir envío"
+          primary={factoryOn ? "Corregir envío" : "Corregir lo recibido"}
           secondary="La diferencia entra o sale del inventario"
         />
       </MenuItem>

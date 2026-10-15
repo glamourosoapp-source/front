@@ -555,6 +555,16 @@ export const MIN_STOCK_FORM_OPTIONS: FactoryFormDrawOptions = {
   footers: false,
 };
 
+/**
+ * Opciones del formato de un pedido: es la hoja que se le manda a fábrica, así
+ * que lleva su rótulo y los pies de bidones y total.
+ */
+export const RESTOCK_ORDER_FORM_OPTIONS: FactoryFormDrawOptions = {
+  title: "PEDIDO A FÁBRICA",
+  qtyHeader: "Cant",
+  footers: true,
+};
+
 /** Opciones de la hoja de entrada de surtido (lo que llegó a la sucursal). */
 export const RESTOCK_ENTRY_FORM_OPTIONS: FactoryFormDrawOptions = {
   title: "ENTRADA DE SURTIDO",
@@ -591,7 +601,9 @@ export async function exportFactoryFormPdf(form: FactoryForm, options?: FactoryF
       ? MIN_STOCK_FORM_OPTIONS
       : form.source.kind === "entry"
         ? RESTOCK_ENTRY_FORM_OPTIONS
-        : {};
+        : form.source.kind === "order"
+          ? RESTOCK_ORDER_FORM_OPTIONS
+          : {};
   drawFactoryForm(doc, form, options ?? fallback);
   doc.save(factoryFormFileName(form));
 }

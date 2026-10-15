@@ -24,7 +24,7 @@ import { config } from "@/config";
 import { httpClient, getApiErrorMessage } from "@/services/http-client";
 import { usePermissions } from "@/lib/permissions";
 import { formatMoney, formatQuantity } from "@/lib/format-money";
-import { exportFactoryFormPdf, RESTOCK_ENTRY_FORM_OPTIONS } from "@/lib/export-factory-form";
+import { exportFactoryFormPdf, RESTOCK_ORDER_FORM_OPTIONS } from "@/lib/export-factory-form";
 import type { RestockOrder, RestockOrderItem } from "@/types";
 import {
   FactoryFormSheet,
@@ -221,10 +221,7 @@ export function RestockOrderSheetPage() {
     if (!form) return;
     setExporting(true);
     try {
-      await exportFactoryFormPdf(formWithValues(form, values, charges, canSeeCosts), {
-        ...RESTOCK_ENTRY_FORM_OPTIONS,
-        footers: true,
-      });
+      await exportFactoryFormPdf(formWithValues(form, values, charges, canSeeCosts), RESTOCK_ORDER_FORM_OPTIONS);
       if (order) {
         // Impreso: desde ahora el pedido ya no se puede cancelar.
         await markFormPrinted(`/pos/restock/orders/${order.id}/form-printed`);
@@ -277,7 +274,7 @@ export function RestockOrderSheetPage() {
           <h1 className="page-title" style={{ display: "flex", alignItems: "center", gap: 10 }}>
             <Truck size={22} style={{ color: "var(--glam-blue)", flex: "0 0 auto" }} />
             <span>
-              {canEdit ? "Corregir envío" : "Pedido a fábrica"}
+              {canEdit ? (config.factoryModuleEnabled ? "Corregir envío" : "Corregir lo recibido") : "Pedido a fábrica"}
               {order?.branch ? ` · ${order.branch.code} · ${order.branch.name}` : ""}
             </span>
           </h1>
@@ -291,7 +288,10 @@ export function RestockOrderSheetPage() {
               <Chip size="small" variant="outlined" label={RESTOCK_ORIGIN_LABELS[order.origin] ?? order.origin} />
               <span className="page-kicker" style={{ margin: 0 }}>
                 Pedido {formatDateTime(order.createdAt)}
-                {order.sentAt ? ` · enviado ${formatDateTime(order.sentAt)}` : ""}
+                {/* Con fábrica apagada, al recibir se anota la misma hora como salida: no se repite. */}
+                {order.sentAt && (config.factoryModuleEnabled || !order.receivedAt)
+                  ? ` · ${config.factoryModuleEnabled ? "enviado" : "salió"} ${formatDateTime(order.sentAt)}`
+                  : ""}
                 {order.receivedAt ? ` · recibido ${formatDateTime(order.receivedAt)}` : ""}
               </span>
             </div>
@@ -317,7 +317,7 @@ export function RestockOrderSheetPage() {
             onClick={() => void exportPdf()}
             disabled={!form || exporting}
           >
-            {exporting ? "Generando…" : "Descargar formato"}
+            {exporting ? "Generando…" : "Descargar PDF"}
           </Button>
           {!editing && order ? (
             <RestockOrderActions
@@ -336,23 +336,27 @@ export function RestockOrderSheetPage() {
         canEdit ? (
           <Alert severity={alreadySent ? "warning" : "info"}>
             {alreadySent
-              ? "Este pedido ya se envió: al guardar, lo que bajes sale del inventario de la sucursal y lo que subas o agregues entra."
+              ? `Este pedido ya se ${config.factoryModuleEnabled ? "envió" : "recibió"}: al guardar, lo que bajes sale del inventario de la sucursal y lo que subas o agregues entra.`
               : config.factoryModuleEnabled
                 ? "Todavía no se envía: corrige lo que de verdad sale de fábrica (lo que no hay, déjalo vacío). El inventario sube cuando lo marques como enviado."
-                : "Todavía no llega: corrige lo que de verdad va a salir de fábrica (lo que no hay, déjalo vacío). El inventario sube al registrar la llegada."}{" "}
+                : "Todavía no llega: corrige lo que de verdad va a salir de fábrica (lo que no hay, déjalo vacío). El inventario sube al recibirlo."}{" "}
             Se captura en empaques, como en el papel: <strong>2</strong> en un bidón son 40 L. Enter baja al siguiente
             renglón.
           </Alert>
         ) : (
           <p className="page-kicker" style={{ margin: 0 }}>
             {alreadySent
-              ? "Cómo salió de fábrica: lo que se envió a la sucursal."
+              ? config.factoryModuleEnabled
+                ? "Cómo salió de fábrica: lo que se envió a la sucursal."
+                : "Lo que llegó a la sucursal."
               : isCancelled
                 ? "Pedido cancelado: así estaba cuando se canceló."
                 : config.factoryModuleEnabled
                   ? "Cómo va el pedido: lo que se va a enviar (lo pedido, o lo que ya se corrigió)."
-                  : "Lo que se pidió. Cuando llegue, \"Registrar llegada\" abre esta hoja para capturar lo que de verdad llegó."}
-            {order.dispatchNotes ? ` Nota del envío: ${order.dispatchNotes}` : ""}
+                  : "Lo que se pidió. Cuando llegue, \"Recibir\" abre la hoja precargada para capturar lo que de verdad llegó."}
+            {order.dispatchNotes
+              ? ` ${config.factoryModuleEnabled ? "Nota del envío" : "Nota de la llegada"}: ${order.dispatchNotes}`
+              : ""}
           </p>
         )
       ) : null}
@@ -376,8 +380,8 @@ export function RestockOrderSheetPage() {
             value="partidas"
             label={
               order.returns?.length
-                ? `Partidas · ${order.items?.length ?? 0} · con devolución`
-                : `Partidas · ${order.items?.length ?? 0}`
+                ? `Productos · ${order.items?.length ?? 0} · con devolución`
+                : `Productos · ${order.items?.length ?? 0}`
             }
           />
         </Tabs>

@@ -8,17 +8,31 @@ import { formatQuantity } from "@/lib/format-money";
 export const WEEKDAY_LABELS = ["Domingo", "Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado"];
 
 /**
- * Con fábrica apagada nadie aprueba: un pedido pendiente es simplemente "Pedido"
- * (espera a que llegue), no "Pendiente de aprobar".
+ * Con fábrica apagada nadie aprueba ni prepara en el sistema: todo lo que se
+ * pidió y no ha llegado es "Pedido a fábrica", y lo que se marcó como enviado
+ * (su inventario ya subió) va "En camino". Con fábrica prendida se conservan
+ * los pasos de fábrica.
  */
+const FACTORY_ON = config.factoryModuleEnabled;
 export const RESTOCK_STATUS_LABELS: Record<string, string> = {
-  [RESTOCK_ORDER_STATUS.PENDING]: config.factoryModuleEnabled ? "Pendiente de aprobar" : "Pedido",
-  [RESTOCK_ORDER_STATUS.APPROVED]: "Aprobado",
-  [RESTOCK_ORDER_STATUS.PREPARING]: "En preparación",
-  [RESTOCK_ORDER_STATUS.SENT]: "Enviado",
+  [RESTOCK_ORDER_STATUS.PENDING]: FACTORY_ON ? "Pendiente de aprobar" : "Pedido a fábrica",
+  [RESTOCK_ORDER_STATUS.APPROVED]: FACTORY_ON ? "Aprobado" : "Pedido a fábrica",
+  [RESTOCK_ORDER_STATUS.PREPARING]: FACTORY_ON ? "En preparación" : "Pedido a fábrica",
+  [RESTOCK_ORDER_STATUS.SENT]: FACTORY_ON ? "Enviado" : "En camino",
   [RESTOCK_ORDER_STATUS.RECEIVED]: "Recibido",
   [RESTOCK_ORDER_STATUS.CANCELLED]: "Cancelado",
 };
+
+/**
+ * Opciones del filtro de estado: con fábrica apagada tres estados se llaman
+ * igual ("Pedido a fábrica"), así que se ofrece una sola opción por etiqueta,
+ * con el primer estado que la lleva.
+ */
+export const RESTOCK_STATUS_FILTER_OPTIONS: Array<{ value: string; label: string }> = Object.entries(
+  RESTOCK_STATUS_LABELS
+)
+  .filter(([, label], index, all) => all.findIndex(([, other]) => other === label) === index)
+  .map(([value, label]) => ({ value, label }));
 
 export const RESTOCK_STATUS_COLORS: Record<
   string,
@@ -37,7 +51,7 @@ export const RESTOCK_ORIGIN_LABELS: Record<string, string> = {
   [RESTOCK_ORIGIN.SHORTAGE_AUTO]: "Corte automático",
   [RESTOCK_ORIGIN.SHORTAGE_MANUAL]: "Manual",
   [RESTOCK_ORIGIN.FRANCHISE]: "Franquicia",
-  [RESTOCK_ORIGIN.MANUAL_ENTRY]: "Entrada en sucursal",
+  [RESTOCK_ORIGIN.MANUAL_ENTRY]: "Sin pedido",
 };
 
 export const HEALTH_COLORS: Record<BranchHealthLevel, string> = {
@@ -274,4 +288,15 @@ export function salesPeriodLabels(today: string = todayInMexico()) {
     month: `${MONTHS_LONG[Number(today.slice(5, 7)) - 1]} ${today.slice(0, 4)}`,
     last30: formatDateOnlyRange(shiftDateOnly(today, -29), today),
   };
+}
+
+/** "11 bidones · 3 cajas · 4 piezas", sin las partes en cero ni plurales de más. */
+export function packSummary(shortages: Array<{ unit: string; requestedQty: number }>): string {
+  const totals = packTotals(shortages);
+  const parts = [
+    totals.bidones ? `${totals.bidones} ${totals.bidones === 1 ? "bidón" : "bidones"}` : "",
+    totals.cajas ? `${totals.cajas} ${totals.cajas === 1 ? "caja" : "cajas"}` : "",
+    totals.piezas ? `${totals.piezas} ${totals.piezas === 1 ? "pieza" : "piezas"}` : "",
+  ].filter(Boolean);
+  return parts.join(" · ");
 }

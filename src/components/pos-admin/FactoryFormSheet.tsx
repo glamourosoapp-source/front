@@ -177,6 +177,10 @@ export function FactoryFormSheet({
 }: FactoryFormSheetProps) {
   const sheetRef = useRef<HTMLDivElement>(null);
   const current = pages.find((p) => p.page === page) ?? pages[0];
+  // Con cantidad ahora o en lo precargado: al capturar, borrar una cantidad no
+  // debe esconder el renglón mientras se escribe.
+  const shown = (row: FactoryFormRow) =>
+    isLinked(row) && (packsOf(values[rowKey(row)]) > 0 || packsOf(baseline[rowKey(row)]) > 0);
 
   /** Enter / flecha abajo: siguiente renglón de la hoja; flecha arriba: el anterior. */
   function onKeyDown(event: React.KeyboardEvent<HTMLInputElement>) {
@@ -219,14 +223,14 @@ export function FactoryFormSheet({
 
       {current ? (
         <div className="msf-sheet" ref={sheetRef} key={current.page}>
-          {onlyFilled && !filledCount(current, values) ? (
+          {onlyFilled && !current.blocks.flat().some(shown) ? (
             <p className="page-kicker" style={{ margin: 0 }}>
               Esta hoja no trae cantidades.
             </p>
           ) : null}
           {current.blocks.map((block, blockIndex) => {
             const visible = onlyFilled
-              ? block.filter((row) => isLinked(row) && packsOf(values[rowKey(row)]) > 0)
+              ? block.filter(shown)
               : block;
             if (!visible.length) return null;
             return (

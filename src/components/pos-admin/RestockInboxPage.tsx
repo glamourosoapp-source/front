@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Button, MenuItem, Tab, Tabs, TextField } from "@mui/material";
-import { ArrowRight, Lock, ShieldAlert, Truck } from "lucide-react";
+import { ArrowRight, PackagePlus, ShieldAlert, Truck } from "lucide-react";
 import { toast } from "sonner";
 import { BRANCH_TYPES, RESTOCK_ORIGIN } from "@glamouroso/shared/constants";
 import { httpClient, getApiErrorMessage } from "@/services/http-client";
@@ -12,9 +12,9 @@ import { usePermissions } from "@/lib/permissions";
 import type { Branch, BranchShortage, ListResponse, RestockOrder } from "@/types";
 import { FilterBar, FilterDateRange, FilterMeta, type DateRangeOption } from "./FilterBar";
 import { RestockOrdersTable } from "./RestockOrdersTable";
-import { isAwaitingRestockOrder } from "./RestockOrderActions";
-import { RestockAwaitingDialog, blockingRestockOrder, isAwaitingOrderError } from "./RestockAwaitingDialog";
-import { RESTOCK_STATUS_LABELS, WEEKDAY_LABELS, formatDateTime, packTotals, relativeDays } from "./pos-labels";
+import { isAwaitingRestockOrder, isOpenRestockOrder, restockArrivalHref } from "./RestockOrderActions";
+import { blockingRestockOrder } from "./RestockAwaitingDialog";
+import { RESTOCK_STATUS_FILTER_OPTIONS, packSummary, WEEKDAY_LABELS, formatDateTime, packTotals, relativeDays } from "./pos-labels";
 
 const RANGES: DateRangeOption[] = [
   { key: "todo", label: "Todo", days: null },
@@ -34,21 +34,11 @@ interface InboxRow {
   lastOrderAt: string | null;
 }
 
-function packSummary(shortages: BranchShortage[]): string {
-  const totals = packTotals(shortages);
-  const parts = [
-    totals.bidones ? `${totals.bidones} ${totals.bidones === 1 ? "bidón" : "bidones"}` : "",
-    totals.cajas ? `${totals.cajas} ${totals.cajas === 1 ? "caja" : "cajas"}` : "",
-    totals.piezas ? `${totals.piezas} ${totals.piezas === 1 ? "pieza" : "piezas"}` : "",
-  ].filter(Boolean);
-  return parts.join(" · ");
-}
-
 /**
  * Faltantes y surtido: la bandeja de TODAS las sucursales. No repite la
  * pestaña "Pedidos a fábrica" de cada sucursal (ahí se trabaja el detalle):
  * aquí se ve de un vistazo qué sucursal tiene faltante sin pedir y qué pedidos
- * siguen sin llegar, y se confirma el pedido sin entrar a cada una.
+ * siguen sin llegar. Confirmar se hace en la sucursal, viendo qué se va a pedir.
  * - **Por sucursal**: una fila por sucursal; clic abre su pestaña de pedidos.
  * - **Pedidos**: todos los pedidos de sucursales con filtros (las franquicias
  *   tienen su propio módulo).
@@ -69,9 +59,7 @@ export function RestockInboxPage() {
   const [branches, setBranches] = useState<Branch[]>([]);
   const [shortagesByBranch, setShortagesByBranch] = useState<Record<string, BranchShortage[] | null>>({});
   const [recent, setRecent] = useState<RestockOrder[]>([]);
-  const [generating, setGenerating] = useState<string | null>(null);
   /** Pedido en camino que impide confirmar otro, con su sucursal: abre el modal. */
-  const [blockedBy, setBlockedBy] = useState<{ order: RestockOrder; branch: Branch } | null>(null);
 
   // Vista Pedidos
   const [branchFilter, setBranchFilter] = useState("");
@@ -174,42 +162,6 @@ export function RestockInboxPage() {
         </div>
       </div>
     );
-  }
-
-  async function generate(branch: Branch, awaiting: RestockOrder[]) {
-    // Un pedido a la vez por sucursal: con uno en camino no se confirma otro.
-    const blocking = blockingRestockOrder(awaiting);
-    if (blocking) {
-      setBlockedBy({ order: blocking, branch });
-      return;
-    }
-    setGenerating(branch.id);
-    try {
-      const result = await httpClient.post<RestockOrder | { created: false; message: string }>(
-        `/pos/restock/branches/${branch.id}/generate`,
-        {}
-      );
-      if ("created" in result && result.created === false) {
-        toast.info(result.message);
-        return;
-      }
-      toast.success(`Pedido de ${branch.code} confirmado: quedó por recibir`);
-      await loadInbox();
-    } catch (error) {
-      if (isAwaitingOrderError(error)) {
-        const fresh = await httpClient
-          .get<ListResponse<RestockOrder>>("/pos/restock/orders", { branchId: branch.id, limit: 100 })
-          .then((res) => res.items.filter(isAwaitingRestockOrder))
-          .catch(() => []);
-        const order = blockingRestockOrder(fresh);
-        if (order) setBlockedBy({ order, branch });
-        void loadInbox();
-      } else {
-        toast.error(getApiErrorMessage(error, "No se pudo generar el pedido"));
-      }
-    } finally {
-      setGenerating(null);
-    }
   }
 
   function openBranch(branch: Branch) {
@@ -340,22 +292,35 @@ export function RestockInboxPage() {
                           : WEEKDAY_LABELS[row.branch.restockCutoffDow]}
                       </td>
                       <td style={{ textAlign: "right", whiteSpace: "nowrap" }} onClick={(event) => event.stopPropagation()}>
-                        {canCreate && row.shortages?.length ? (
-                          <Button
-                            size="small"
-                            variant={row.awaiting.length ? "outlined" : "contained"}
-                            startIcon={row.awaiting.length ? <Lock size={14} /> : <Truck size={14} />}
-                            disabled={generating === row.branch.id}
-                            onClick={() => void generate(row.branch, row.awaiting)}
-                            title={
-                              row.awaiting.length
-                                ? "Hay un pedido en camino: se podrá confirmar otro cuando se reciba"
-                                : undefined
-                            }
-                          >
-                            {generating === row.branch.id ? "Confirmando..." : "Confirmar pedido"}
-                          </Button>
-                        ) : null}
+                        {(() => {
+                          // Una acción por sucursal según su paso: con pedido en camino, recibirlo;
+                          // con faltante, revisarlo en la sucursal antes de confirmar (no a ciegas).
+                          const inTransit = blockingRestockOrder(row.awaiting);
+                          if (inTransit) {
+                            return canDispatch && isOpenRestockOrder(inTransit) ? (
+                              <Button
+                                size="small"
+                                variant="contained"
+                                color="success"
+                                startIcon={<PackagePlus size={14} />}
+                                component={Link}
+                                href={restockArrivalHref(inTransit)}
+                              >
+                                Recibir
+                              </Button>
+                            ) : null;
+                          }
+                          return canCreate && row.shortages?.length ? (
+                            <Button
+                              size="small"
+                              variant="contained"
+                              startIcon={<Truck size={14} />}
+                              onClick={() => openBranch(row.branch)}
+                            >
+                              Revisar y pedir
+                            </Button>
+                          ) : null;
+                        })()}
                       </td>
                     </tr>
                   );
@@ -402,7 +367,7 @@ export function RestockInboxPage() {
               sx={{ minWidth: 200 }}
             >
               <MenuItem value="">Todos los estados</MenuItem>
-              {Object.entries(RESTOCK_STATUS_LABELS).map(([value, label]) => (
+              {RESTOCK_STATUS_FILTER_OPTIONS.map(({ value, label }) => (
                 <MenuItem key={value} value={value}>
                   {label}
                 </MenuItem>
@@ -435,11 +400,6 @@ export function RestockInboxPage() {
         </>
       )}
 
-      <RestockAwaitingDialog
-        order={blockedBy?.order ?? null}
-        branchLabel={blockedBy ? `${blockedBy.branch.code} · ${blockedBy.branch.name}` : null}
-        onClose={() => setBlockedBy(null)}
-      />
     </div>
   );
 }

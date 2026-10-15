@@ -12,7 +12,7 @@ import {
   FilterMeta,
   type DateRangeOption,
 } from "@/components/pos-admin/FilterBar";
-import { RESTOCK_STATUS_LABELS } from "@/components/pos-admin/pos-labels";
+import { RESTOCK_STATUS_FILTER_OPTIONS } from "@/components/pos-admin/pos-labels";
 import { httpClient, getApiErrorMessage } from "@/services/http-client";
 import { usePermissions } from "@/lib/permissions";
 import { useRealtime } from "@/components/realtime/RealtimeProvider";
@@ -249,7 +249,7 @@ export default function FactoryPanelPage() {
         >
           <MenuItem value="open">Por enviar (abiertos)</MenuItem>
           <MenuItem value="all">Todos los estados</MenuItem>
-          {Object.entries(RESTOCK_STATUS_LABELS).map(([value, label]) => (
+          {RESTOCK_STATUS_FILTER_OPTIONS.map(({ value, label }) => (
             <MenuItem key={value} value={value}>
               {label}
             </MenuItem>

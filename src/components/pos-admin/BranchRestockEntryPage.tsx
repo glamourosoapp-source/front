@@ -3,8 +3,18 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
-import { Button, Dialog, DialogActions, DialogContent, DialogTitle, MenuItem, TextField } from "@mui/material";
-import { ArrowLeft, Download, PackagePlus, RotateCcw, ShieldAlert, Truck } from "lucide-react";
+import {
+  Button,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogTitle,
+  FormControlLabel,
+  MenuItem,
+  Switch,
+  TextField,
+} from "@mui/material";
+import { ArrowLeft, CheckCheck, Download, PackagePlus, RotateCcw, ShieldAlert, Truck } from "lucide-react";
 import type { FactoryForm } from "@glamouroso/shared";
 import { httpClient, getApiErrorMessage } from "@/services/http-client";
 import { usePermissions } from "@/lib/permissions";
@@ -78,6 +88,8 @@ export function BranchRestockEntryPage() {
   const [publicity, setPublicity] = useState("");
   const [saving, setSaving] = useState(false);
   const [exporting, setExporting] = useState(false);
+  /** Al recibir un pedido solo se ven sus renglones; apagado, las 4 hojas completas. */
+  const [onlyFilled, setOnlyFilled] = useState(false);
 
   const load = useCallback(
     async (key: BasisKey | null) => {
@@ -94,6 +106,7 @@ export function BranchRestockEntryPage() {
         setValues(initial);
         setPrefill(initial);
         setPublicity(data.publicity?.qty ? String(data.publicity.qty) : "");
+        setOnlyFilled(data.entry?.kind === "order");
       } catch (error) {
         toast.error(getApiErrorMessage(error, "No se pudo cargar la hoja de entrada"));
       } finally {
@@ -147,6 +160,9 @@ export function BranchRestockEntryPage() {
     ? form.entry.openOrders.find((order) => order.id === form.entry?.orderId) ?? null
     : null;
 
+  /** Precargada con un pedido y sin tocar: llegó tal cual se pidió. */
+  const allAsOrdered = Boolean(basedOn) && changedFromPrefill === 0;
+
   function changeBasis(key: BasisKey) {
     if (hasWork && !window.confirm("Se perderá lo que ya capturaste en la hoja. ¿Precargar de nuevo?")) return;
     const query = key.startsWith("order:") ? `order=${key.slice(6)}` : `basis=${key}`;
@@ -166,7 +182,7 @@ export function BranchRestockEntryPage() {
         publicityQty: charges.publicityQty,
       });
       toast.success(
-        `Llegada registrada: ${captured.length} ${captured.length === 1 ? "renglón" : "renglones"} al inventario`
+        `Recibido: ${captured.length} ${captured.length === 1 ? "renglón" : "renglones"} al inventario`
       );
       setConfirmOpen(false);
       router.push(`/dashboard/pos/sucursales/${branchId}?tab=pedidos`);
@@ -225,13 +241,20 @@ export function BranchRestockEntryPage() {
           <h1 className="page-title" style={{ display: "flex", alignItems: "center", gap: 10 }}>
             <Truck size={22} style={{ color: "var(--glam-blue)", flex: "0 0 auto" }} />
             <span>
-              Llegada de surtido{form ? ` · ${form.code ? `${form.code} · ` : ""}${form.name}` : ""}
+              Recibir surtido{form ? ` · ${form.code ? `${form.code} · ` : ""}${form.name}` : ""}
             </span>
           </h1>
           <p className="page-kicker">
-            La hoja viene precargada; corrige o llena lo que de verdad llegó. Se captura en empaques, como en
-            el papel: <strong>2</strong> en un bidón son 40 L, <strong>1</strong> en una caja de 24 son 24 pz.
-            Enter baja al siguiente renglón.
+            {basedOn ? (
+              <>
+                La hoja viene con lo pedido. Si todo llegó, presiona <strong>Todo llegó completo</strong>; si algo
+                llegó distinto, corrige solo ese renglón.{" "}
+              </>
+            ) : (
+              <>Captura lo que de verdad llegó. </>
+            )}
+            Se captura en empaques, como en el papel: <strong>2</strong> en un bidón son 40 L, <strong>1</strong> en
+            una caja de 24 son 24 pz. Enter baja al siguiente renglón.
           </p>
         </div>
         <div style={{ display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap" }}>
@@ -249,7 +272,7 @@ export function BranchRestockEntryPage() {
             {(form?.entry?.openOrders ?? []).map((order) => (
               <MenuItem key={order.id} value={`order:${order.id}`}>
                 Pedido del {formatDate(order.createdAt)} · {RESTOCK_ORIGIN_LABELS[order.origin] ?? order.origin} ·{" "}
-                {RESTOCK_STATUS_LABELS[order.status] ?? order.status} · {order.itemsCount} partidas
+                {RESTOCK_STATUS_LABELS[order.status] ?? order.status} · {order.itemsCount} {order.itemsCount === 1 ? "producto" : "productos"}
               </MenuItem>
             ))}
             <MenuItem value="shortages">Faltante calculado hoy</MenuItem>
@@ -261,7 +284,7 @@ export function BranchRestockEntryPage() {
             onClick={() => void exportPdf()}
             disabled={!form || exporting}
           >
-            {exporting ? "Generando…" : "Descargar formato"}
+            {exporting ? "Generando…" : "Descargar PDF"}
           </Button>
         </div>
       </div>
@@ -271,15 +294,27 @@ export function BranchRestockEntryPage() {
           {basedOn
             ? `Precargada con el pedido del ${formatDate(basedOn.createdAt)} (${
                 RESTOCK_ORIGIN_LABELS[basedOn.origin] ?? basedOn.origin
-              }). Al registrar, ese pedido queda como recibido con lo que captures; sus partidas que dejes vacías quedan en 0.`
+              }). Al recibir, ese pedido queda como recibido con lo que captures; lo que dejes vacío queda como que no llegó.`
             : form.entry?.kind === "shortages"
-              ? "La sucursal no tiene pedidos abiertos: la hoja trae el faltante calculado hoy contra su stock. Al registrar se crea una entrada manual."
-              : "Hoja en blanco. Al registrar se crea una entrada manual con lo que captures."}
+              ? "La sucursal no tiene pedidos abiertos: la hoja trae el faltante calculado hoy contra su stock. Al recibir se guarda como llegada sin pedido."
+              : "Hoja en blanco. Al recibir se guarda como llegada sin pedido con lo que captures."}
           {unlinked ? ` ${unlinked} renglones sin ligar al catálogo se ven en gris y no se capturan.` : ""}
         </p>
       ) : null}
 
       {loading && !form ? <p className="page-kicker">Cargando hoja...</p> : null}
+
+      {form ? (
+        <FormControlLabel
+          control={<Switch checked={onlyFilled} onChange={(event) => setOnlyFilled(event.target.checked)} />}
+          label={
+            onlyFilled
+              ? "Solo lo que trae el pedido (apágalo para agregar algo que no venía)"
+              : "Solo renglones con cantidad"
+          }
+          sx={{ m: 0 }}
+        />
+      ) : null}
 
       <FactoryFormSheet
         pages={pages}
@@ -291,6 +326,7 @@ export function BranchRestockEntryPage() {
         disabled={!canRegister || saving}
         qtyHeader="Cant"
         inputLabel="Cantidad de"
+        onlyFilled={onlyFilled}
       />
 
       {canRegister ? (
@@ -311,24 +347,26 @@ export function BranchRestockEntryPage() {
             >
               Volver a lo precargado
             </Button>
+            {/* Lo normal: llegó tal cual se pidió y se recibe en un clic. */}
             <Button
               variant="contained"
-              startIcon={<PackagePlus size={15} />}
+              color={allAsOrdered ? "success" : "primary"}
+              startIcon={allAsOrdered ? <CheckCheck size={15} /> : <PackagePlus size={15} />}
               disabled={!captured.length || saving}
               onClick={() => setConfirmOpen(true)}
             >
-              Registrar llegada
+              {allAsOrdered ? "Todo llegó completo" : "Recibir"}
             </Button>
           </div>
         </div>
       ) : (
         <p className="page-kicker">
-          Registrar la llegada pide los permisos de Faltantes y surtido y de Inventario (editar).
+          Recibir pide los permisos de Faltantes y surtido y de Inventario (editar).
         </p>
       )}
 
       <Dialog open={confirmOpen} onClose={() => (saving ? null : setConfirmOpen(false))} fullWidth maxWidth="md">
-        <DialogTitle>Registrar llegada de surtido</DialogTitle>
+        <DialogTitle>{allAsOrdered ? "Recibir: todo llegó completo" : "Recibir surtido"}</DialogTitle>
         <DialogContent dividers>
           <p className="page-kicker" style={{ marginTop: 0 }}>
             Sube el inventario de {form?.name} con {captured.length} {captured.length === 1 ? "renglón" : "renglones"}:{" "}
@@ -412,7 +450,7 @@ export function BranchRestockEntryPage() {
             Seguir capturando
           </Button>
           <Button variant="contained" onClick={() => void register()} disabled={saving}>
-            {saving ? "Registrando…" : "Registrar llegada"}
+            {saving ? "Recibiendo…" : "Recibir"}
           </Button>
         </DialogActions>
       </Dialog>

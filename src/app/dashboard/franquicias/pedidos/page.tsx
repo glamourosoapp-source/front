@@ -11,7 +11,7 @@ import {
   FilterMeta,
   type DateRangeOption,
 } from "@/components/pos-admin/FilterBar";
-import { RESTOCK_STATUS_LABELS, approvedRestockMessage, restockItemAmount } from "@/components/pos-admin/pos-labels";
+import { RESTOCK_STATUS_FILTER_OPTIONS, approvedRestockMessage, restockItemAmount } from "@/components/pos-admin/pos-labels";
 import { formatMoney } from "@/lib/format-money";
 import { httpClient, getApiErrorMessage } from "@/services/http-client";
 import { usePermissions } from "@/lib/permissions";
@@ -215,7 +215,7 @@ export default function FranchiseOrdersPage() {
         >
           <MenuItem value="open">Por enviar (abiertos)</MenuItem>
           <MenuItem value="all">Todos los estados</MenuItem>
-          {Object.entries(RESTOCK_STATUS_LABELS).map(([value, label]) => (
+          {RESTOCK_STATUS_FILTER_OPTIONS.map(({ value, label }) => (
             <MenuItem key={value} value={value}>
               {label}
             </MenuItem>

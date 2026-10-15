@@ -90,7 +90,7 @@ export function RestockAwaitingDialog({ order, branchLabel, onClose }: RestockAw
           </div>
         ) : null}
         <p className="page-kicker" style={{ marginBottom: 0 }}>
-          Cuando llegue el producto, usa <strong>Registrar llegada</strong> en ese pedido (o{" "}
+          Cuando llegue el producto, usa <strong>Recibir</strong> en ese pedido (o{" "}
           <strong>Confirmar llegada</strong> si ya estaba marcado como enviado). Si ese pedido ya no va a llegar,
           cancélalo desde su menú &quot;⋯&quot; y entonces podrás confirmar uno nuevo.
         </p>
@@ -110,7 +110,7 @@ export function RestockAwaitingDialog({ order, branchLabel, onClose }: RestockAw
             href={restockArrivalHref(order)}
             startIcon={<PackagePlus size={16} />}
           >
-            Registrar llegada
+            Recibir
           </Button>
         ) : null}
       </DialogActions>
