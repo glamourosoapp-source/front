@@ -721,6 +721,12 @@ export interface RestockOrder {
   /** Primera impresión del formato de pedido; desde ahí ya no se cancela. */
   formPrintedAt?: string | null;
   formPrintedBy?: string | null;
+  /** Motivo de la cancelación (obligatorio al cancelar un pedido ya enviado a fábrica). */
+  cancelReason?: string | null;
+  cancelledBy?: string | null;
+  cancelledAt?: string | null;
+  /** Publicidad que se pidió con este pedido (pie del formato). */
+  publicityQty?: number | null;
   items?: RestockOrderItem[];
   /** Devoluciones a fábrica ligadas a este pedido: lo que el transportista se llevó de regreso. */
   returns?: FactoryReturn[];

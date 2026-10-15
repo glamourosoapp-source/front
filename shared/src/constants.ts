@@ -121,6 +121,8 @@ export const NOTIFICATION_TYPES = {
   WHATSAPP_QUALITY_ALERT: "whatsapp_quality_alert",
   /** El scheduler generó el pedido de surtido del día de corte de una sucursal. */
   RESTOCK_ORDER_CREATED: "restock_order_created",
+  /** Un pedido de surtido se envió a fábrica desde el panel. */
+  RESTOCK_ORDER_SUBMITTED: "restock_order_submitted",
 } as const;
 
 /** Path del gateway WebSocket del Back (mismo host que la API). */

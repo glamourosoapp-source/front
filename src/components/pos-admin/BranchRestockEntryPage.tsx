@@ -12,6 +12,8 @@ import {
   FormControlLabel,
   MenuItem,
   Switch,
+  Tab,
+  Tabs,
   TextField,
 } from "@mui/material";
 import { ArrowLeft, CheckCheck, Download, PackagePlus, RotateCcw, ShieldAlert, Truck } from "lucide-react";
@@ -41,6 +43,8 @@ import {
   sheetCharges,
 } from "./factory-form-values";
 import { RESTOCK_ORIGIN_LABELS, RESTOCK_STATUS_LABELS, formatDate, unitLabel } from "./pos-labels";
+import { RestockSummaryList } from "./RestockSummaryList";
+import { RestockSteps } from "./RestockSteps";
 
 /** `order:<id>` | `shortages` | `blank`: con qué se precarga la hoja. */
 type BasisKey = string;
@@ -160,12 +164,29 @@ export function BranchRestockEntryPage() {
     ? form.entry.openOrders.find((order) => order.id === form.entry?.orderId) ?? null
     : null;
 
+  /**
+   * Resumen (la lista del pedido con − / +) o Formato (la hoja de 4 páginas).
+   * Por omisión Resumen al recibir un pedido y Formato en la hoja en blanco.
+   */
+  const vistaParam = searchParams.get("vista");
+  const view: "resumen" | "formato" =
+    vistaParam === "formato" || vistaParam === "resumen"
+      ? vistaParam
+      : form?.entry?.kind === "order"
+        ? "resumen"
+        : "formato";
+  function selectView(next: "resumen" | "formato") {
+    const query = new URLSearchParams(searchParams.toString());
+    query.set("vista", next);
+    router.replace(`/dashboard/pos/sucursales/${branchId}/entrada?${query}`);
+  }
+
   /** Precargada con un pedido y sin tocar: llegó tal cual se pidió. */
   const allAsOrdered = Boolean(basedOn) && changedFromPrefill === 0;
 
   function changeBasis(key: BasisKey) {
     if (hasWork && !window.confirm("Se perderá lo que ya capturaste en la hoja. ¿Precargar de nuevo?")) return;
-    const query = key.startsWith("order:") ? `order=${key.slice(6)}` : `basis=${key}`;
+    const query = (key.startsWith("order:") ? `order=${key.slice(6)}` : `basis=${key}`) + (vistaParam ? `&vista=${vistaParam}` : "");
     router.replace(`/dashboard/pos/sucursales/${branchId}/entrada?${query}`);
   }
 
@@ -238,6 +259,11 @@ export function BranchRestockEntryPage() {
             <ArrowLeft size={16} />
             Volver a pedidos a fábrica
           </Link>
+          {basedOn ? (
+            <div style={{ margin: "4px 0 8px" }}>
+              <RestockSteps current="transit" compact />
+            </div>
+          ) : null}
           <h1 className="page-title" style={{ display: "flex", alignItems: "center", gap: 10 }}>
             <Truck size={22} style={{ color: "var(--glam-blue)", flex: "0 0 auto" }} />
             <span>
@@ -305,6 +331,41 @@ export function BranchRestockEntryPage() {
       {loading && !form ? <p className="page-kicker">Cargando hoja...</p> : null}
 
       {form ? (
+        <Tabs value={view} onChange={(_e, next) => selectView(next)} sx={{ borderBottom: "1px solid var(--border)" }}>
+          <Tab value="resumen" label={`Resumen · ${captured.length}`} />
+          <Tab value="formato" label="Formato" />
+        </Tabs>
+      ) : null}
+
+      {form && view === "resumen" ? (
+        <section className="panel p-5" style={{ display: "grid", gap: 14 }}>
+          {allAsOrdered && canRegister ? (
+            <div className="restock-all-arrived">
+              <div>
+                <strong>¿Llegó todo lo que se pidió?</strong>
+                <span className="page-kicker" style={{ margin: 0 }}>
+                  Recíbelo en un clic. Si algo llegó distinto, corrige solo ese renglón abajo.
+                </span>
+              </div>
+              <Button variant="contained" color="success" size="large" startIcon={<CheckCheck size={18} />} onClick={() => setConfirmOpen(true)}>
+                Todo llegó completo
+              </Button>
+            </div>
+          ) : null}
+          <RestockSummaryList
+            rows={rows}
+            values={values}
+            baseline={prefill}
+            baselineLabel={basedOn ? "Pedido" : "Precargado"}
+            onChange={(key, value) => setValues((prev) => ({ ...prev, [key]: value }))}
+            canSeeCosts={canSeeCosts}
+            disabled={!canRegister || saving}
+            emptyText="Agrega lo que llegó con el buscador de abajo, o cámbiate a la vista Formato."
+          />
+        </section>
+      ) : null}
+
+      {form && view === "formato" ? (
         <FormControlLabel
           control={<Switch checked={onlyFilled} onChange={(event) => setOnlyFilled(event.target.checked)} />}
           label={
@@ -316,25 +377,27 @@ export function BranchRestockEntryPage() {
         />
       ) : null}
 
-      <FactoryFormSheet
-        pages={pages}
-        page={page}
-        onPageChange={setPage}
-        values={values}
-        baseline={prefill}
-        onChange={(key, value) => setValues((prev) => ({ ...prev, [key]: value }))}
-        disabled={!canRegister || saving}
-        qtyHeader="Cant"
-        inputLabel="Cantidad de"
-        onlyFilled={onlyFilled}
-      />
+      {view === "formato" ? (
+        <FactoryFormSheet
+          pages={pages}
+          page={page}
+          onPageChange={setPage}
+          values={values}
+          baseline={prefill}
+          onChange={(key, value) => setValues((prev) => ({ ...prev, [key]: value }))}
+          disabled={!canRegister || saving}
+          qtyHeader="Cant"
+          inputLabel="Cantidad de"
+          onlyFilled={onlyFilled}
+        />
+      ) : null}
 
       {canRegister ? (
         <div className={`msf-savebar${captured.length ? " msf-savebar--active" : ""}`}>
           <span>
             {captured.length
               ? `${captured.length} ${captured.length === 1 ? "renglón" : "renglones"} · ${formatQuantity(totals.liters)} L · ${formatQuantity(totals.pieces)} pz${
-                  canSeeCosts ? ` · ${formatMoney(totals.amount)}` : ""
+                  canSeeCosts ? ` · ${formatMoney(totals.amount + charges.total)} con cargos` : ""
                 }${changedFromPrefill ? ` · ${changedFromPrefill} cambiado${changedFromPrefill === 1 ? "" : "s"} contra lo precargado` : ""}`
               : "Sin cantidades capturadas"}
           </span>
@@ -374,7 +437,7 @@ export function BranchRestockEntryPage() {
             {canSeeCosts ? (
               <>
                 {" "}
-                por <strong>{formatMoney(totals.amount)}</strong> a costo
+                por <strong>{formatMoney(totals.amount)}</strong> a precio de tienda
               </>
             ) : null}
             .{" "}

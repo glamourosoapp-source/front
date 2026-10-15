@@ -69,6 +69,12 @@ export function RestockOrderDetail({ order }: { order: RestockOrder }) {
 
   return (
     <>
+      {order.cancelReason ? (
+        <p className="page-kicker" style={{ marginTop: 0, color: "#b91c1c" }}>
+          <strong>Cancelado:</strong> {order.cancelReason}
+          {order.cancelledAt ? ` (${formatDateTime(order.cancelledAt)})` : ""}
+        </p>
+      ) : null}
       {order.notes ? (
         <p className="page-kicker" style={{ marginTop: 0 }}>
           <strong>Nota de quien pidió:</strong> {order.notes}

@@ -25,6 +25,17 @@ export interface CapturedRow {
   amount: number;
 }
 
+/**
+ * Importe de un renglón como lo cobra el formato de tiendas: empaques × precio
+ * a tienda del renglón; sin precio, piezas o litros × costo del catálogo. Es la
+ * misma regla del total del pedido en el Back, así que todas las pantallas
+ * muestran el mismo total.
+ */
+export function rowAmount(row: FactoryFormRow, packs: number): number {
+  if (row.unitPrice != null && Number(row.unitPrice) > 0) return round2(packs * Number(row.unitPrice));
+  return round2(packs * row.packSize * (row.unitCost ?? 0));
+}
+
 export interface SheetCharges {
   transparent: number;
   color: number;
@@ -48,7 +59,7 @@ export function capturedRows(rows: FactoryFormRow[], values: SheetValues): Captu
     const packs = packsOf(values[rowKey(row)]);
     if (packs <= 0) continue;
     const base = toBase(values[rowKey(row)], row.packSize);
-    list.push({ row, packs, base, amount: round2(base * (row.unitCost ?? 0)) });
+    list.push({ row, packs, base, amount: rowAmount(row, packs) });
   }
   return list;
 }
@@ -113,7 +124,7 @@ export function formWithValues(
   const withValues = (row: FactoryFormRow): FactoryFormRow => {
     if (!isLinked(row)) return row;
     const packs = packsOf(values[rowKey(row)]);
-    const amount = packs > 0 && canSeeCosts ? round2(packs * row.packSize * (row.unitCost ?? 0)) : null;
+    const amount = packs > 0 && canSeeCosts ? rowAmount(row, packs) : null;
     return { ...row, qty: packs > 0 ? round2(packs) : null, amount, unitCost: canSeeCosts ? row.unitCost : null };
   };
   const pages = form.pages.map((p) => ({ ...p, blocks: p.blocks.map((block) => block.map(withValues)) }));

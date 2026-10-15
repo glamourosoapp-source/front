@@ -71,15 +71,23 @@ export function unitsPerRestockPackage(item: {
 /**
  * Por qué un pedido a fábrica ya no se puede cancelar, o `null` si sí se puede.
  *
- * Solo se cancela mientras nadie lo ha empezado a trabajar (decisión de
- * Ramiro, 2026-10-01): sigue en su estado inicial (pendiente) y su formato no
- * se ha impreso. Con la hoja impresa fábrica ya pudo empezar a surtirlo.
+ * - **Con el módulo de fábrica apagado** (hoy): se cancela mientras no haya
+ *   llegado a la sucursal, aunque ya se haya enviado a fábrica (decisión de
+ *   Ramiro, 2026-10-14). Quien lo envió sabe si fábrica ya lo surtió; por eso
+ *   se pide un motivo y se le recuerda avisar a fábrica.
+ * - **Con fábrica prendida**: solo mientras nadie lo ha empezado a trabajar
+ *   (decisión del 2026-10-01): sigue pendiente y su formato no se ha impreso.
  */
-export function restockCancelBlocker(order: {
-  status: string;
-  formPrintedAt?: string | Date | null;
-}): string | null {
+export function restockCancelBlocker(
+  order: { status: string; formPrintedAt?: string | Date | null },
+  options: { factoryModuleEnabled?: boolean } = {}
+): string | null {
   if (order.status === RESTOCK_ORDER_STATUS.CANCELLED) return "Este pedido ya está cancelado";
+  if (options.factoryModuleEnabled === false) {
+    if (order.status === RESTOCK_ORDER_STATUS.RECEIVED) return "Ya se recibió en la sucursal";
+    if (order.status === RESTOCK_ORDER_STATUS.SENT) return "Su inventario ya se cargó a la sucursal";
+    return null;
+  }
   if (order.status !== RESTOCK_ORDER_STATUS.PENDING) {
     return "Solo se puede cancelar un pedido pendiente: este ya avanzó";
   }

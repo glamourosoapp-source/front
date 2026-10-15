@@ -27,6 +27,7 @@ export function getNotificationTypeConfig(type: string): NotificationTypeConfig 
     case NOTIFICATION_TYPES.CAMPAIGN_COMPLETED:
       return { label: "Campaña", icon: Megaphone, tone: "campaign" };
     case NOTIFICATION_TYPES.RESTOCK_ORDER_CREATED:
+    case NOTIFICATION_TYPES.RESTOCK_ORDER_SUBMITTED:
       return { label: "Surtido", icon: Truck, tone: "restock" };
     default:
       return { label: "Aviso", icon: MessageCircle, tone: "handoff" };
@@ -38,6 +39,10 @@ export function hrefForNotification(n: Notification): string {
     return `/dashboard/orders/${n.entityId}`;
   }
   if (n.entityType === NOTIFICATION_ENTITY_TYPES.RESTOCK_ORDER) {
+    // Un pedido enviado a fábrica lleva directo a su hoja.
+    if (n.type === NOTIFICATION_TYPES.RESTOCK_ORDER_SUBMITTED && n.entityId) {
+      return `/dashboard/pos/surtido/pedidos/${n.entityId}`;
+    }
     // Fábrica lista todos los pedidos de surtido (sucursales y franquicias)
     // y es donde se aprueban; con el módulo apagado, Faltantes y surtido.
     return config.factoryModuleEnabled ? "/dashboard/fabrica" : "/dashboard/pos/surtido";

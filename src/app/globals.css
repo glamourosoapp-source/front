@@ -970,6 +970,316 @@ textarea {
   }
 }
 
+/* ---- Surtido a fábrica en 3 pasos ----
+
+   Revisar y enviar → En camino → Recibido. Mismas tarjetas que Sucursales y
+   Cortes (`.pos-day .pos-cut`): la luz de la izquierda dice en qué paso va
+   cada sucursal y la tarjeta trae una sola acción. */
+.restock-rows {
+  display: grid;
+  gap: 12px;
+}
+
+.restock-steps {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: 13px;
+}
+
+.restock-steps li {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--muted);
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.restock-steps li + li::before {
+  content: "";
+  width: 28px;
+  height: 2px;
+  margin-right: 2px;
+  border-radius: 2px;
+  background: var(--border);
+}
+
+.restock-steps li.is-done + li::before,
+.restock-steps li.is-current + li::before {
+  background: #bfe3f4;
+}
+
+.restock-steps-dot {
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.restock-steps li.is-done .restock-steps-dot {
+  background: #dcfce7;
+  border-color: #bbf7d0;
+  color: #15803d;
+}
+
+.restock-steps li.is-current {
+  color: var(--glam-navy);
+}
+
+.restock-steps li.is-current .restock-steps-dot {
+  background: var(--glam-blue);
+  border-color: var(--glam-blue);
+  color: #fff;
+  box-shadow: 0 0 0 4px var(--soft-blue);
+}
+
+.restock-current-steps {
+  padding: 14px 20px 0;
+}
+
+.restock-current .pos-day-head {
+  align-items: start;
+}
+
+.restock-current .restock-current-icon {
+  transform: none;
+}
+
+.restock-current .restock-current-icon.is-pending {
+  background: #fef3c7;
+  color: #b45309;
+}
+
+.restock-current .restock-current-icon.is-transit {
+  background: var(--glam-blue);
+  color: #fff;
+}
+
+.restock-current .restock-current-icon.is-done {
+  background: #dcfce7;
+  color: #15803d;
+}
+
+.restock-badge-pending {
+  background: #f59e0b;
+}
+
+.restock-top {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 4px 16px;
+}
+
+.restock-top > span {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Los links del pie de tarjeta van en azul; un botón con forma de link
+   (Revisar y enviar, Recibir) conserva el color de su botón. */
+.restock-current-footer a.MuiButton-contained {
+  color: #fff;
+}
+
+.restock-current-footer {
+  flex-wrap: wrap;
+  justify-content: flex-start;
+  align-items: center;
+  gap: 10px 14px;
+}
+
+/* Luz del paso en la bandeja: hermana del foco de tienda. Solo late lo que
+   está en camino; lo demás es un color fijo. */
+.restock-light.is-pending {
+  --light: #d97706;
+  --light-soft: #fef3c7;
+}
+
+.restock-light.is-transit {
+  --light: #0284c7;
+  --light-soft: #e0f2fe;
+}
+
+.restock-light.is-stuck {
+  --light: #dc2626;
+  --light-soft: #fee2e2;
+}
+
+.restock-light.is-ok {
+  --light: #16a34a;
+  --light-soft: #dcfce7;
+}
+
+.restock-light.is-loading {
+  --light: #94a3b8;
+  --light-soft: #f1f5f9;
+}
+
+.restock-light.is-pending .store-light-dot::before,
+.restock-light.is-pending .store-light-dot::after,
+.restock-light.is-ok .store-light-dot::before,
+.restock-light.is-ok .store-light-dot::after,
+.restock-light.is-loading .store-light-dot::before,
+.restock-light.is-loading .store-light-dot::after {
+  animation: none;
+  opacity: 0;
+}
+
+.restock-branch .pos-day-head {
+  cursor: pointer;
+}
+
+.restock-branch-action {
+  display: flex;
+  justify-content: flex-end;
+  min-width: 40px;
+}
+
+.restock-branch.is-stuck {
+  border-color: #fecaca;
+}
+
+/* Vista Resumen: los productos del pedido agrupados por cómo surte fábrica. */
+.restock-summary {
+  display: grid;
+  gap: 18px;
+}
+
+.restock-summary-group {
+  display: grid;
+  gap: 8px;
+}
+
+.restock-summary-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  color: var(--glam-navy);
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.restock-summary-title span {
+  padding: 1px 8px;
+  border-radius: 999px;
+  background: var(--soft-blue);
+  font-size: 12px;
+}
+
+.restock-summary-table tbody tr {
+  cursor: default;
+}
+
+.restock-summary-table tbody tr.is-changed td {
+  background: #fffbeb;
+}
+
+.restock-summary-pack {
+  color: var(--muted);
+  font-size: 13px;
+  white-space: nowrap;
+}
+
+.restock-summary-was {
+  color: #92400e;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.restock-stepper {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.restock-stepper .input {
+  width: 72px;
+  height: 34px;
+  padding: 4px 8px;
+  text-align: center;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.restock-all-arrived {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 16px;
+  border: 1px solid #bbf7d0;
+  border-radius: 12px;
+  background: #f0fdf4;
+}
+
+.restock-all-arrived > div {
+  display: grid;
+  gap: 2px;
+  color: #14532d;
+}
+
+.restock-review-stats {
+  justify-content: flex-start;
+}
+
+.restock-charges {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: center;
+  gap: 10px 16px;
+  margin-top: 12px;
+  max-width: 620px;
+  font-size: 14px;
+}
+
+.restock-result {
+  display: grid;
+  justify-items: center;
+  gap: 12px;
+  padding: 32px 24px !important;
+  text-align: center;
+}
+
+.restock-result-icon {
+  color: #16a34a;
+}
+
+.restock-result-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 10px;
+  margin-top: 6px;
+}
+
+@media (max-width: 720px) {
+  .restock-steps li + li::before {
+    width: 12px;
+  }
+
+  .restock-steps.is-compact .restock-steps-label,
+  .restock-steps li:not(.is-current) .restock-steps-label {
+    display: none;
+  }
+
+  .restock-top {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
 /* ---- Barra de filtros (pantallas del punto de venta) ----
 
    `.toolbar` reparte a sus hijos con `space-between`: con tres controles los

@@ -41,9 +41,36 @@ export const updateRestockOrderSchema = z.object({
   notes: optionalString,
 });
 
-/** Genera el pedido de faltantes de una sucursal a mano (mismo cálculo que el scheduler). */
+/** Una partida capturada en empaques: de una línea o de un producto, no de los dos. */
+const packItemSchema = z
+  .object({
+    lineId: z.union([z.string().uuid(), z.null()]).optional(),
+    productId: z.union([z.string().uuid(), z.null()]).optional(),
+    qty: z.coerce.number().min(0).max(100_000),
+  })
+  .superRefine((value, ctx) => {
+    if (Boolean(value.lineId) === Boolean(value.productId)) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Indica lineId o productId, no ambos" });
+    }
+  });
+
+/**
+ * Genera el pedido de faltantes de una sucursal a mano.
+ * - Sin `items`: el faltante calculado (mismo cálculo que el scheduler).
+ * - Con `items`: lo que se revisó y ajustó en el panel, en empaques.
+ * - `submit`: el pedido nace enviado a fábrica (`approved`), no pendiente.
+ */
 export const generateShortageOrderSchema = z.object({
   notes: optionalString,
+  items: z.array(packItemSchema).max(2000).optional(),
+  submit: z.boolean().optional(),
+  /** Publicidad que se pide con este pedido (pie del formato). */
+  publicityQty: z.coerce.number().int().min(0).max(1000).optional(),
+});
+
+/** Cancelar: con fábrica apagada un pedido ya enviado a fábrica pide motivo. */
+export const cancelRestockOrderSchema = z.object({
+  reason: z.union([z.string().trim().max(300), z.literal(""), z.null()]).optional(),
 });
 
 export const queryRestockOrdersSchema = paginationSchema.extend({

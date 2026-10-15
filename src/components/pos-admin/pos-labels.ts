@@ -8,14 +8,14 @@ import { formatQuantity } from "@/lib/format-money";
 export const WEEKDAY_LABELS = ["Domingo", "Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado"];
 
 /**
- * Con fábrica apagada nadie aprueba ni prepara en el sistema: todo lo que se
- * pidió y no ha llegado es "Pedido a fábrica", y lo que se marcó como enviado
- * (su inventario ya subió) va "En camino". Con fábrica prendida se conservan
- * los pasos de fábrica.
+ * Con fábrica apagada el ciclo es de la sucursal: "Por enviar" (pendiente: los
+ * viejos o los del corte automático), "Pedido a fábrica" (enviado desde la
+ * revisión, `approved`) y "En camino" (los que se marcaron como enviados: su
+ * inventario ya subió). Con fábrica prendida se conservan los pasos de fábrica.
  */
 const FACTORY_ON = config.factoryModuleEnabled;
 export const RESTOCK_STATUS_LABELS: Record<string, string> = {
-  [RESTOCK_ORDER_STATUS.PENDING]: FACTORY_ON ? "Pendiente de aprobar" : "Pedido a fábrica",
+  [RESTOCK_ORDER_STATUS.PENDING]: FACTORY_ON ? "Pendiente de aprobar" : "Por enviar",
   [RESTOCK_ORDER_STATUS.APPROVED]: FACTORY_ON ? "Aprobado" : "Pedido a fábrica",
   [RESTOCK_ORDER_STATUS.PREPARING]: FACTORY_ON ? "En preparación" : "Pedido a fábrica",
   [RESTOCK_ORDER_STATUS.SENT]: FACTORY_ON ? "Enviado" : "En camino",
@@ -299,4 +299,9 @@ export function packSummary(shortages: Array<{ unit: string; requestedQty: numbe
     totals.piezas ? `${totals.piezas} ${totals.piezas === 1 ? "pieza" : "piezas"}` : "",
   ].filter(Boolean);
   return parts.join(" · ");
+}
+
+/** Revisar y enviar el pedido a fábrica de una sucursal. */
+export function restockReviewHref(branchId: string): string {
+  return `/dashboard/pos/sucursales/${branchId}/pedido`;
 }

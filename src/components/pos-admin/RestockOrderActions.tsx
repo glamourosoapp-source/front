@@ -13,6 +13,7 @@ import {
   ListItemText,
   Menu,
   MenuItem,
+  TextField,
 } from "@mui/material";
 import { Check, Eye, FileDown, MoreHorizontal, PackageCheck, PackagePlus, Pencil, Send, X } from "lucide-react";
 import { toast } from "sonner";
@@ -61,9 +62,11 @@ interface RestockOrderActionsProps {
  * todo lo demás en el menú "⋯". Es el mismo juego de botones en la tabla de
  * pedidos, en la tarjeta y en la hoja del pedido.
  *
- * Con fábrica apagada (lo normal hoy) el ciclo es pedido → llegada:
- * - abierto → **Recibir** (la hoja de entrada precargada; el pedido queda
- *   recibido con lo que se capture y sube al inventario);
+ * Con fábrica apagada (lo normal hoy) el ciclo es enviar → recibir:
+ * - pendiente (viejos o del corte automático) → **Enviar a fábrica**, y
+ *   "Recibir" en el menú por si ya llegó;
+ * - enviado a fábrica (`approved`/`preparing`) → **Recibir** (la hoja de
+ *   entrada precargada; el pedido queda recibido y sube al inventario);
  * - en camino (los que se marcaron con el botón anterior) → **Confirmar llegada**,
  *   que solo lo pasa a recibido: su inventario ya subió al enviarse;
  * - recibido → sin acción principal; "Corregir lo recibido" en el menú.
@@ -81,6 +84,7 @@ export function RestockOrderActions({
 }: RestockOrderActionsProps) {
   const [menuAnchor, setMenuAnchor] = useState<HTMLElement | null>(null);
   const [confirm, setConfirm] = useState<"cancel" | "receive" | null>(null);
+  const [cancelReason, setCancelReason] = useState("");
   const [sending, setSending] = useState(false);
   const [busy, setBusy] = useState(false);
   const { download, downloading } = useFactoryFormDownload();
@@ -88,23 +92,29 @@ export function RestockOrderActions({
   const factoryOn = config.factoryModuleEnabled;
   const isFranchise = order.origin === RESTOCK_ORIGIN.FRANCHISE || order.branch?.type === "franchise";
   const open = isOpenRestockOrder(order);
+  const pending = order.status === RESTOCK_ORDER_STATUS.PENDING;
   const sent = order.status === RESTOCK_ORDER_STATUS.SENT;
   const received = order.status === RESTOCK_ORDER_STATUS.RECEIVED;
   const dispatch = canDispatch && !isFranchise;
-  // Solo pendiente y sin formato impreso; si no, el menú dice por qué.
-  const cancelBlocker = restockCancelBlocker(order);
+  // Con fábrica apagada se cancela hasta que llegue; con fábrica, solo pendiente y sin imprimir.
+  const cancelBlocker = restockCancelBlocker(order, { factoryModuleEnabled: factoryOn });
+  // Ya enviado a fábrica (o con su formato impreso): cancelar pide motivo.
+  const cancelNeedsReason = !pending || Boolean(order.formPrintedAt);
   const canCancel = canUpdate && open && !cancelBlocker;
   const canCorrect = dispatch && (sent || received);
 
-  async function run(action: "approve" | "cancel" | "receive") {
+  async function run(action: "approve" | "submit" | "cancel" | "receive") {
     setBusy(true);
     try {
-      if (action === "approve") {
+      if (action === "submit") {
+        await httpClient.post(`/pos/restock/orders/${order.id}/submit`, {});
+        toast.success("Pedido enviado a fábrica: descarga su PDF y mándaselo");
+      } else if (action === "approve") {
         await httpClient.put(`/pos/restock/orders/${order.id}`, { status: RESTOCK_ORDER_STATUS.APPROVED });
         toast.success(approvedRestockMessage());
       } else if (action === "cancel") {
-        await httpClient.post(`/pos/restock/orders/${order.id}/cancel`, {});
-        toast.success("Pedido cancelado");
+        await httpClient.post(`/pos/restock/orders/${order.id}/cancel`, { reason: cancelReason.trim() || null });
+        toast.success(cancelNeedsReason ? "Pedido cancelado: avísale a fábrica" : "Pedido cancelado");
       } else {
         await httpClient.post(`/pos/restock/orders/${order.id}/receive`, {});
         toast.success("Llegada confirmada: el pedido quedó recibido");
@@ -134,6 +144,19 @@ export function RestockOrderActions({
         </Button>
       );
     }
+  } else if (pending && canUpdate) {
+    primary = (
+      <Button
+        size={size}
+        variant="contained"
+        startIcon={<Send size={14} />}
+        disabled={busy}
+        onClick={() => void run("submit")}
+        title="Marca el pedido como enviado a fábrica; después descarga su PDF y mándaselo"
+      >
+        Enviar a fábrica
+      </Button>
+    );
   } else if (open && dispatch) {
     primary = (
       <Button
@@ -184,6 +207,14 @@ export function RestockOrderActions({
       >
         <ListItemIcon><FileDown size={16} /></ListItemIcon>
         <ListItemText>{downloading ? "Generando..." : "Descargar PDF"}</ListItemText>
+      </MenuItem>
+    );
+  }
+  if (!factoryOn && pending && dispatch) {
+    menuItems.push(
+      <MenuItem key="arrival" component={Link} href={restockArrivalHref(order)} onClick={closeMenu}>
+        <ListItemIcon><PackagePlus size={16} /></ListItemIcon>
+        <ListItemText primary="Recibir" secondary="Si ya llegó sin haberlo enviado aquí" />
       </MenuItem>
     );
   }
@@ -282,6 +313,24 @@ export function RestockOrderActions({
               ? `El pedido del ${formatDateTime(order.createdAt)} se cancela y ya no se surte. No mueve inventario.`
               : `El pedido del ${formatDateTime(order.createdAt)} pasa a recibido. Su inventario ya subió cuando se marcó como enviado, así que no se mueve de nuevo.`}
           </p>
+          {confirm === "cancel" && cancelNeedsReason ? (
+            <>
+              <p className="page-kicker" style={{ margin: "10px 0" }}>
+                Este pedido ya se envió a fábrica: <strong>avísale a fábrica que se canceló</strong>.
+              </p>
+              <TextField
+                label="¿Por qué se cancela?"
+                value={cancelReason}
+                onChange={(event) => setCancelReason(event.target.value)}
+                fullWidth
+                required
+                multiline
+                minRows={2}
+                inputProps={{ maxLength: 300 }}
+                autoFocus
+              />
+            </>
+          ) : null}
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setConfirm(null)} disabled={busy}>
@@ -290,7 +339,7 @@ export function RestockOrderActions({
           <Button
             variant="contained"
             color={confirm === "cancel" ? "error" : "success"}
-            disabled={busy}
+            disabled={busy || (confirm === "cancel" && cancelNeedsReason && cancelReason.trim().length < 3)}
             onClick={() => confirm && void run(confirm)}
           >
             {confirm === "cancel" ? "Cancelar pedido" : "Pasar a recibido"}

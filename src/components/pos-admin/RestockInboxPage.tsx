@@ -3,18 +3,30 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Button, MenuItem, Tab, Tabs, TextField } from "@mui/material";
-import { ArrowRight, PackagePlus, ShieldAlert, Truck } from "lucide-react";
+import { Button, MenuItem, Tab, Tabs, TextField, Tooltip } from "@mui/material";
+import { ArrowRight, CheckCircle2, PackageCheck, PackagePlus, ShieldAlert, Truck } from "lucide-react";
 import { toast } from "sonner";
-import { BRANCH_TYPES, RESTOCK_ORIGIN } from "@glamouroso/shared/constants";
+import { BRANCH_TYPES, RESTOCK_ORDER_STATUS, RESTOCK_ORIGIN } from "@glamouroso/shared/constants";
 import { httpClient, getApiErrorMessage } from "@/services/http-client";
 import { usePermissions } from "@/lib/permissions";
+import { formatMoney } from "@/lib/format-money";
+import { useRealtime } from "@/components/realtime/RealtimeProvider";
 import type { Branch, BranchShortage, ListResponse, RestockOrder } from "@/types";
-import { FilterBar, FilterDateRange, FilterMeta, type DateRangeOption } from "./FilterBar";
+import { FilterBar, FilterDateRange, FilterMeta, FilterSearch, FilterSegmented, type DateRangeOption } from "./FilterBar";
 import { RestockOrdersTable } from "./RestockOrdersTable";
 import { isAwaitingRestockOrder, isOpenRestockOrder, restockArrivalHref } from "./RestockOrderActions";
 import { blockingRestockOrder } from "./RestockAwaitingDialog";
-import { RESTOCK_STATUS_FILTER_OPTIONS, packSummary, WEEKDAY_LABELS, formatDateTime, packTotals, relativeDays } from "./pos-labels";
+import {
+  RESTOCK_STATUS_FILTER_OPTIONS,
+  RESTOCK_STATUS_LABELS,
+  businessDayOf,
+  packSummary,
+  packTotals,
+  posWeekStart,
+  relativeDays,
+  restockOrderSheetHref,
+  restockReviewHref,
+} from "./pos-labels";
 
 const RANGES: DateRangeOption[] = [
   { key: "todo", label: "Todo", days: null },
@@ -25,13 +37,52 @@ const RANGES: DateRangeOption[] = [
 
 type View = "sucursales" | "pedidos";
 
-/** Una fila de la bandeja: lo que cada sucursal necesita hoy. */
+/** En qué paso va una sucursal: lo que decide su color, su texto y su botón. */
+type Step = "pending" | "transit" | "stuck" | "ok" | "loading";
+type StepFilter = "all" | "pending" | "transit" | "ok";
+
+/** Un pedido en camino por más de esto se marca como atorado. */
+const STUCK_DAYS = 3;
+
+const STEP_FILTERS: Array<{ value: StepFilter; label: string }> = [
+  { value: "all", label: "Todas" },
+  { value: "pending", label: "Por pedir" },
+  { value: "transit", label: "En camino" },
+  { value: "ok", label: "Al día" },
+];
+
+/** Una tarjeta de la bandeja: lo que cada sucursal necesita hoy. */
 interface InboxRow {
   branch: Branch;
   /** `null` mientras se calcula o si falló. */
   shortages: BranchShortage[] | null;
   awaiting: RestockOrder[];
-  lastOrderAt: string | null;
+  /** El más viejo en camino: el que hay que recibir. */
+  inTransit: RestockOrder | null;
+  lastReceived: RestockOrder | null;
+  step: Step;
+}
+
+function ageDays(value: string | null | undefined): number {
+  if (!value) return 0;
+  return Math.floor((Date.now() - new Date(value).getTime()) / 86_400_000);
+}
+
+/**
+ * Luz del paso, hermana del foco de tienda de Sucursales: ámbar "Por pedir",
+ * azul "En camino" (con ondas), rojo "Atorado" y verde "Al día".
+ */
+function RestockStepLight({ step }: { step: Step }) {
+  const label =
+    step === "pending" ? "Por pedir" : step === "transit" ? "En camino" : step === "stuck" ? "Atorado" : step === "ok" ? "Al día" : "…";
+  return (
+    <span className={`store-light restock-light is-${step}`}>
+      <span className="store-light-dot">
+        {step === "ok" ? <CheckCircle2 size={16} /> : <Truck size={16} />}
+      </span>
+      <span className="store-light-label">{label}</span>
+    </span>
+  );
 }
 
 /**
@@ -59,7 +110,9 @@ export function RestockInboxPage() {
   const [branches, setBranches] = useState<Branch[]>([]);
   const [shortagesByBranch, setShortagesByBranch] = useState<Record<string, BranchShortage[] | null>>({});
   const [recent, setRecent] = useState<RestockOrder[]>([]);
-  /** Pedido en camino que impide confirmar otro, con su sucursal: abre el modal. */
+  const [stepFilter, setStepFilter] = useState<StepFilter>("all");
+  const [search, setSearch] = useState("");
+  const { subscribe } = useRealtime();
 
   // Vista Pedidos
   const [branchFilter, setBranchFilter] = useState("");
@@ -132,21 +185,66 @@ export function RestockInboxPage() {
     if (view === "pedidos") void loadOrders();
   }, [view, loadOrders]);
 
-  const rows: InboxRow[] = useMemo(
-    () =>
-      branches.map((branch) => {
-        const mine = recent.filter((order) => order.branchId === branch.id);
+  // Un pedido que se envía o se recibe en otra pantalla cambia la tarjeta.
+  useEffect(() => {
+    return subscribe((event) => {
+      if (event.type === "restock_orders_changed") {
+        void loadInbox();
+        if (view === "pedidos") void loadOrders();
+      }
+    });
+  }, [subscribe, loadInbox, loadOrders, view]);
+
+  const rows: InboxRow[] = useMemo(() => {
+    const order: Record<Step, number> = { stuck: 0, pending: 1, transit: 2, loading: 3, ok: 4 };
+    return branches
+      .map((branch) => {
+        const mine = recent.filter((item) => item.branchId === branch.id);
+        const awaiting = mine.filter(isAwaitingRestockOrder);
+        const inTransit = blockingRestockOrder(awaiting);
+        const shortages = shortagesByBranch[branch.id] ?? null;
+        const step: Step = inTransit
+          ? ageDays(inTransit.createdAt) > STUCK_DAYS
+            ? "stuck"
+            : "transit"
+          : shortages === null
+            ? "loading"
+            : shortages.length
+              ? "pending"
+              : "ok";
         return {
           branch,
-          shortages: shortagesByBranch[branch.id] ?? null,
-          awaiting: mine.filter(isAwaitingRestockOrder),
-          lastOrderAt: mine[0]?.createdAt ?? null,
+          shortages,
+          awaiting,
+          inTransit,
+          lastReceived: mine.find((item) => item.status === RESTOCK_ORDER_STATUS.RECEIVED) ?? null,
+          step,
         };
-      }),
-    [branches, recent, shortagesByBranch]
-  );
-  const withShortage = rows.filter((row) => row.shortages?.length).length;
-  const awaitingTotal = rows.reduce((sum, row) => sum + row.awaiting.length, 0);
+      })
+      .sort((a, b) => order[a.step] - order[b.step] || a.branch.code.localeCompare(b.branch.code));
+  }, [branches, recent, shortagesByBranch]);
+
+  const kpis = useMemo(() => {
+    const weekStart = posWeekStart(businessDayOf(new Date().toISOString()));
+    const receivedThisWeek = recent.filter(
+      (order) => order.status === RESTOCK_ORDER_STATUS.RECEIVED && businessDayOf(order.receivedAt) >= weekStart
+    );
+    return {
+      pending: rows.filter((row) => row.step === "pending").length,
+      transit: rows.filter((row) => row.step === "transit" || row.step === "stuck").length,
+      stuck: rows.filter((row) => row.step === "stuck").length,
+      receivedCount: receivedThisWeek.length,
+      receivedTotal: receivedThisWeek.reduce((sum, order) => sum + Number(order.total ?? 0), 0),
+    };
+  }, [rows, recent]);
+
+  const shown = rows.filter((row) => {
+    if (stepFilter === "pending" && row.step !== "pending") return false;
+    if (stepFilter === "transit" && row.step !== "transit" && row.step !== "stuck") return false;
+    if (stepFilter === "ok" && row.step !== "ok") return false;
+    const term = search.trim().toLowerCase();
+    return !term || `${row.branch.code} ${row.branch.name}`.toLowerCase().includes(term);
+  });
 
   if (!canView) {
     return (
@@ -193,13 +291,42 @@ export function RestockInboxPage() {
 
       {view === "sucursales" ? (
         <>
+          <section className="grid grid-4">
+            <div className="card metric">
+              <div className="metric-head">
+                <span>Por pedir</span>
+              </div>
+              <strong style={{ color: kpis.pending ? "#b45309" : undefined }}>{kpis.pending}</strong>
+              <small>{kpis.pending === 1 ? "Sucursal con faltante y nada en camino" : "Sucursales con faltante y nada en camino"}</small>
+            </div>
+            <div className="card metric">
+              <div className="metric-head">
+                <span>En camino</span>
+              </div>
+              <strong style={{ color: "var(--glam-blue)" }}>{kpis.transit}</strong>
+              <small>Pedidos enviados a fábrica sin recibir</small>
+            </div>
+            <div className="card metric">
+              <div className="metric-head">
+                <span>Atorados</span>
+              </div>
+              <strong style={{ color: kpis.stuck ? "#c62828" : undefined }}>{kpis.stuck}</strong>
+              <small>En camino desde hace más de {STUCK_DAYS} días</small>
+            </div>
+            <div className="card metric">
+              <div className="metric-head">
+                <span>Recibido esta semana</span>
+              </div>
+              <strong>{formatMoney(kpis.receivedTotal)}</strong>
+              <small>
+                {kpis.receivedCount} {kpis.receivedCount === 1 ? "pedido" : "pedidos"} · semana de viernes a jueves
+              </small>
+            </div>
+          </section>
+
           <FilterBar>
-            <span className="page-kicker" style={{ margin: 0 }}>
-              <strong style={{ color: "var(--glam-navy)" }}>{withShortage}</strong>{" "}
-              {withShortage === 1 ? "sucursal con faltante" : "sucursales con faltante"} ·{" "}
-              <strong style={{ color: "var(--glam-navy)" }}>{awaitingTotal}</strong>{" "}
-              {awaitingTotal === 1 ? "pedido por recibir" : "pedidos por recibir"}
-            </span>
+            <FilterSegmented label="Paso" options={STEP_FILTERS} value={stepFilter} onChange={setStepFilter} />
+            <FilterSearch value={search} onChange={setSearch} placeholder="Buscar sucursal por código o nombre" />
             <FilterMeta>
               <Link
                 href="/dashboard/pos/formato?vista=no-ligados"
@@ -211,129 +338,124 @@ export function RestockInboxPage() {
             </FilterMeta>
           </FilterBar>
 
-          <div className="table-container-premium">
-            <table className="table">
-              <thead>
-                <tr>
-                  <th>Sucursal</th>
-                  <th>Faltante de hoy</th>
-                  <th>Por recibir</th>
-                  <th>Último pedido</th>
-                  <th>Corte</th>
-                  <th style={{ textAlign: "right" }} aria-label="Acciones" />
-                </tr>
-              </thead>
-              <tbody>
-                {rows.map((row) => {
-                  const oldest = row.awaiting[row.awaiting.length - 1];
-                  return (
-                    <tr
-                      key={row.branch.id}
-                      className="clickable-row"
-                      tabIndex={0}
-                      style={{ cursor: "pointer" }}
-                      onClick={() => openBranch(row.branch)}
-                      onKeyDown={(event) => {
-                        if (event.key === "Enter" && event.target === event.currentTarget) openBranch(row.branch);
-                      }}
-                    >
-                      <td>
-                        <strong>{row.branch.code}</strong>
-                        <div className="page-kicker" style={{ margin: 0 }}>
-                          {row.branch.name}
-                        </div>
-                      </td>
-                      <td>
-                        {row.shortages === null ? (
-                          <span className="page-kicker" style={{ margin: 0 }}>
-                            Calculando...
-                          </span>
-                        ) : row.shortages.length ? (
-                          <>
-                            <strong style={{ color: "var(--glam-navy)" }}>{packSummary(row.shortages)}</strong>
-                            <div className="page-kicker" style={{ margin: 0 }}>
-                              {row.shortages.length} {row.shortages.length === 1 ? "producto" : "productos"}
-                            </div>
-                          </>
-                        ) : (
-                          <span className="page-kicker" style={{ margin: 0 }}>
-                            Nada que pedir
-                          </span>
-                        )}
-                      </td>
-                      <td>
-                        {row.awaiting.length ? (
-                          <>
-                            <strong>
-                              {row.awaiting.length} {row.awaiting.length === 1 ? "pedido" : "pedidos"}
-                            </strong>
-                            <div className="page-kicker" style={{ margin: 0 }}>
-                              el más viejo {relativeDays(oldest?.createdAt)}
-                            </div>
-                          </>
-                        ) : (
-                          <span className="page-kicker" style={{ margin: 0 }}>
-                            Al día
-                          </span>
-                        )}
-                      </td>
-                      <td>
-                        {row.lastOrderAt ? (
-                          <span title={formatDateTime(row.lastOrderAt)}>{relativeDays(row.lastOrderAt)}</span>
-                        ) : (
-                          <span className="page-kicker" style={{ margin: 0 }}>
-                            Nunca
-                          </span>
-                        )}
-                      </td>
-                      <td>
-                        {row.branch.restockCutoffDow == null
-                          ? "Manual"
-                          : WEEKDAY_LABELS[row.branch.restockCutoffDow]}
-                      </td>
-                      <td style={{ textAlign: "right", whiteSpace: "nowrap" }} onClick={(event) => event.stopPropagation()}>
-                        {(() => {
-                          // Una acción por sucursal según su paso: con pedido en camino, recibirlo;
-                          // con faltante, revisarlo en la sucursal antes de confirmar (no a ciegas).
-                          const inTransit = blockingRestockOrder(row.awaiting);
-                          if (inTransit) {
-                            return canDispatch && isOpenRestockOrder(inTransit) ? (
-                              <Button
-                                size="small"
-                                variant="contained"
-                                color="success"
-                                startIcon={<PackagePlus size={14} />}
-                                component={Link}
-                                href={restockArrivalHref(inTransit)}
-                              >
-                                Recibir
-                              </Button>
-                            ) : null;
-                          }
-                          return canCreate && row.shortages?.length ? (
-                            <Button
-                              size="small"
-                              variant="contained"
-                              startIcon={<Truck size={14} />}
-                              onClick={() => openBranch(row.branch)}
-                            >
-                              Revisar y pedir
-                            </Button>
-                          ) : null;
-                        })()}
-                      </td>
-                    </tr>
+          <div className="restock-rows">
+            {!rows.length ? <p className="page-kicker">Cargando sucursales...</p> : null}
+            {rows.length && !shown.length ? <p className="page-kicker">Ninguna sucursal con este filtro.</p> : null}
+            {shown.map((row) => {
+              const order = row.inTransit;
+              const totals = packTotals(row.shortages ?? []);
+              const transit = row.step === "transit" || row.step === "stuck";
+              let action: React.ReactNode = null;
+              if (order && transit) {
+                if (canDispatch && isOpenRestockOrder(order) && order.status !== RESTOCK_ORDER_STATUS.PENDING) {
+                  action = (
+                    <Button size="small" variant="contained" color="success" startIcon={<PackagePlus size={14} />} component={Link} href={restockArrivalHref(order)}>
+                      Recibir
+                    </Button>
                   );
-                })}
-                {!rows.length ? (
-                  <tr>
-                    <td colSpan={6} style={{ textAlign: "center", padding: 24, color: "var(--muted)" }}>
-                      Cargando sucursales...
-                    </td>
-                  </tr>
-                ) : null}
-              </tbody>
-            </table>
+                } else {
+                  action = (
+                    <Button size="small" variant="outlined" component={Link} href={restockOrderSheetHref(order.id)}>
+                      Ver pedido
+                    </Button>
+                  );
+                }
+              } else if (row.step === "pending" && canCreate) {
+                action = (
+                  <Button size="small" variant="contained" startIcon={<Truck size={14} />} component={Link} href={restockReviewHref(row.branch.id)}>
+                    Revisar y enviar
+                  </Button>
+                );
+              }
+              return (
+                <section key={row.branch.id} className={`pos-day pos-cut pos-branch restock-branch is-${row.step}`}>
+                  <div
+                    className="pos-day-head"
+                    role="link"
+                    tabIndex={0}
+                    onClick={() => openBranch(row.branch)}
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter" && event.target === event.currentTarget) openBranch(row.branch);
+                    }}
+                  >
+                    <RestockStepLight step={row.step} />
+                    <span className="pos-day-date">
+                      <span className="pos-day-weekday">
+                        {row.branch.code} · {row.branch.name}
+                      </span>
+                      <span className="pos-day-fulldate">
+                        {row.branch.city ? `${row.branch.city} · ` : ""}
+                        {row.lastReceived?.receivedAt
+                          ? `último surtido recibido ${relativeDays(row.lastReceived.receivedAt)}`
+                          : "sin surtido recibido todavía"}
+                      </span>
+                    </span>
+                    <span className="pos-branch-status">
+                      <span>
+                        <Truck size={15} className="pos-branch-status-icon" />
+                        {order && transit ? (
+                          <span>
+                            <strong>{RESTOCK_STATUS_LABELS[order.status] ?? order.status}</strong> {relativeDays(order.createdAt)}
+                            {row.step === "stuck" ? <strong style={{ color: "#c62828" }}> · revisa si ya llegó</strong> : null}
+                            {row.awaiting.length > 1 ? <span className="pos-branch-muted"> · {row.awaiting.length} pedidos abiertos</span> : null}
+                          </span>
+                        ) : row.step === "pending" ? (
+                          <span>
+                            Faltan <strong>{packSummary(row.shortages ?? [])}</strong>
+                          </span>
+                        ) : row.step === "ok" ? (
+                          <span className="pos-branch-muted">Completa en su stock</span>
+                        ) : (
+                          <span className="pos-branch-muted">Calculando el faltante…</span>
+                        )}
+                      </span>
+                      {order && transit && row.shortages?.length ? (
+                        <span className="pos-branch-muted">
+                          <PackageCheck size={15} className="pos-branch-status-icon" />
+                          Faltante de hoy: {packSummary(row.shortages)}
+                        </span>
+                      ) : null}
+                    </span>
+                    <span className="pos-day-stats">
+                      {order && transit ? (
+                        <>
+                          <span className="pos-day-stat">
+                            <small>Productos</small>
+                            <b>{order.items?.length ?? 0}</b>
+                          </span>
+                          <span className="pos-day-stat is-total">
+                            <small>Pedido</small>
+                            <b>{order.total != null ? formatMoney(order.total) : "—"}</b>
+                          </span>
+                        </>
+                      ) : (
+                        <>
+                          <span className="pos-day-stat">
+                            <small>Bidones</small>
+                            <b>{totals.bidones}</b>
+                          </span>
+                          <span className="pos-day-stat">
+                            <small>Cajas</small>
+                            <b>{totals.cajas}</b>
+                          </span>
+                          <span className="pos-day-stat">
+                            <small>Piezas</small>
+                            <b>{totals.piezas}</b>
+                          </span>
+                        </>
+                      )}
+                    </span>
+                    <span className="restock-branch-action" onClick={(event) => event.stopPropagation()}>
+                      {action ?? (
+                        <Tooltip title="Abrir la sucursal">
+                          <ArrowRight size={18} className="pos-branch-go" />
+                        </Tooltip>
+                      )}
+                    </span>
+                  </div>
+                </section>
+              );
+            })}
           </div>
         </>
       ) : (

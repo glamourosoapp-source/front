@@ -17,6 +17,7 @@ import {
   TextField,
 } from "@mui/material";
 import { ArrowLeft, Download, RotateCcw, Save, ShieldAlert, Truck } from "lucide-react";
+import { RestockSteps, type RestockStep } from "./RestockSteps";
 import { toast } from "sonner";
 import type { FactoryForm, FactoryFormRow } from "@glamouroso/shared";
 import { BRANCH_TYPES, RESTOCK_ORDER_STATUS, RESTOCK_ORIGIN } from "@glamouroso/shared/constants";
@@ -68,6 +69,13 @@ interface Change {
   item: RestockOrderItem | null;
 }
 
+/** En qué paso de los 3 va un pedido según su estado. */
+function sheetStep(status: string): RestockStep {
+  if (status === RESTOCK_ORDER_STATUS.RECEIVED) return "received";
+  if (status === RESTOCK_ORDER_STATUS.PENDING) return "review";
+  return "transit";
+}
+
 /**
  * La hoja del formato de un pedido de surtido: cómo quedó (lo que se envía, o
  * lo pedido si nadie lo ha tocado) y, con `?modo=editar`, la misma captura que
@@ -95,7 +103,8 @@ export function RestockOrderSheetPage() {
   const [exporting, setExporting] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
   /** Fuera de edición: la hoja del formato o las partidas (pedido contra enviado, devoluciones). */
-  const [view, setView] = useState<"formato" | "partidas">("formato");
+  // Resumen (lo pedido contra lo que llegó) primero; la hoja del formato en su pestaña.
+  const [view, setView] = useState<"formato" | "partidas">("partidas");
   const [saving, setSaving] = useState(false);
   const [reasons, setReasons] = useState<Record<string, string>>({});
   const [dispatchNote, setDispatchNote] = useState("");
@@ -271,6 +280,11 @@ export function RestockOrderSheetPage() {
             <ArrowLeft size={16} />
             Volver a los pedidos
           </button>
+          {order && !isFranchise && order.status !== RESTOCK_ORDER_STATUS.CANCELLED ? (
+            <div style={{ margin: "4px 0 8px" }}>
+              <RestockSteps current={sheetStep(order.status)} compact />
+            </div>
+          ) : null}
           <h1 className="page-title" style={{ display: "flex", alignItems: "center", gap: 10 }}>
             <Truck size={22} style={{ color: "var(--glam-blue)", flex: "0 0 auto" }} />
             <span>
@@ -375,15 +389,15 @@ export function RestockOrderSheetPage() {
 
       {!canEdit && order ? (
         <Tabs value={view} onChange={(_e, value) => setView(value)} sx={{ borderBottom: "1px solid var(--border)" }}>
-          <Tab value="formato" label="Formato" />
           <Tab
             value="partidas"
             label={
               order.returns?.length
-                ? `Productos · ${order.items?.length ?? 0} · con devolución`
-                : `Productos · ${order.items?.length ?? 0}`
+                ? `Resumen · ${order.items?.length ?? 0} · con devolución`
+                : `Resumen · ${order.items?.length ?? 0}`
             }
           />
+          <Tab value="formato" label="Formato" />
         </Tabs>
       ) : null}
 
