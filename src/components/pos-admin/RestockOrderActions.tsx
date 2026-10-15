@@ -22,7 +22,7 @@ import { restockCancelBlocker } from "@glamouroso/shared/pos-restock";
 import { config } from "@/config";
 import { httpClient, getApiErrorMessage } from "@/services/http-client";
 import type { RestockOrder } from "@/types";
-import { approvedRestockMessage, formatDateTime, restockOrderSheetHref } from "./pos-labels";
+import { approvedRestockMessage, formatDateTime, restockOrderSheetHref, restockReviewHref } from "./pos-labels";
 import { RestockSendDialog } from "./RestockSendDialog";
 import { useFactoryFormDownload } from "./useFactoryFormDownload";
 
@@ -63,8 +63,9 @@ interface RestockOrderActionsProps {
  * pedidos, en la tarjeta y en la hoja del pedido.
  *
  * Con fábrica apagada (lo normal hoy) el ciclo es enviar → recibir:
- * - pendiente (viejos o del corte automático) → **Enviar a fábrica**, y
- *   "Recibir" en el menú por si ya llegó;
+ * - pendiente ("Por enviar": viejos, del corte automático o creados sin enviar)
+ *   → **Revisar y enviar** (la revisión abre ese pedido), y "Recibir" en el
+ *   menú por si ya llegó;
  * - enviado a fábrica (`approved`/`preparing`) → **Recibir** (la hoja de
  *   entrada precargada; el pedido queda recibido y sube al inventario);
  * - en camino (los que se marcaron con el botón anterior) → **Confirmar llegada**,
@@ -103,13 +104,10 @@ export function RestockOrderActions({
   const canCancel = canUpdate && open && !cancelBlocker;
   const canCorrect = dispatch && (sent || received);
 
-  async function run(action: "approve" | "submit" | "cancel" | "receive") {
+  async function run(action: "approve" | "cancel" | "receive") {
     setBusy(true);
     try {
-      if (action === "submit") {
-        await httpClient.post(`/pos/restock/orders/${order.id}/submit`, {});
-        toast.success("Pedido enviado a fábrica: descarga su PDF y mándaselo");
-      } else if (action === "approve") {
+      if (action === "approve") {
         await httpClient.put(`/pos/restock/orders/${order.id}`, { status: RESTOCK_ORDER_STATUS.APPROVED });
         toast.success(approvedRestockMessage());
       } else if (action === "cancel") {
@@ -145,16 +143,17 @@ export function RestockOrderActions({
       );
     }
   } else if (pending && canUpdate) {
+    // Un pedido "Por enviar" se revisa antes de mandarlo: la revisión lo abre a él.
     primary = (
       <Button
         size={size}
         variant="contained"
         startIcon={<Send size={14} />}
-        disabled={busy}
-        onClick={() => void run("submit")}
-        title="Marca el pedido como enviado a fábrica; después descarga su PDF y mándaselo"
+        component={Link}
+        href={restockReviewHref(order.branchId)}
+        title="Revisa el pedido y envíalo a fábrica; se descarga su PDF para mandárselo"
       >
-        Enviar a fábrica
+        Revisar y enviar
       </Button>
     );
   } else if (open && dispatch) {

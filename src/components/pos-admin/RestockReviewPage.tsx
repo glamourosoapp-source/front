@@ -132,22 +132,39 @@ export function RestockReviewPage() {
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const [sent, setSent] = useState<RestockOrder | null>(null);
+  /** Pedido "Por enviar" de la sucursal: se revisa y se envía ese. */
+  const [draft, setDraft] = useState<RestockOrder | null>(null);
   const [downloading, setDownloading] = useState(false);
 
   const load = useCallback(async () => {
     if (!canView) return;
     setLoading(true);
     try {
-      const [data, orders, month] = await Promise.all([
-        httpClient.get<FactoryForm>(`/pos/restock/branches/${branchId}/shortages/form`),
+      const [orders, month] = await Promise.all([
         httpClient.get<ListResponse<RestockOrder>>("/pos/restock/orders", { branchId, limit: 100 }),
         httpClient.get<ListResponse<RestockOrder>>("/pos/restock/orders", { branchId, limit: 100, from: monthStart() }),
       ]);
+      const open = orders.items.filter(isAwaitingRestockOrder);
+      // Un pedido que se creó pero no se envió ("Por enviar") ES el pedido que
+      // se revisa: se carga ese, no el faltante, y Enviar a fábrica lo envía.
+      const pendingDraft = open.some((order) => order.status !== RESTOCK_ORDER_STATUS.PENDING)
+        ? null
+        : (open.find((order) => order.status === RESTOCK_ORDER_STATUS.PENDING) ?? null);
+      const data = await httpClient.get<FactoryForm>(
+        pendingDraft
+          ? `/pos/restock/orders/${pendingDraft.id}/form`
+          : `/pos/restock/branches/${branchId}/shortages/form`
+      );
       const initial = initialValues(data);
       setForm(data);
       setValues(initial);
       setSuggested(initial);
-      setAwaiting(orders.items.filter(isAwaitingRestockOrder));
+      setAwaiting(open);
+      setDraft(pendingDraft);
+      if (pendingDraft) {
+        setPublicity(pendingDraft.publicityQty ? String(pendingDraft.publicityQty) : "");
+        setNotes(pendingDraft.notes ?? "");
+      }
       setPublicityThisMonth(
         month.items.some(
           (order) => order.status !== RESTOCK_ORDER_STATUS.CANCELLED && Number(order.publicityQty ?? 0) > 0
@@ -176,7 +193,10 @@ export function RestockReviewPage() {
     () => Object.keys(values).filter((key) => !sameValue(values[key], suggested[key])).length,
     [values, suggested]
   );
-  const inTransit = awaiting[0] ?? null;
+  // Ya enviado a fábrica (o en camino): no se puede mandar otro; la pantalla queda de solo lectura.
+  const inTransit = draft ? null : (awaiting[0] ?? null);
+  const locked = Boolean(inTransit);
+  const baseLabel = draft ? "Pedido" : "Sugerido";
   const branchLabel = form ? `${form.code ? `${form.code} · ` : ""}${form.name}` : "";
   const backHref = `/dashboard/pos/sucursales/${branchId}?tab=pedidos`;
 
@@ -211,12 +231,19 @@ export function RestockReviewPage() {
     if (!targets.length) return;
     setSaving(true);
     try {
-      const order = await httpClient.post<RestockOrder>(`/pos/restock/branches/${branchId}/generate`, {
-        items: targets.map(({ lineId, productId, packs }) => (lineId ? { lineId, qty: packs } : { productId, qty: packs })),
-        submit: true,
-        publicityQty: charges.publicityQty,
-        notes: notes.trim() || null,
-      });
+      const items = targets.map(({ lineId, productId, packs }) => (lineId ? { lineId, qty: packs } : { productId, qty: packs }));
+      const order = draft
+        ? await httpClient.post<RestockOrder>(`/pos/restock/orders/${draft.id}/submit`, {
+            items,
+            publicityQty: charges.publicityQty,
+            notes: notes.trim() || null,
+          })
+        : await httpClient.post<RestockOrder>(`/pos/restock/branches/${branchId}/generate`, {
+            items,
+            submit: true,
+            publicityQty: charges.publicityQty,
+            notes: notes.trim() || null,
+          });
       setConfirmOpen(false);
       setSent(order);
       toast.success("Pedido enviado a fábrica");
@@ -316,15 +343,28 @@ export function RestockReviewPage() {
               </h1>
               <p className="restock-review-branch">{branchLabel || "…"}</p>
               <p className="page-kicker" style={{ margin: 0 }}>
-                Viene con el faltante de hoy. Ajusta lo que quieras pedir y presiona <strong>Enviar a fábrica</strong>.
+                {draft ? (
+                  <>
+                    Este pedido se creó el {formatDateTime(draft.createdAt)} y <strong>todavía no se envía a fábrica</strong>.
+                    Revísalo y presiona <strong>Enviar a fábrica</strong>.
+                  </>
+                ) : locked ? (
+                  <>Esta sucursal ya tiene un pedido enviado a fábrica: se podrá hacer otro cuando ese se reciba o se cancele.</>
+                ) : (
+                  <>
+                    Viene con el faltante de hoy. Ajusta lo que quieras pedir y presiona <strong>Enviar a fábrica</strong>.
+                  </>
+                )}
               </p>
             </div>
           </div>
-          <RestockSteps current="review" />
+          <RestockSteps current={locked ? "transit" : "review"} />
         </div>
 
+        {/* Con un pedido en camino las cifras serían del faltante, no de un pedido: se ocultan. */}
+        {locked ? null : (
         <div className={`restock-review-stats${canSeeCosts ? "" : " is-no-total"}`} aria-label="Totales del pedido">
-          <Stat icon={ListChecks} label="Productos" value={formatQuantity(captured.length)} note={changed ? `${changed} cambiado${changed === 1 ? "" : "s"}` : "igual al faltante"} />
+          <Stat icon={ListChecks} label="Productos" value={formatQuantity(captured.length)} note={changed ? `${changed} cambiado${changed === 1 ? "" : "s"}` : draft ? "igual al pedido" : "igual al faltante"} />
           <Stat icon={Droplets} label="Bidones" value={formatQuantity(counts.bidones)} note={`${formatQuantity(counts.liters)} L de líquidos`} />
           <Stat icon={Package} label="Cajas" value={formatQuantity(counts.cajas)} note={`${formatQuantity(counts.boxPieces)} piezas`} />
           <Stat icon={Boxes} label="Piezas sueltas" value={formatQuantity(counts.piezas)} />
@@ -338,17 +378,24 @@ export function RestockReviewPage() {
             />
           ) : null}
         </div>
+        )}
       </section>
 
       {inTransit ? (
         <Alert
           severity="info"
           action={
-            <RestockOrderActions order={inTransit} canUpdate={canUpdate} canDispatch={canDispatch} onChanged={() => void load()} />
+            <span style={{ display: "inline-flex", gap: 8, alignItems: "center" }}>
+              <Button size="small" startIcon={<Eye size={14} />} component={Link} href={restockOrderSheetHref(inTransit.id)} sx={{ whiteSpace: "nowrap" }}>
+                Ver pedido
+              </Button>
+              <RestockOrderActions order={inTransit} canUpdate={canUpdate} canDispatch={canDispatch} onChanged={() => void load()} />
+            </span>
           }
         >
           <strong>Ya hay un pedido en camino</strong> ({RESTOCK_STATUS_LABELS[inTransit.status]}, {formatDateTime(inTransit.createdAt)},{" "}
-          {relativeDays(inTransit.createdAt)}). Se podrá enviar otro cuando ese se reciba o se cancele.
+          {relativeDays(inTransit.createdAt)}). Recíbelo cuando llegue o cancélalo para hacer uno nuevo. Abajo puedes ver el
+          faltante de hoy, solo para consultarlo.
         </Alert>
       ) : null}
 
@@ -366,10 +413,10 @@ export function RestockReviewPage() {
               rows={rows}
               values={values}
               baseline={suggested}
-              baselineLabel="Sugerido"
+              baselineLabel={baseLabel}
               onChange={(key, value) => setValues((prev) => ({ ...prev, [key]: value }))}
               canSeeCosts={canSeeCosts}
-              disabled={!canCreate || saving}
+              disabled={!canCreate || saving || locked}
               emptyText="La sucursal está completa en su stock: no hay faltante. Agrega lo que quieras pedir."
             />
           </section>
@@ -387,7 +434,7 @@ export function RestockReviewPage() {
               values={values}
               baseline={suggested}
               onChange={(key, value) => setValues((prev) => ({ ...prev, [key]: value }))}
-              disabled={!canCreate || saving}
+              disabled={!canCreate || saving || locked}
               onlyFilled={onlyFilled}
               qtyHeader="Cant"
               inputLabel="Cantidad de"
@@ -433,18 +480,18 @@ export function RestockReviewPage() {
         </section>
       ) : null}
 
-      {canCreate && form ? (
+      {canCreate && form && !locked ? (
         <div className={`msf-savebar${captured.length ? " msf-savebar--active" : ""}`}>
           <span>
             {captured.length
               ? `${captured.length} ${captured.length === 1 ? "producto" : "productos"} · ${formatQuantity(totals.liters)} L · ${formatQuantity(totals.pieces)} pz${
                   canSeeCosts ? ` · ${formatMoney(grandTotal)}` : ""
-                }${changed ? ` · ${changed} cambiado${changed === 1 ? "" : "s"} contra lo sugerido` : ""}`
+                }${changed ? ` · ${changed} cambiado${changed === 1 ? "" : "s"} contra lo ${baseLabel.toLowerCase()}` : ""}`
               : "Sin productos en el pedido"}
           </span>
           <div style={{ display: "flex", gap: 8 }}>
             <Button color="inherit" startIcon={<RotateCcw size={15} />} disabled={!changed || saving} onClick={() => setValues(suggested)}>
-              Volver a lo sugerido
+              {draft ? "Volver al pedido" : "Volver a lo sugerido"}
             </Button>
             <Button
               variant="contained"

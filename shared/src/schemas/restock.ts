@@ -68,6 +68,13 @@ export const generateShortageOrderSchema = z.object({
   publicityQty: z.coerce.number().int().min(0).max(1000).optional(),
 });
 
+/** Enviar a fábrica un pedido pendiente, opcionalmente con lo revisado en el panel. */
+export const submitRestockOrderSchema = z.object({
+  items: z.array(packItemSchema).max(2000).optional(),
+  publicityQty: z.coerce.number().int().min(0).max(1000).optional(),
+  notes: optionalString,
+});
+
 /** Cancelar: con fábrica apagada un pedido ya enviado a fábrica pide motivo. */
 export const cancelRestockOrderSchema = z.object({
   reason: z.union([z.string().trim().max(300), z.literal(""), z.null()]).optional(),

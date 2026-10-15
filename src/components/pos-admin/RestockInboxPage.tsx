@@ -203,7 +203,10 @@ export function RestockInboxPage() {
         const awaiting = mine.filter(isAwaitingRestockOrder);
         const inTransit = blockingRestockOrder(awaiting);
         const shortages = shortagesByBranch[branch.id] ?? null;
-        const step: Step = inTransit
+        // Un pedido "Por enviar" todavía no sale: la sucursal sigue en el paso 1.
+        const step: Step = inTransit?.status === RESTOCK_ORDER_STATUS.PENDING
+          ? "pending"
+          : inTransit
           ? ageDays(inTransit.createdAt) > STUCK_DAYS
             ? "stuck"
             : "transit"
@@ -360,6 +363,12 @@ export function RestockInboxPage() {
                     </Button>
                   );
                 }
+              } else if (order && order.status === RESTOCK_ORDER_STATUS.PENDING && canUpdate) {
+                action = (
+                  <Button size="small" variant="contained" startIcon={<Truck size={14} />} component={Link} href={restockReviewHref(row.branch.id)}>
+                    Revisar y enviar
+                  </Button>
+                );
               } else if (row.step === "pending" && canCreate) {
                 action = (
                   <Button size="small" variant="contained" startIcon={<Truck size={14} />} component={Link} href={restockReviewHref(row.branch.id)}>
@@ -398,6 +407,10 @@ export function RestockInboxPage() {
                             <strong>{RESTOCK_STATUS_LABELS[order.status] ?? order.status}</strong> {relativeDays(order.createdAt)}
                             {row.step === "stuck" ? <strong style={{ color: "#c62828" }}> · revisa si ya llegó</strong> : null}
                             {row.awaiting.length > 1 ? <span className="pos-branch-muted"> · {row.awaiting.length} pedidos abiertos</span> : null}
+                          </span>
+                        ) : order?.status === RESTOCK_ORDER_STATUS.PENDING ? (
+                          <span>
+                            <strong>Pedido por enviar</strong> desde {relativeDays(order.createdAt)}: revísalo y envíalo a fábrica
                           </span>
                         ) : row.step === "pending" ? (
                           <span>
