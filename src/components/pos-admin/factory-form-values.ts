@@ -42,8 +42,9 @@ export interface SheetCharges {
   bidones: number;
   blue: number;
   blueAmount: number;
-  publicityQty: number;
   publicityAmount: number;
+  /** Envío (flete) en pesos. */
+  shippingAmount: number;
   total: number;
 }
 
@@ -80,11 +81,14 @@ export function capturedTotals(captured: CapturedRow[]) {
   );
 }
 
-/** Cargos del pie con lo capturado: bidones vacíos, cajas azules y publicidad (reglas del formato de tiendas). */
+/**
+ * Cargos del pie con lo capturado: bidones vacíos y cajas azules (reglas del
+ * formato de tiendas) más la publicidad y el envío, que se capturan en pesos.
+ */
 export function sheetCharges(
   captured: CapturedRow[],
   prices: FactoryFormCharges | undefined,
-  publicity: string | number
+  amounts: { publicity: string | number; shipping: string | number }
 ): SheetCharges {
   let transparent = 0;
   let color = 0;
@@ -94,19 +98,20 @@ export function sheetCharges(
     if (row.bidon === "color") color += packs;
     if (row.blueBox) blue += packs;
   }
-  const publicityQty = Math.max(0, Math.floor(Number(publicity) || 0));
+  const money = (value: string | number) => round2(Math.max(0, Number(value) || 0));
   const bidones = round2(transparent * (prices?.bidonTransparent ?? 0) + color * (prices?.bidonColor ?? 0));
   const blueAmount = round2(blue * (prices?.blueBox ?? 0));
-  const publicityAmount = round2(publicityQty * (prices?.publicity ?? 0));
+  const publicityAmount = money(amounts.publicity);
+  const shippingAmount = money(amounts.shipping);
   return {
     transparent,
     color,
     bidones,
     blue,
     blueAmount,
-    publicityQty,
     publicityAmount,
-    total: round2(bidones + blueAmount + publicityAmount),
+    shippingAmount,
+    total: round2(bidones + blueAmount + publicityAmount + shippingAmount),
   };
 }
 
@@ -137,7 +142,9 @@ export function formWithValues(
       ? round2(
           rowsTotal(p.blocks) +
             (p.page === 1 ? charges.bidones : 0) +
-            (index === last ? rowsTotal([extras]) + charges.blueAmount + charges.publicityAmount : 0)
+            (index === last
+              ? rowsTotal([extras]) + charges.blueAmount + charges.publicityAmount + charges.shippingAmount
+              : 0)
         )
       : 0,
   }));
@@ -156,7 +163,8 @@ export function formWithValues(
       },
     },
     blueBoxes: { qty: charges.blue, amount: canSeeCosts ? charges.blueAmount : 0 },
-    publicity: { qty: charges.publicityQty, amount: canSeeCosts ? charges.publicityAmount : 0 },
+    publicity: { qty: charges.publicityAmount > 0 ? 1 : 0, amount: canSeeCosts ? charges.publicityAmount : 0 },
+    shipping: { amount: canSeeCosts ? charges.shippingAmount : 0 },
     grandTotal: canSeeCosts ? round2(priced.reduce((sum, p) => sum + p.total, 0)) : 0,
   };
 }

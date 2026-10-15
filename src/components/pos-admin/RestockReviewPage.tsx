@@ -43,6 +43,7 @@ import type { ListResponse, RestockOrder } from "@/types";
 import { FactoryFormSheet, allRows, packDescription, sameValue, sheetPages, type SheetValues } from "./FactoryFormSheet";
 import { capturedRows, capturedTargets, capturedTotals, initialValues, sheetCharges } from "./factory-form-values";
 import { RestockSummaryList } from "./RestockSummaryList";
+import { RestockChargesEditor } from "./RestockChargesEditor";
 import { RestockSteps } from "./RestockSteps";
 import { RestockOrderActions, isAwaitingRestockOrder } from "./RestockOrderActions";
 import { RESTOCK_STATUS_LABELS, formatDateTime, relativeDays, restockOrderSheetHref } from "./pos-labels";
@@ -125,8 +126,9 @@ export function RestockReviewPage() {
   const [onlyFilled, setOnlyFilled] = useState(false);
   const [awaiting, setAwaiting] = useState<RestockOrder[]>([]);
   const [publicityThisMonth, setPublicityThisMonth] = useState<boolean | null>(null);
+  /** Publicidad y envío en pesos. La publicidad va por omisión al precio configurado ($1,300) si este mes no se ha cobrado. */
   const [publicity, setPublicity] = useState("");
-  const [showCharges, setShowCharges] = useState(false);
+  const [shipping, setShipping] = useState("");
   const [notes, setNotes] = useState("");
   const [loading, setLoading] = useState(true);
   const [confirmOpen, setConfirmOpen] = useState(false);
@@ -161,15 +163,25 @@ export function RestockReviewPage() {
       setSuggested(initial);
       setAwaiting(open);
       setDraft(pendingDraft);
-      if (pendingDraft) {
-        setPublicity(pendingDraft.publicityQty ? String(pendingDraft.publicityQty) : "");
-        setNotes(pendingDraft.notes ?? "");
-      }
-      setPublicityThisMonth(
-        month.items.some(
-          (order) => order.status !== RESTOCK_ORDER_STATUS.CANCELLED && Number(order.publicityQty ?? 0) > 0
-        )
+      // ¿Ya se le cobró publicidad este mes a la sucursal? (sin contar el propio borrador)
+      const chargedThisMonth = month.items.some(
+        (order) =>
+          order.id !== pendingDraft?.id &&
+          order.status !== RESTOCK_ORDER_STATUS.CANCELLED &&
+          (Number(order.publicityAmount ?? 0) > 0 || Number(order.publicityQty ?? 0) > 0)
       );
+      setPublicityThisMonth(chargedThisMonth);
+      const price = data.charges?.publicity ?? 1300;
+      if (pendingDraft) {
+        // El borrador conserva lo que ya traía; si no traía nada, la regla del mes.
+        const saved = data.publicity?.amount ?? 0;
+        setPublicity(String(saved > 0 ? saved : chargedThisMonth ? 0 : price));
+        setShipping(String(data.shipping?.amount ?? 0));
+        setNotes(pendingDraft.notes ?? "");
+      } else {
+        setPublicity(String(chargedThisMonth ? 0 : price));
+        setShipping("0");
+      }
     } catch (error) {
       toast.error(getApiErrorMessage(error, "No se pudo calcular el pedido"));
     } finally {
@@ -187,7 +199,10 @@ export function RestockReviewPage() {
   const targets = useMemo(() => capturedTargets(rows, values), [rows, values]);
   const totals = useMemo(() => capturedTotals(captured), [captured]);
   const counts = useMemo(() => packCounts(captured), [captured]);
-  const charges = useMemo(() => sheetCharges(captured, form?.charges, publicity), [captured, form?.charges, publicity]);
+  const charges = useMemo(
+    () => sheetCharges(captured, form?.charges, { publicity, shipping }),
+    [captured, form?.charges, publicity, shipping]
+  );
   const grandTotal = totals.amount + charges.total;
   const changed = useMemo(
     () => Object.keys(values).filter((key) => !sameValue(values[key], suggested[key])).length,
@@ -235,13 +250,15 @@ export function RestockReviewPage() {
       const order = draft
         ? await httpClient.post<RestockOrder>(`/pos/restock/orders/${draft.id}/submit`, {
             items,
-            publicityQty: charges.publicityQty,
+            publicityAmount: charges.publicityAmount,
+            shippingAmount: charges.shippingAmount,
             notes: notes.trim() || null,
           })
         : await httpClient.post<RestockOrder>(`/pos/restock/branches/${branchId}/generate`, {
             items,
             submit: true,
-            publicityQty: charges.publicityQty,
+            publicityAmount: charges.publicityAmount,
+            shippingAmount: charges.shippingAmount,
             notes: notes.trim() || null,
           });
       setConfirmOpen(false);
@@ -258,7 +275,8 @@ export function RestockReviewPage() {
   async function copySummary() {
     const lines = captured.map(({ row, packs }) => `• ${row.label}: ${formatQuantity(packs)} ${packDescription(row)}`);
     const extras = [
-      charges.publicityQty ? `• Publicidad: ${charges.publicityQty}` : "",
+      charges.publicityAmount ? `• Publicidad: ${formatMoney(charges.publicityAmount)}` : "",
+      charges.shippingAmount ? `• Envío: ${formatMoney(charges.shippingAmount)}` : "",
       canSeeCosts ? `Total: ${formatMoney(grandTotal)}` : "",
     ].filter(Boolean);
     const text = [`Pedido a fábrica · ${branchLabel}`, ...lines, ...extras, notes.trim() ? `Nota: ${notes.trim()}` : ""]
@@ -444,39 +462,23 @@ export function RestockReviewPage() {
       ) : null}
 
       {form && canSeeCosts ? (
-        <section className="panel p-5">
-          <Button size="small" color="inherit" onClick={() => setShowCharges((open) => !open)} aria-expanded={showCharges}>
-            {showCharges ? "Ocultar" : "Ver"} cargos de fábrica ({formatMoney(charges.total)})
-          </Button>
-          {showCharges ? (
-            <div className="restock-charges">
-              <span>
-                Bidones vacíos: {formatQuantity(charges.transparent)} transparentes y {formatQuantity(charges.color)} de color
-              </span>
-              <strong>{formatMoney(charges.bidones)}</strong>
-              <span>Cajas azules: {formatQuantity(charges.blue)}</span>
-              <strong>{formatMoney(charges.blueAmount)}</strong>
-              <TextField
-                label="Publicidad (piezas)"
-                type="number"
-                size="small"
-                value={publicity}
-                onChange={(event) => setPublicity(event.target.value)}
-                inputProps={{ min: 0, step: 1 }}
-                helperText={
-                  publicityThisMonth === false
-                    ? "Este mes todavía no se ha pedido publicidad para esta sucursal."
-                    : publicityThisMonth
-                      ? "Este mes ya se pidió publicidad para esta sucursal."
-                      : form.charges
-                        ? `${formatMoney(form.charges.publicity)} cada una`
-                        : undefined
-                }
-                sx={{ width: 320 }}
-              />
-              <strong>{formatMoney(charges.publicityAmount)}</strong>
-            </div>
-          ) : null}
+        <section className="panel p-5" style={{ display: "grid", gap: 4 }}>
+          <h3 className="restock-summary-title" style={{ margin: 0 }}>
+            Cargos de fábrica
+          </h3>
+          <RestockChargesEditor
+            charges={charges}
+            publicity={publicity}
+            shipping={shipping}
+            onPublicityChange={setPublicity}
+            onShippingChange={setShipping}
+            disabled={!canCreate || saving || locked}
+            publicityHint={
+              publicityThisMonth
+                ? "Este mes ya se le cobró publicidad a esta sucursal: va en $0. Cámbialo si toca cobrarla."
+                : `Este mes todavía no se cobra: va en ${formatMoney(form.charges?.publicity ?? 1300)}. Pon 0 si no se cobra.`
+            }
+          />
         </section>
       ) : null}
 
@@ -513,7 +515,8 @@ export function RestockReviewPage() {
             Vas a enviar a fábrica el pedido de <strong>{branchLabel}</strong>: {captured.length}{" "}
             {captured.length === 1 ? "producto" : "productos"} ({formatQuantity(counts.bidones)} bidones,{" "}
             {formatQuantity(counts.cajas)} cajas, {formatQuantity(counts.piezas)} piezas
-            {charges.publicityQty ? `, ${charges.publicityQty} de publicidad` : ""})
+            {charges.publicityAmount ? `, publicidad ${formatMoney(charges.publicityAmount)}` : ""}
+            {charges.shippingAmount ? `, envío ${formatMoney(charges.shippingAmount)}` : ""})
             {canSeeCosts ? (
               <>
                 {" "}por <strong>{formatMoney(grandTotal)}</strong>

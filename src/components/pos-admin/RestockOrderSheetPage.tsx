@@ -157,7 +157,10 @@ export function RestockOrderSheetPage() {
   const captured = useMemo(() => capturedRows(rows, values), [rows, values]);
   const totals = useMemo(() => capturedTotals(captured), [captured]);
   const charges = useMemo(
-    () => sheetCharges(captured, form?.charges, form?.publicity?.qty ?? 0),
+    () => sheetCharges(captured, form?.charges, {
+        publicity: form?.publicity?.amount ?? 0,
+        shipping: form?.shipping?.amount ?? 0,
+      }),
     [captured, form?.charges, form?.publicity?.qty]
   );
   const estimatedTotal = round2(totals.amount + charges.total);

@@ -727,6 +727,9 @@ export interface RestockOrder {
   cancelledAt?: string | null;
   /** Publicidad que se pidió con este pedido (pie del formato). */
   publicityQty?: number | null;
+  /** Lo que se cobra de publicidad y de envío (flete), en pesos. */
+  publicityAmount?: number | string | null;
+  shippingAmount?: number | string | null;
   items?: RestockOrderItem[];
   /** Devoluciones a fábrica ligadas a este pedido: lo que el transportista se llevó de regreso. */
   returns?: FactoryReturn[];
@@ -972,6 +975,8 @@ export interface FactoryForm {
   blueBoxes?: { qty: number; amount: number };
   /** Publicidad del pedido (pie de la hoja 4). */
   publicity?: { qty: number; amount: number };
+  /** Envío (flete) del pedido, en pesos (pie de la hoja 4). */
+  shipping?: { amount: number };
   /** Precios de los cargos del pie (configurables por organización). */
   charges?: FactoryFormCharges;
   /** Suma de las hojas + OTROS + bidones + cajas azules + publicidad. */

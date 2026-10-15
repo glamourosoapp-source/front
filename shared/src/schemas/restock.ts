@@ -66,12 +66,18 @@ export const generateShortageOrderSchema = z.object({
   submit: z.boolean().optional(),
   /** Publicidad que se pide con este pedido (pie del formato). */
   publicityQty: z.coerce.number().int().min(0).max(1000).optional(),
+  /** Publicidad y envío (flete) en pesos; 0 = no se cobra. */
+  publicityAmount: z.coerce.number().min(0).max(1_000_000).optional(),
+  shippingAmount: z.coerce.number().min(0).max(1_000_000).optional(),
 });
 
 /** Enviar a fábrica un pedido pendiente, opcionalmente con lo revisado en el panel. */
 export const submitRestockOrderSchema = z.object({
   items: z.array(packItemSchema).max(2000).optional(),
   publicityQty: z.coerce.number().int().min(0).max(1000).optional(),
+  /** Publicidad y envío (flete) en pesos; 0 = no se cobra. */
+  publicityAmount: z.coerce.number().min(0).max(1_000_000).optional(),
+  shippingAmount: z.coerce.number().min(0).max(1_000_000).optional(),
   notes: optionalString,
 });
 
@@ -162,6 +168,9 @@ export const registerRestockEntrySchema = z
     notes: z.union([z.string().max(500), z.literal(""), z.null()]).optional(),
     /** Publicidad que viene con la entrada (pie del formato). */
     publicityQty: z.coerce.number().int().min(0).max(1000).optional(),
+  /** Publicidad y envío (flete) en pesos; 0 = no se cobra. */
+  publicityAmount: z.coerce.number().min(0).max(1_000_000).optional(),
+  shippingAmount: z.coerce.number().min(0).max(1_000_000).optional(),
   })
   .superRefine((value, ctx) => {
     if (!value.items.some((item) => item.qty > 0)) {

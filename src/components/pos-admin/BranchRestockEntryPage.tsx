@@ -45,6 +45,7 @@ import {
 import { RESTOCK_ORIGIN_LABELS, RESTOCK_STATUS_LABELS, formatDate, unitLabel } from "./pos-labels";
 import { RestockSummaryList } from "./RestockSummaryList";
 import { RestockSteps } from "./RestockSteps";
+import { RestockChargesEditor } from "./RestockChargesEditor";
 
 /** `order:<id>` | `shortages` | `blank`: con qué se precarga la hoja. */
 type BasisKey = string;
@@ -89,7 +90,9 @@ export function BranchRestockEntryPage() {
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [notes, setNotes] = useState("");
   /** Publicidad que llega con la entrada (pie del formato, precio en `form.charges`). */
+  /** Publicidad y envío (flete) en pesos: vienen del pedido y se corrigen si llegó distinto. */
   const [publicity, setPublicity] = useState("");
+  const [shipping, setShipping] = useState("");
   const [saving, setSaving] = useState(false);
   const [exporting, setExporting] = useState(false);
   /** Al recibir un pedido solo se ven sus renglones; apagado, las 4 hojas completas. */
@@ -109,7 +112,8 @@ export function BranchRestockEntryPage() {
         setForm(data);
         setValues(initial);
         setPrefill(initial);
-        setPublicity(data.publicity?.qty ? String(data.publicity.qty) : "");
+        setPublicity(String(data.publicity?.amount ?? 0));
+        setShipping(String(data.shipping?.amount ?? 0));
         setOnlyFilled(data.entry?.kind === "order");
       } catch (error) {
         toast.error(getApiErrorMessage(error, "No se pudo cargar la hoja de entrada"));
@@ -144,7 +148,10 @@ export function BranchRestockEntryPage() {
   const totals = useMemo(() => capturedTotals(captured), [captured]);
 
   /** Cargos del pie con lo capturado: bidones vacíos, cajas azules y publicidad (reglas del formato de tiendas). */
-  const charges = useMemo(() => sheetCharges(captured, form?.charges, publicity), [captured, form?.charges, publicity]);
+  const charges = useMemo(
+    () => sheetCharges(captured, form?.charges, { publicity, shipping }),
+    [captured, form?.charges, publicity, shipping]
+  );
 
   const changedFromPrefill = useMemo(
     () => Object.keys(values).filter((key) => !sameValue(values[key], prefill[key])).length,
@@ -200,7 +207,8 @@ export function BranchRestockEntryPage() {
           lineId ? { lineId, qty: packs } : { productId, qty: packs }
         ),
         notes: notes.trim() || null,
-        publicityQty: charges.publicityQty,
+        publicityAmount: charges.publicityAmount,
+        shippingAmount: charges.shippingAmount,
       });
       toast.success(
         `Recibido: ${captured.length} ${captured.length === 1 ? "renglón" : "renglones"} al inventario`
@@ -471,31 +479,23 @@ export function BranchRestockEntryPage() {
               </tbody>
             </table>
           </div>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr auto", gap: "4px 16px", marginTop: 12, fontSize: 14 }}>
-            <span>
-              Bidones vacíos: {formatQuantity(charges.transparent)} transparentes y {formatQuantity(charges.color)} de color
-            </span>
-            <strong>{canSeeCosts ? formatMoney(charges.bidones) : ""}</strong>
-            <span>Cajas azules: {formatQuantity(charges.blue)}</span>
-            <strong>{canSeeCosts ? formatMoney(charges.blueAmount) : ""}</strong>
-            <span>Publicidad: {formatQuantity(charges.publicityQty)}</span>
-            <strong>{canSeeCosts ? formatMoney(charges.publicityAmount) : ""}</strong>
-            {canSeeCosts ? (
-              <>
-                <span style={{ fontWeight: 700 }}>Total con cargos</span>
-                <strong>{formatMoney(round2(totals.amount + charges.total))}</strong>
-              </>
-            ) : null}
-          </div>
-          <TextField
-            label="Publicidad (piezas)"
-            type="number"
-            value={publicity}
-            onChange={(event) => setPublicity(event.target.value)}
-            inputProps={{ min: 0, step: 1 }}
-            helperText={form?.charges ? `${formatMoney(form.charges.publicity)} cada una` : undefined}
-            sx={{ mt: 2, mr: 2, width: 200 }}
-          />
+          {canSeeCosts ? (
+            <>
+              <RestockChargesEditor
+                charges={charges}
+                publicity={publicity}
+                shipping={shipping}
+                onPublicityChange={setPublicity}
+                onShippingChange={setShipping}
+                publicityHint="Viene del pedido. Cámbiala si se cobró distinto; 0 si no se cobra."
+                disabled={saving}
+              />
+              <div className="restock-charges" style={{ marginTop: 6 }}>
+                <span style={{ fontWeight: 800 }}>Total con cargos</span>
+                <strong style={{ fontSize: 16 }}>{formatMoney(round2(totals.amount + charges.total))}</strong>
+              </div>
+            </>
+          ) : null}
           <TextField
             label="Nota (opcional)"
             placeholder="Quién lo trajo, remisión, algo que llegó dañado…"

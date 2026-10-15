@@ -167,8 +167,9 @@ function footerFor(form: FactoryForm, page: number, total: number, footers: bool
     ];
   }
   if (page === 4) {
-    // Publicidad y cajas azules: cantidad y precio los manda el Back (Excel de tiendas).
+    // Publicidad, flete (envío) y cajas azules: los importes los manda el Back.
     const publicity = form.publicity;
+    const shipping = form.shipping;
     const blue = form.blueBoxes;
     return [
       {
@@ -177,7 +178,7 @@ function footerFor(form: FactoryForm, page: number, total: number, footers: bool
         qty: publicity?.qty ? formatQty(publicity.qty) : undefined,
         amount: publicity?.amount ? formatMoney(publicity.amount) : undefined,
       },
-      { label: "Flete", bold: true },
+      { label: "Flete", bold: true, amount: shipping?.amount ? formatMoney(shipping.amount) : undefined },
       { label: "CAJAS AZULES", shaded: true, qty: blue ? formatQty(blue.qty) : undefined },
       { label: "", shaded: true, amount: blue ? formatMoney(blue.amount) : undefined },
       { label: "TOTAL=", amount: formatMoney(total), shaded: true, bold: true },
