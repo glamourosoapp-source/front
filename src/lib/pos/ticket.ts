@@ -1,4 +1,4 @@
-import { POS_SALE_UNITS, PRICING_TIERS } from "@glamouroso/shared/constants";
+import { CONTAINER_UNIT_PRICE, POS_SALE_UNITS, PRICING_TIERS } from "@glamouroso/shared/constants";
 import type { PricingTier } from "@glamouroso/shared/constants";
 import { priceBulkLiters, pricePieces } from "@glamouroso/shared/pos-pricing";
 import type { PosCatalog, PosCatalogLine, PosCatalogProduct } from "@/types";
@@ -159,6 +159,29 @@ export function priceTicket(lines: PosLine[], catalog: PosCatalog | null): Ticke
     linesCount: priced.length,
     lines: priced,
   };
+}
+
+/**
+ * Bidones de una venta a domicilio: 1 por pieza de un producto que lo lleva
+ * (20L líquido o `variants.bidon`, marcado por el catálogo), a
+ * `CONTAINER_UNIT_PRICE`, como en un pedido del CRM. Es vista previa: el
+ * servidor agrega el renglón al ticket con la misma regla.
+ */
+export function deliveryContainers(
+  lines: PosLine[],
+  catalog: PosCatalog | null
+): { count: number; fee: number } {
+  const carries = new Set(
+    (catalog?.products ?? []).filter((p) => p.returnableContainer).map((p) => p.id)
+  );
+  const count = Math.trunc(
+    lines.reduce(
+      (sum, line) =>
+        sum + (line.kind === "piece" && line.productId && carries.has(line.productId) ? line.quantity : 0),
+      0
+    )
+  );
+  return { count, fee: round2(count * CONTAINER_UNIT_PRICE) };
 }
 
 /** Cuerpo de `POST /pos/sales`: solo lo que el servidor acepta (nunca precios). */

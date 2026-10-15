@@ -235,6 +235,13 @@ export const SAT_CFDI_USES = [
 /** Precio del bidón (envase retornable de presentaciones 20L). Futuro: mover a organizations.brand_settings. */
 export const CONTAINER_UNIT_PRICE = 25;
 
+/**
+ * Renglón con que la venta a domicilio de la caja cobra los bidones: 1 por
+ * unidad que lo lleva (misma regla que el CRM), a `CONTAINER_UNIT_PRICE`. Lo
+ * agrega el servidor; en el pedido del CRM viaja como cargo de bidones.
+ */
+export const POS_RETURNABLE_CONTAINER_ITEM_NAME = "Bidón retornable";
+
 /** Tipo de punto: sucursal propia con POS, o franquicia que solo levanta pedidos a fábrica. */
 export const BRANCH_TYPES = {
   BRANCH: "branch",

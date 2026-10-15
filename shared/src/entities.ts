@@ -634,6 +634,11 @@ export interface PosCatalogProduct {
   lineId?: string | null;
   litersPerUnit?: string | number | null;
   /**
+   * Lleva bidón retornable (presentación 20L líquida o `variants.bidon`): la
+   * venta a domicilio lo cobra aparte, como un pedido del CRM.
+   */
+  returnableContainer?: boolean;
+  /**
    * Existencia en la sucursal: piezas del producto, o litros si tiene línea.
    * `null` cuando quien consulta no tiene `posInventory:view` (el cajero no ve
    * inventario, ni en pantalla ni en la respuesta).

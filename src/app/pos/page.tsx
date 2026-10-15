@@ -61,6 +61,7 @@ import { buildCustomerReturn, type CustomerReturnTicket } from "@/lib/pos/custom
 import { formatMoney, formatQuantity } from "@/lib/format-money";
 import { businessStamp } from "@/lib/business-time";
 import {
+  deliveryContainers,
   lineFromBulk,
   lineFromProduct,
   priceTicket,
@@ -102,8 +103,10 @@ import {
 import { CustomerReturnSheet } from "@/components/pos/CustomerReturnSheet";
 import { PosDeliveryDialog } from "@/components/pos/PosDeliveryDialog";
 import {
+  CONTAINER_UNIT_PRICE,
   PRICING_TIERS,
   POS_PAYMENT_METHODS,
+  POS_RETURNABLE_CONTAINER_ITEM_NAME,
   posPaymentMethodLabel,
 } from "@glamouroso/shared/constants";
 import { POS_CLOCK_SKEW_WARN_MS } from "@glamouroso/shared/pos-sync";
@@ -293,10 +296,25 @@ export default function PosPage() {
     () => priceTicket(ticket.lines, catalog),
     [ticket.lines, catalog],
   );
+  /**
+   * Venta a domicilio: los bidones se cobran aparte, como en un pedido del CRM
+   * (1 por producto de 20 L). El servidor agrega el mismo renglón al ticket.
+   */
+  const containers = useMemo(
+    () =>
+      isDelivery
+        ? deliveryContainers(ticket.lines, catalog)
+        : { count: 0, fee: 0 },
+    [isDelivery, ticket.lines, catalog],
+  );
   const total = useMemo(
     () =>
-      Math.max(0, Math.round((totals.subtotal - ticket.discount) * 100) / 100),
-    [totals.subtotal, ticket.discount],
+      Math.max(
+        0,
+        Math.round((totals.subtotal + containers.fee - ticket.discount) * 100) /
+          100,
+      ),
+    [totals.subtotal, containers.fee, ticket.discount],
   );
 
   const focusCode = useCallback(() => {
@@ -1712,6 +1730,21 @@ export default function PosPage() {
                 ) : null}
               </tr>
             ))}
+            {containers.count > 0 ? (
+              <tr className="pos-container-charge">
+                <td className="code">—</td>
+                <td className="name">
+                  {POS_RETURNABLE_CONTAINER_ITEM_NAME}
+                  <span className="pos-breakdown">
+                    1 por cada producto de 20 L, como en los pedidos del CRM
+                  </span>
+                </td>
+                <td className="num">{formatMoney(CONTAINER_UNIT_PRICE)}</td>
+                <td className="num">{containers.count}</td>
+                <td className="num amount">{formatMoney(containers.fee)}</td>
+                {canSeeStock ? <td className="num">—</td> : null}
+              </tr>
+            ) : null}
             {!totals.lines.length ? (
               <tr>
                 <td colSpan={canSeeStock ? 6 : 5} className="pos-empty">
