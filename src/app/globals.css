@@ -1357,14 +1357,160 @@ textarea {
   }
 }
 
-.restock-charges {
+/* Cargos de fábrica: tabla de concepto (con su ayuda), detalle e importe.
+   Publicidad y envío se escriben en la misma columna del importe. */
+.restock-charges-box {
   display: grid;
-  grid-template-columns: 1fr auto;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--card);
+  overflow: hidden;
+}
+
+.restock-charge-head,
+.restock-charge-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr) 170px;
   align-items: center;
-  gap: 10px 16px;
-  margin-top: 12px;
-  max-width: 620px;
+  gap: 16px;
+  padding: 10px 16px;
+}
+
+.restock-charge-head {
+  background: var(--bg);
+  border-bottom: 1px solid var(--border);
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.restock-charge-head span:last-child {
+  text-align: right;
+}
+
+.restock-charge-row + .restock-charge-row {
+  border-top: 1px solid var(--border);
+}
+
+.restock-charge-concept {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.restock-charge-concept b {
+  color: var(--glam-navy);
   font-size: 14px;
+}
+
+.restock-charge-concept small {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.restock-charge-detail {
+  color: var(--ink);
+  font-size: 13px;
+}
+
+.restock-charge-tag {
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--soft-blue);
+  color: var(--glam-navy);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.restock-charge-amount {
+  display: flex;
+  justify-content: flex-end;
+  color: var(--glam-navy);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.restock-charge-row.is-total {
+  background: var(--bg);
+}
+
+.restock-charge-row.is-total .restock-charge-amount {
+  font-size: 16px;
+}
+
+/* Producto + Cargos = Total, al pie de la tabla. */
+.restock-charges-grand {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px 14px;
+  padding: 12px 16px;
+  border-top: 1px solid var(--border);
+}
+
+.restock-charges-grand > div {
+  display: grid;
+  gap: 2px;
+  text-align: right;
+}
+
+.restock-charges-grand small {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.restock-charges-grand b {
+  color: var(--glam-navy);
+  font-size: 16px;
+  font-variant-numeric: tabular-nums;
+}
+
+.restock-charges-grand > span {
+  color: var(--muted);
+  font-size: 18px;
+  font-weight: 700;
+}
+
+.restock-charges-grand .is-total {
+  padding: 6px 12px;
+  border-radius: 10px;
+  background: var(--glam-navy);
+}
+
+.restock-charges-grand .is-total small {
+  color: rgba(255, 255, 255, 0.75);
+}
+
+.restock-charges-grand .is-total b {
+  color: #fff;
+  font-size: 20px;
+}
+
+@media (max-width: 640px) {
+  .restock-charge-head {
+    display: none;
+  }
+
+  .restock-charge-row {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  .restock-charge-detail {
+    grid-column: 1;
+    grid-row: 2;
+  }
+
+  .restock-charge-amount {
+    grid-column: 2;
+    grid-row: 1 / span 2;
+  }
 }
 
 .restock-result {

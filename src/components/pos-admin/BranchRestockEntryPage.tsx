@@ -26,7 +26,6 @@ import { toast } from "sonner";
 import {
   FactoryFormSheet,
   allRows,
-  round2,
   rowKey,
   sameValue,
   sheetPages,
@@ -481,19 +480,19 @@ export function BranchRestockEntryPage() {
           </div>
           {canSeeCosts ? (
             <>
+              <h3 className="restock-summary-title" style={{ margin: "16px 0 6px" }}>
+                Cargos de fábrica
+              </h3>
               <RestockChargesEditor
                 charges={charges}
                 publicity={publicity}
                 shipping={shipping}
                 onPublicityChange={setPublicity}
                 onShippingChange={setShipping}
-                publicityHint="Viene del pedido. Cámbiala si se cobró distinto; 0 si no se cobra."
+                publicityHint="Viene del pedido. Cámbiala si se cobró distinto."
+                productAmount={totals.amount}
                 disabled={saving}
               />
-              <div className="restock-charges" style={{ marginTop: 6 }}>
-                <span style={{ fontWeight: 800 }}>Total con cargos</span>
-                <strong style={{ fontSize: 16 }}>{formatMoney(round2(totals.amount + charges.total))}</strong>
-              </div>
             </>
           ) : null}
           <TextField
