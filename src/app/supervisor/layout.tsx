@@ -11,6 +11,14 @@ import SupervisorShell from "./SupervisorShell";
 export const metadata: Metadata = {
   title: "Glamouroso · Supervisor de caja",
   description: "Apertura y cierre de las sucursales y pedidos a fábrica, para el supervisor de caja.",
+  /**
+   * Su propia app instalable: el manifiesto de la raíz es el de la caja
+   * (abre en `/pos`, en horizontal), y una tablet que instalaba desde aquí
+   * dejaba al supervisor en "Sin acceso a la caja". Este abre en `/supervisor`
+   * y respeta la orientación del aparato.
+   */
+  manifest: "/supervisor.webmanifest",
+  appleWebApp: { capable: true, title: "Supervisor", statusBarStyle: "default" },
 };
 
 export const viewport: Viewport = {

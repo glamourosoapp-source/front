@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { ShieldAlert } from "lucide-react";
 import { RealtimeProvider } from "@/components/realtime/RealtimeProvider";
 import { useAuthStore } from "@/stores/auth.store";
-import { usePermissions } from "@/lib/permissions";
+import { landingRouteFor, usePermissions } from "@/lib/permissions";
 import { startCapturingInstallPrompt } from "@/lib/pwa-install";
 import { usePosAutoUpdate } from "@/hooks/usePosAutoUpdate";
 import "./pos.css";
@@ -24,8 +24,16 @@ export default function PosShell({ children }: { children: ReactNode }) {
   const hydrate = useAuthStore((s) => s.hydrate);
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
   const user = useAuthStore((s) => s.user);
-  const { can } = usePermissions();
+  const { can, permissions } = usePermissions();
   const [checked, setChecked] = useState(false);
+  /**
+   * La caja es la app instalable de la raíz: en una tablet, un supervisor de
+   * caja (o la tablet de fábrica, o una franquicia) puede terminar abriéndola.
+   * Sin permiso de caja y con pantalla propia fuera del panel, se va a la suya
+   * en vez de quedarse en "Sin acceso a la caja". El cajero no pasa por aquí.
+   */
+  const home = user ? landingRouteFor(permissions) : null;
+  const ownApp = checked && Boolean(user) && !can("pos", "view") && home !== null && home !== "/pos" && home !== "/dashboard";
   usePosAutoUpdate();
 
   useEffect(() => {
@@ -36,6 +44,10 @@ export default function PosShell({ children }: { children: ReactNode }) {
     if (typeof window === "undefined") return;
     if (!window.localStorage.getItem("token") && !isAuthenticated) router.push("/login");
   }, [isAuthenticated, router]);
+
+  useEffect(() => {
+    if (ownApp && home) router.replace(home);
+  }, [ownApp, home, router]);
 
   // El service worker solo se registra en las pantallas instalables del POS.
   useEffect(() => {
@@ -57,7 +69,7 @@ export default function PosShell({ children }: { children: ReactNode }) {
     startCapturingInstallPrompt();
   }, []);
 
-  if (!checked || !user) {
+  if (!checked || !user || ownApp) {
     return <main className="pos" style={{ display: "grid", placeItems: "center" }}>Cargando caja...</main>;
   }
 

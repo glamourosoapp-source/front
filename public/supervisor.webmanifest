@@ -1,0 +1,24 @@
+{
+  "id": "/supervisor",
+  "name": "Glamouroso · Supervisor de caja",
+  "short_name": "Supervisor",
+  "description": "Apertura y cierre de las sucursales y pedidos a fábrica, para el supervisor de caja.",
+  "start_url": "/supervisor",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#262d60",
+  "theme_color": "#262d60",
+  "categories": ["business", "productivity"],
+  "lang": "es-MX",
+  "dir": "ltr",
+  "icons": [
+    { "src": "/icons/pos-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/icons/pos-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "/icons/pos-maskable-192.png", "sizes": "192x192", "type": "image/png", "purpose": "maskable" },
+    { "src": "/icons/pos-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ],
+  "shortcuts": [
+    { "name": "Sucursales de hoy", "short_name": "Sucursales", "url": "/supervisor" },
+    { "name": "Pedidos a fábrica", "short_name": "Pedidos", "url": "/supervisor/pedidos" }
+  ]
+}
