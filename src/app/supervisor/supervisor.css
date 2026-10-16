@@ -451,9 +451,11 @@ a.sup-card:hover {
   color: var(--glam-navy);
 }
 
+/* Abrió y Cerró lado a lado; el horario en su propio renglón a todo lo ancho
+   ("9:00 a.m. – 7:00 p.m." no cabía en un tercio de la tarjeta en tablet). */
 .sup-times {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 8px;
   margin: 0;
 }
@@ -488,6 +490,19 @@ a.sup-card:hover {
   color: var(--text);
   font-size: 13px;
   font-weight: 600;
+}
+
+.sup-times .is-schedule {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 4px 12px;
+}
+
+.sup-times .is-schedule dd {
+  white-space: normal;
 }
 
 .sup-flags {
@@ -676,7 +691,6 @@ a.sup-card:hover {
   }
 
   .sup-times dd.is-muted {
-    font-size: 12px;
-    white-space: normal;
+    font-size: 13px;
   }
 }

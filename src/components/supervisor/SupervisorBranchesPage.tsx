@@ -55,7 +55,7 @@ function BranchCard({ row }: { row: BranchStats }) {
           <dt>Cerró</dt>
           <dd>{day?.status === "closed" ? storeTime(day.closedAt) : day?.status === "open" ? "Abierta" : "—"}</dd>
         </div>
-        <div>
+        <div className="is-schedule">
           <dt>Horario</dt>
           <dd className="is-muted">
             {day?.hours
