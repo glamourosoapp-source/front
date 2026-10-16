@@ -1198,6 +1198,16 @@ textarea {
   font-weight: 600;
 }
 
+/* Cantidad de solo lectura (pedido en camino): el número, sin − / +. */
+.restock-summary-qty {
+  display: inline-block;
+  min-width: 48px;
+  color: var(--glam-navy);
+  font-size: 16px;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+
 .restock-stepper {
   display: inline-flex;
   align-items: center;
@@ -1354,6 +1364,203 @@ textarea {
   .restock-review-stats,
   .restock-review-stats.is-no-total {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+/* Pedido a fábrica en celular (panel y app del supervisor): nada se sale de la
+   pantalla y la vista Resumen pasa de tabla a una tarjeta por producto, con
+   − / + de 40 px para el dedo. */
+.msf-page > * {
+  min-width: 0;
+}
+
+@media (max-width: 720px) {
+  .restock-review-head {
+    padding: 16px;
+  }
+
+  .restock-review-icon {
+    display: none;
+  }
+
+  /* Las cuatro cifras en un renglón: el detalle ya va en la barra de enviar. */
+  .restock-review-stats.is-no-total {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 6px;
+  }
+
+  .restock-stat {
+    padding: 8px 10px;
+  }
+
+  .restock-review-stats.is-no-total .restock-stat {
+    padding: 8px;
+  }
+
+  .restock-review-stats.is-no-total .restock-stat-head {
+    font-size: 11px;
+    letter-spacing: 0;
+    text-transform: none;
+  }
+
+  .restock-review-stats.is-no-total .restock-stat-head svg,
+  .restock-review-stats.is-no-total .restock-stat small {
+    display: none;
+  }
+
+  .restock-review-stats.is-no-total .restock-stat b {
+    font-size: 20px;
+  }
+
+  .msf-page > .panel.p-5 {
+    padding: 14px;
+  }
+
+  /* Hoja del pedido: título arriba y los botones debajo, a lo ancho. */
+  .msf-page > .toolbar {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .msf-page .page-title {
+    font-size: 22px;
+  }
+
+  /* Aviso con botones (pedido en camino): los botones bajan debajo del texto. */
+  .msf-page .MuiAlert-root {
+    flex-wrap: wrap;
+  }
+
+  .msf-page .MuiAlert-message {
+    flex: 1 1 calc(100% - 40px);
+  }
+
+  .msf-page .MuiAlert-action {
+    width: 100%;
+    margin: 0;
+    padding: 4px 0 0 36px;
+  }
+
+  .msf-page .MuiAlert-action > span {
+    flex-wrap: wrap;
+  }
+
+  .restock-summary .table-container-premium {
+    border: 0 !important;
+    box-shadow: none !important;
+  }
+
+  .restock-summary .restock-summary-table {
+    border: 0;
+    background: transparent;
+  }
+
+  .restock-summary-table,
+  .restock-summary-table tbody {
+    display: block;
+  }
+
+  .restock-summary-table thead {
+    display: none;
+  }
+
+  .restock-summary-table tbody tr {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto 40px;
+    grid-template-areas:
+      "name name remove"
+      "pack qty qty"
+      "eq amount amount";
+    align-items: center;
+    column-gap: 8px;
+    margin-bottom: 8px;
+    padding: 10px 6px 10px 12px;
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    background: var(--card);
+  }
+
+  .restock-summary-table tbody tr.is-changed {
+    border-color: #fcd34d;
+    background: #fffbeb;
+  }
+
+  .restock-summary-table tbody tr.is-changed td {
+    background: transparent;
+  }
+
+  .restock-summary-table tbody td {
+    padding: 0;
+    border: 0;
+  }
+
+  .restock-summary-table .rs-name {
+    grid-area: name;
+    min-width: 0;
+  }
+
+  .restock-summary-table .rs-remove {
+    grid-area: remove;
+  }
+
+  .restock-summary-table .rs-pack {
+    grid-area: pack;
+    white-space: normal;
+  }
+
+  .restock-summary-table .rs-qty {
+    grid-area: qty;
+    padding-top: 6px;
+  }
+
+  .restock-summary-table .rs-eq {
+    grid-area: eq;
+    color: var(--muted);
+    font-size: 13px;
+    text-align: left !important;
+  }
+
+  .restock-summary-table .rs-amount {
+    grid-area: amount;
+    font-weight: 700;
+  }
+
+  .restock-stepper .MuiIconButton-root {
+    width: 40px;
+    height: 40px;
+    border: 1px solid var(--border);
+  }
+
+  .restock-stepper .input {
+    width: 64px;
+    height: 40px;
+    font-size: 16px; /* 16 px: iOS no hace zoom al escribir */
+  }
+
+  .msf-input {
+    font-size: 16px;
+  }
+
+  /* Barra de enviar: el resumen arriba y los botones a lo ancho. */
+  .msf-savebar {
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .msf-savebar > span {
+    flex: 1 1 100%;
+    font-size: 13px;
+  }
+
+  .msf-savebar > div {
+    flex: 1 1 100%;
+  }
+
+  .msf-savebar > div > .MuiButton-root {
+    flex: 1 1 0;
+    min-height: 44px;
+    padding-inline: 8px;
+    white-space: nowrap;
   }
 }
 

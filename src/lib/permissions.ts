@@ -9,8 +9,9 @@ import { useAuthStore } from "@/stores/auth.store";
 /**
  * Pantalla donde debe aterrizar un usuario al entrar.
  *
- * El POS trae usuarios que NO viven en el dashboard: un cajero abre la caja, la
- * tablet de fábrica abre los pedidos por enviar y una franquicia su portal. El
+ * El POS trae usuarios que NO viven en el dashboard: un cajero abre la caja, un
+ * supervisor de caja su app (`/supervisor`), la tablet de fábrica abre los
+ * pedidos por enviar y una franquicia su portal. El
  * resto (y cualquier admin) sigue entrando al dashboard como siempre.
  */
 export function landingRouteFor(permissions: PermissionMap | null | undefined): string {
@@ -24,6 +25,7 @@ export function landingRouteFor(permissions: PermissionMap | null | undefined): 
   const worksInDashboard = allows("dashboard") || allows("orders");
   if (!worksInDashboard) {
     if (allows("pos")) return "/pos";
+    if (allows("posSupervisor")) return "/supervisor";
     if (allows("factory") && config.factoryModuleEnabled) return "/fabrica";
     if (allows("franchise") && config.franchiseModuleEnabled) return "/franquicia";
   }

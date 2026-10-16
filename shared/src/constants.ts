@@ -456,6 +456,7 @@ export const PERMISSION_MODULES = [
   { key: "posRestock", label: "POS: faltantes y surtido" },
   { key: "posReturns", label: "POS: devoluciones a fábrica" },
   { key: "posCustomerReturns", label: "POS: devoluciones de cliente" },
+  { key: "posSupervisor", label: "POS: app de supervisor de caja" },
   { key: "factory", label: "Fábrica: pedidos por enviar" },
   { key: "franchise", label: "Franquicia: pedidos a fábrica" },
 ] as const;

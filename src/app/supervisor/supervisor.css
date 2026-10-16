@@ -1,0 +1,682 @@
+/*
+ * App del supervisor de caja. Se piensa primero para el celular (una columna,
+ * botones de 44 px, navegación abajo al alcance del pulgar) y crece a tablet
+ * (dos columnas, navegación arriba) y computadora (tres columnas).
+ */
+
+.sup {
+  min-height: 100vh;
+  min-height: 100dvh;
+  background: var(--bg);
+  color: var(--text);
+}
+
+.sup-center {
+  display: grid;
+  place-items: center;
+  min-height: 100vh;
+  padding: 24px 16px;
+}
+
+/* ---------- Barra de arriba ---------- */
+
+.sup-topbar {
+  position: sticky;
+  top: 0;
+  z-index: 30;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 16px;
+  padding-top: calc(10px + env(safe-area-inset-top));
+  background: var(--card);
+  border-bottom: 1px solid var(--border);
+}
+
+.sup-brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  margin-right: auto;
+  color: var(--glam-navy);
+  text-decoration: none;
+}
+
+.sup-brand img {
+  width: 32px;
+  height: 32px;
+  flex: 0 0 auto;
+}
+
+.sup-brand span {
+  display: grid;
+  min-width: 0;
+  line-height: 1.15;
+}
+
+.sup-brand strong {
+  font-size: 16px;
+}
+
+.sup-brand small {
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sup-nav {
+  display: flex;
+  gap: 4px;
+}
+
+.sup-nav a {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 40px;
+  padding: 0 14px;
+  border-radius: 10px;
+  color: var(--muted);
+  font-size: 14px;
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.sup-nav a:hover {
+  background: var(--soft-blue);
+  color: var(--glam-navy);
+}
+
+.sup-nav a.is-active {
+  background: var(--soft-blue);
+  color: var(--glam-navy);
+}
+
+.sup-nav a.is-active svg {
+  color: var(--glam-blue);
+}
+
+.sup-logout {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 40px;
+  padding: 0 12px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--card);
+  color: var(--muted);
+  font: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.sup-logout:hover {
+  color: var(--glam-navy);
+}
+
+.sup-body {
+  width: 100%;
+  max-width: 1180px;
+  margin: 0 auto;
+  padding: 20px 24px 40px;
+}
+
+/* ---------- Encabezado de página, resumen y búsqueda ---------- */
+
+.sup-page {
+  display: grid;
+  gap: 14px;
+}
+
+.sup-page-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.sup-page-head h1 {
+  margin: 0;
+  color: var(--glam-navy);
+  font-size: 24px;
+  line-height: 1.2;
+}
+
+.sup-page-head p {
+  margin: 4px 0 0;
+  color: var(--muted);
+  font-size: 14px;
+}
+
+.sup-capitalize {
+  display: inline-block;
+}
+
+.sup-capitalize::first-letter {
+  text-transform: uppercase;
+}
+
+.sup-updated {
+  display: block;
+  font-size: 12px;
+}
+
+.sup-icon-button {
+  display: inline-grid;
+  flex: 0 0 auto;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--card);
+  color: var(--glam-navy);
+  cursor: pointer;
+}
+
+.sup-icon-button:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.sup-spin {
+  animation: sup-spin 0.9s linear infinite;
+}
+
+@keyframes sup-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.sup-summary {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.sup-summary.is-five {
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+}
+
+.sup-summary-item {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--card);
+  color: var(--muted);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.sup-summary-item b {
+  color: var(--glam-navy);
+  font-size: 22px;
+  line-height: 1.1;
+  font-variant-numeric: tabular-nums;
+}
+
+.sup-summary-item span {
+  overflow: hidden;
+  font-size: 13px;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sup-summary-item.is-open b {
+  color: #15803d;
+}
+
+.sup-summary-item.is-closed b {
+  color: #b91c1c;
+}
+
+.sup-summary-item.is-step-draft b {
+  color: #b45309;
+}
+
+.sup-summary-item.is-step-pending b {
+  color: #b45309;
+}
+
+.sup-summary-item.is-step-transit b {
+  color: var(--glam-blue);
+}
+
+.sup-summary-item.is-step-ok b {
+  color: #15803d;
+}
+
+.sup-summary-item.is-active {
+  border-color: var(--glam-blue);
+  background: var(--soft-blue);
+  box-shadow: inset 0 0 0 1px var(--glam-blue);
+}
+
+.sup-search {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+  padding: 0 14px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--card);
+  color: var(--muted);
+}
+
+.sup-search input {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  font-size: 16px; /* 16 px: iOS no hace zoom al enfocar */
+}
+
+.sup-search:focus-within {
+  border-color: var(--glam-blue);
+}
+
+.sup-empty {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 8px 0;
+  color: var(--muted);
+}
+
+/* ---------- Tarjetas ---------- */
+
+.sup-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.sup-card {
+  display: grid;
+  align-content: start;
+  gap: 12px;
+  min-width: 0;
+  padding: 14px 16px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: var(--card);
+  box-shadow: var(--shadow-sm);
+  color: inherit;
+  text-decoration: none;
+}
+
+a.sup-card:hover {
+  border-color: var(--glam-blue);
+}
+
+.sup-branch-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.sup-branch-name {
+  display: grid;
+  flex: 1;
+  min-width: 0;
+  line-height: 1.2;
+}
+
+.sup-branch-name strong {
+  overflow: hidden;
+  color: var(--glam-navy);
+  font-size: 16px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sup-branch-name small {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+/* Foco de la tienda o del paso del pedido, como en Sucursales y Surtido del panel. */
+.sup-light {
+  position: relative;
+  display: inline-grid;
+  flex: 0 0 auto;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 999px;
+  background: #f1f5f9;
+  color: #64748b;
+}
+
+.sup-light.is-open {
+  background: #dcfce7;
+  color: #15803d;
+}
+
+.sup-light.is-open::after {
+  content: "";
+  position: absolute;
+  inset: -3px;
+  border: 2px solid #22c55e;
+  border-radius: inherit;
+  opacity: 0;
+  animation: sup-ping 2s ease-out infinite;
+}
+
+@keyframes sup-ping {
+  0% {
+    transform: scale(0.85);
+    opacity: 0.7;
+  }
+  100% {
+    transform: scale(1.35);
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sup-light.is-open::after,
+  .sup-spin {
+    animation: none;
+  }
+}
+
+.sup-light.is-closed {
+  background: #fee2e2;
+  color: #b91c1c;
+}
+
+.sup-light.is-step-draft,
+.sup-light.is-step-pending {
+  background: #fef3c7;
+  color: #b45309;
+}
+
+.sup-light.is-step-transit {
+  background: var(--soft-blue);
+  color: var(--glam-blue);
+}
+
+.sup-light.is-step-ok {
+  background: #dcfce7;
+  color: #15803d;
+}
+
+.sup-pill {
+  flex: 0 0 auto;
+  padding: 3px 10px;
+  border-radius: 999px;
+  background: #f1f5f9;
+  color: #475569;
+  font-size: 12px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.sup-pill.is-open,
+.sup-pill.is-step-ok {
+  background: #dcfce7;
+  color: #166534;
+}
+
+.sup-pill.is-closed {
+  background: #fee2e2;
+  color: #991b1b;
+}
+
+.sup-pill.is-step-draft,
+.sup-pill.is-step-pending {
+  background: #fef3c7;
+  color: #92400e;
+}
+
+.sup-pill.is-step-transit {
+  background: var(--soft-blue);
+  color: var(--glam-navy);
+}
+
+.sup-times {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  margin: 0;
+}
+
+.sup-times div {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+  padding: 8px 10px;
+  border-radius: 10px;
+  background: #f8fafc;
+}
+
+.sup-times dt {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.sup-times dd {
+  margin: 0;
+  color: var(--glam-navy);
+  font-size: 15px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.sup-times dd.is-muted {
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.sup-flags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.sup-flag {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  border-radius: 6px;
+  background: #fdecec;
+  color: #c62828;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.sup-flag.is-muted {
+  background: #f1f5f9;
+  color: #475569;
+}
+
+.sup-card-link {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 40px;
+  margin: 0 -16px -14px;
+  padding: 0 16px;
+  border-top: 1px solid var(--border);
+  color: var(--glam-blue);
+  font-size: 14px;
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.sup-order-detail {
+  margin: 0;
+  color: var(--text);
+  font-size: 14px;
+}
+
+/* ---------- Pantallas del pedido dentro de la app ---------- */
+
+/* Sin sidebar, la barra de enviar va fija al fondo de la pantalla en cualquier
+   ancho (con el área segura del iPhone) y alineada con el contenido. */
+.sup .msf-savebar {
+  position: fixed;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  margin: 0;
+  border-radius: 0;
+  padding-inline: max(24px, calc((100vw - 1180px) / 2 + 24px));
+  padding-bottom: calc(10px + env(safe-area-inset-bottom));
+}
+
+.sup.is-detail .sup-body {
+  padding-bottom: calc(96px + env(safe-area-inset-bottom));
+}
+
+/* En pantallas táctiles (tablet) los − / + también van a 40 px. */
+@media (pointer: coarse) {
+  .sup .restock-stepper .MuiIconButton-root {
+    width: 40px;
+    height: 40px;
+    border: 1px solid var(--border);
+  }
+
+  .sup .restock-stepper .input {
+    height: 40px;
+    font-size: 16px;
+  }
+}
+
+/* ---------- Tablet ---------- */
+
+@media (max-width: 1024px) {
+  .sup-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+/* ---------- Celular ---------- */
+
+@media (max-width: 720px) {
+  .sup-topbar {
+    padding: 8px 16px;
+    padding-top: calc(8px + env(safe-area-inset-top));
+  }
+
+  .sup-logout span {
+    display: none;
+  }
+
+  .sup-logout {
+    width: 40px;
+    justify-content: center;
+    padding: 0;
+  }
+
+  /* La navegación baja a una barra fija, al alcance del pulgar. */
+  .sup-nav {
+    position: fixed;
+    right: 0;
+    bottom: 0;
+    left: 0;
+    z-index: 30;
+    gap: 0;
+    padding: 6px 8px;
+    padding-bottom: calc(6px + env(safe-area-inset-bottom));
+    background: var(--card);
+    border-top: 1px solid var(--border);
+    box-shadow: 0 -6px 18px rgba(38, 45, 96, 0.06);
+  }
+
+  .sup-nav a {
+    flex: 1;
+    flex-direction: column;
+    justify-content: center;
+    gap: 2px;
+    min-height: 52px;
+    font-size: 12px;
+  }
+
+  .sup-nav a.is-active {
+    background: transparent;
+  }
+
+  /* Dentro de un pedido la barra de abajo se esconde: abajo va la de enviar. */
+  .sup.is-detail .sup-nav {
+    display: none;
+  }
+
+  .sup-body {
+    padding: 14px 16px calc(84px + env(safe-area-inset-bottom));
+  }
+
+  .sup.is-detail .sup-body {
+    padding-bottom: calc(140px + env(safe-area-inset-bottom));
+  }
+
+  .sup .msf-savebar {
+    padding-inline: 16px;
+  }
+
+  .sup-page-head h1 {
+    font-size: 21px;
+  }
+
+  .sup-grid {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 10px;
+  }
+
+  /* Los filtros se acomodan en uno o dos renglones: ninguno queda cortado. */
+  .sup-summary,
+  .sup-summary.is-five {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+
+  .sup-summary-item {
+    flex: 1 1 auto;
+    padding: 8px 12px;
+  }
+
+  .sup-summary-item b {
+    font-size: 19px;
+  }
+
+  .sup-times {
+    gap: 6px;
+  }
+
+  .sup-times div {
+    padding: 8px;
+  }
+
+  .sup-times dd {
+    font-size: 14px;
+  }
+
+  .sup-times dd.is-muted {
+    font-size: 12px;
+    white-space: normal;
+  }
+}

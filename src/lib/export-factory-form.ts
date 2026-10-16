@@ -154,7 +154,17 @@ function sectionRow(label: string, page: number, block: number): FactoryFormRow 
   };
 }
 
+/**
+ * Pie de la hoja. Si el Back quitó los montos (`amountsHidden`, supervisor de
+ * caja) el pie conserva rótulos y cantidades, pero sin importes ni totales:
+ * salen vacíos, no en $0.00.
+ */
 function footerFor(form: FactoryForm, page: number, total: number, footers: boolean): FooterRow[] {
+  const rows = footerRows(form, page, total, footers);
+  return form.amountsHidden ? rows.map(({ amount: _amount, ...row }) => row) : rows;
+}
+
+function footerRows(form: FactoryForm, page: number, total: number, footers: boolean): FooterRow[] {
   if (!footers) return [];
   if (page === 1) {
     const { transparent, color } = form.bidones;

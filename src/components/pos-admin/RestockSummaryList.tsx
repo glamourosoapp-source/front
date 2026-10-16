@@ -29,6 +29,8 @@ interface RestockSummaryListProps {
   onChange: (key: string, value: string) => void;
   canSeeCosts: boolean;
   disabled?: boolean;
+  /** Solo para consultar (ya hay un pedido en camino): la cantidad como texto, sin − / + ni quitar. */
+  readOnly?: boolean;
   emptyText: string;
 }
 
@@ -60,6 +62,7 @@ export function RestockSummaryList({
   onChange,
   canSeeCosts,
   disabled = false,
+  readOnly = false,
   emptyText,
 }: RestockSummaryListProps) {
   /** Renglones que se agregaron a mano y todavía están en 0: siguen a la vista. */
@@ -113,7 +116,7 @@ export function RestockSummaryList({
                     const changed = !sameValue(values[key], baseline[key]);
                     return (
                       <tr key={key} className={changed ? "is-changed" : undefined}>
-                        <td>
+                        <td className="rs-name">
                           <strong>{row.label}</strong>
                           {changed ? (
                             <div className="restock-summary-was">
@@ -121,8 +124,11 @@ export function RestockSummaryList({
                             </div>
                           ) : null}
                         </td>
-                        <td className="restock-summary-pack">{packDescription(row)}</td>
-                        <td>
+                        <td className="restock-summary-pack rs-pack">{packDescription(row)}</td>
+                        <td className="rs-qty">
+                          {readOnly ? (
+                            <strong className="restock-summary-qty">{formatQuantity(packs)}</strong>
+                          ) : (
                           <div className="restock-stepper">
                             <IconButton
                               size="small"
@@ -155,16 +161,18 @@ export function RestockSummaryList({
                               <Plus size={15} />
                             </IconButton>
                           </div>
+                          )}
                         </td>
-                        <td style={{ textAlign: "right", whiteSpace: "nowrap" }}>
+                        <td className="rs-eq" style={{ textAlign: "right", whiteSpace: "nowrap" }}>
                           {packs > 0 ? `${formatQuantity(toBase(values[key], row.packSize))} ${unitOf(row)}` : "—"}
                         </td>
                         {canSeeCosts ? (
-                          <td style={{ textAlign: "right", whiteSpace: "nowrap" }}>
+                          <td className="rs-amount" style={{ textAlign: "right", whiteSpace: "nowrap" }}>
                             {packs > 0 ? formatMoney(rowAmount(row, packs)) : "—"}
                           </td>
                         ) : null}
-                        <td style={{ textAlign: "right" }}>
+                        <td className="rs-remove" style={{ textAlign: "right" }}>
+                          {readOnly ? null : (
                           <Tooltip title="Quitar del pedido">
                             <span>
                               <IconButton
@@ -177,6 +185,7 @@ export function RestockSummaryList({
                               </IconButton>
                             </span>
                           </Tooltip>
+                          )}
                         </td>
                       </tr>
                     );
@@ -188,7 +197,7 @@ export function RestockSummaryList({
         );
       })}
 
-      {!disabled ? (
+      {!disabled && !readOnly ? (
         <Autocomplete
           size="small"
           options={options}
@@ -197,6 +206,15 @@ export function RestockSummaryList({
           clearOnBlur
           getOptionLabel={(row) => `${row.label} · ${packDescription(row)}`}
           isOptionEqualToValue={(a, b) => rowKey(a) === rowKey(b)}
+          // Hay renglones con el mismo nombre y empaque (aromas en caja): la llave es el renglón.
+          renderOption={(props, row) => {
+            const { key: _key, ...rest } = props as typeof props & { key?: string };
+            return (
+              <li key={rowKey(row)} {...rest}>
+                {row.label} · {packDescription(row)}
+              </li>
+            );
+          }}
           onChange={(_event, row) => {
             if (!row) return;
             const key = rowKey(row);

@@ -986,6 +986,11 @@ export interface FactoryForm {
   charges?: FactoryFormCharges;
   /** Suma de las hojas + OTROS + bidones + cajas azules + publicidad. */
   grandTotal: number;
+  /**
+   * El Back quitó los montos (supervisor de caja): precios e importes en
+   * `null` y totales en 0. No se pintan, ni en pantalla ni en el PDF.
+   */
+  amountsHidden?: boolean;
 }
 
 /** Ventas de un periodo en el resumen de sucursal. */

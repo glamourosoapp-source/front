@@ -44,9 +44,9 @@ import {
   RESTOCK_STATUS_COLORS,
   RESTOCK_STATUS_LABELS,
   formatDateTime,
-  restockOrderSheetHref,
   unitLabel,
 } from "./pos-labels";
+import { usePosLinks } from "./pos-links";
 import { RestockOrderDetail } from "./RestockOrderCard";
 import { RestockOrderActions } from "./RestockOrderActions";
 import { markFormPrinted } from "./useFactoryFormDownload";
@@ -92,6 +92,7 @@ export function RestockOrderSheetPage() {
   const { can } = usePermissions();
   const canView = can("posRestock", "view");
   const canSeeCosts = can("productCosts", "view");
+  const links = usePosLinks();
 
   const [order, setOrder] = useState<RestockOrder | null>(null);
   const [form, setForm] = useState<FactoryForm | null>(null);
@@ -220,7 +221,7 @@ export function RestockOrderSheetPage() {
         );
       }
       setConfirmOpen(false);
-      router.replace(restockOrderSheetHref(order.id));
+      router.replace(links.orderSheet(order.id));
       await load();
     } catch (error) {
       toast.error(getApiErrorMessage(error, "No se pudo guardar el envío"));
@@ -250,7 +251,7 @@ export function RestockOrderSheetPage() {
   function leave() {
     if (changes.length && !window.confirm("Hay cambios sin guardar. ¿Salir sin guardarlos?")) return;
     if (window.history.length > 1) router.back();
-    else router.push("/dashboard/pos/surtido");
+    else router.push(links.inbox);
   }
 
   if (!canView) {
@@ -315,7 +316,7 @@ export function RestockOrderSheetPage() {
           ) : null}
         </div>
         <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
-          {shownTotal != null && !isFranchise ? (
+          {shownTotal != null && !isFranchise && !links.hideAmounts && !form?.amountsHidden ? (
             <div style={{ textAlign: "right", marginRight: 8 }}>
               <div className="page-kicker" style={{ margin: 0 }}>
                 {changes.length ? "Total estimado con los cambios" : "Total del pedido"}
@@ -370,7 +371,9 @@ export function RestockOrderSheetPage() {
                 ? "Pedido cancelado: así estaba cuando se canceló."
                 : config.factoryModuleEnabled
                   ? "Cómo va el pedido: lo que se va a enviar (lo pedido, o lo que ya se corrigió)."
-                  : "Lo que se pidió. Cuando llegue, \"Recibir\" abre la hoja precargada para capturar lo que de verdad llegó."}
+                  : canDispatch
+                    ? "Lo que se pidió. Cuando llegue, \"Recibir\" abre la hoja precargada para capturar lo que de verdad llegó."
+                    : "Lo que se pidió. Cuando llegue, la oficina lo recibe en el panel."}
             {order.dispatchNotes
               ? ` ${config.factoryModuleEnabled ? "Nota del envío" : "Nota de la llegada"}: ${order.dispatchNotes}`
               : ""}

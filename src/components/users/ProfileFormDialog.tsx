@@ -48,6 +48,7 @@ const MODULE_ACTIONS: Partial<Record<PermissionModule, readonly PermissionAction
   productCosts: ["view", "update"],
   orderPrint: ["view"],
   customerFollowup: ["view"],
+  posSupervisor: ["view"],
 };
 
 const actionApplies = (module: PermissionModule, action: PermissionAction) =>

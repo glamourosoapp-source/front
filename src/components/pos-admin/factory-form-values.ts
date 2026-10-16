@@ -117,7 +117,7 @@ export function sheetCharges(
 
 /**
  * El formato con las cantidades de la pantalla, listo para `exportFactoryFormPdf`.
- * Sin `canSeeCosts` salen las cantidades sin importes.
+ * Sin `canSeeCosts` salen las cantidades sin importes (ni totales en $0.00).
  */
 export function formWithValues(
   form: FactoryForm,
@@ -166,6 +166,8 @@ export function formWithValues(
     publicity: { qty: charges.publicityAmount > 0 ? 1 : 0, amount: canSeeCosts ? charges.publicityAmount : 0 },
     shipping: { amount: canSeeCosts ? charges.shippingAmount : 0 },
     grandTotal: canSeeCosts ? round2(priced.reduce((sum, p) => sum + p.total, 0)) : 0,
+    // Sin costos (o si el Back ya los quitó) el PDF no pinta importes: vacíos, no $0.00.
+    amountsHidden: Boolean(form.amountsHidden) || !canSeeCosts,
   };
 }
 

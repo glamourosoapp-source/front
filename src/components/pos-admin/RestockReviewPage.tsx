@@ -46,7 +46,8 @@ import { RestockSummaryList } from "./RestockSummaryList";
 import { RestockChargesEditor } from "./RestockChargesEditor";
 import { RestockSteps } from "./RestockSteps";
 import { RestockOrderActions, isAwaitingRestockOrder } from "./RestockOrderActions";
-import { RESTOCK_STATUS_LABELS, formatDateTime, relativeDays, restockOrderSheetHref } from "./pos-labels";
+import { RESTOCK_STATUS_LABELS, formatDateTime, relativeDays } from "./pos-labels";
+import { usePosLinks } from "./pos-links";
 
 type View = "resumen" | "formato";
 
@@ -112,6 +113,7 @@ export function RestockReviewPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { can } = usePermissions();
+  const links = usePosLinks();
   const canView = can("posRestock", "view");
   const canCreate = can("posRestock", "create");
   const canUpdate = can("posRestock", "update");
@@ -213,7 +215,7 @@ export function RestockReviewPage() {
   const locked = Boolean(inTransit);
   const baseLabel = draft ? "Pedido" : "Sugerido";
   const branchLabel = form ? `${form.code ? `${form.code} · ` : ""}${form.name}` : "";
-  const backHref = `/dashboard/pos/sucursales/${branchId}?tab=pedidos`;
+  const backHref = links.branchOrders(branchId);
 
   // Con cambios sin enviar, cerrar la pestaña pide confirmación.
   useEffect(() => {
@@ -224,10 +226,7 @@ export function RestockReviewPage() {
   }, [changed, saving, sent]);
 
   function selectView(next: View) {
-    const query = new URLSearchParams(searchParams.toString());
-    if (next === "formato") query.set("vista", "formato");
-    else query.delete("vista");
-    router.replace(`/dashboard/pos/sucursales/${branchId}/pedido${query.size ? `?${query}` : ""}`);
+    router.replace(links.review(branchId, next === "formato" ? "formato" : null));
   }
 
   async function downloadPdf(orderId: string) {
@@ -275,8 +274,8 @@ export function RestockReviewPage() {
   async function copySummary() {
     const lines = captured.map(({ row, packs }) => `• ${row.label}: ${formatQuantity(packs)} ${packDescription(row)}`);
     const extras = [
-      charges.publicityAmount ? `• Publicidad: ${formatMoney(charges.publicityAmount)}` : "",
-      charges.shippingAmount ? `• Envío: ${formatMoney(charges.shippingAmount)}` : "",
+      charges.publicityAmount && !form?.amountsHidden ? (canSeeCosts ? `• Publicidad: ${formatMoney(charges.publicityAmount)}` : "• Publicidad del mes") : "",
+      charges.shippingAmount ? (canSeeCosts ? `• Envío: ${formatMoney(charges.shippingAmount)}` : "• Envío") : "",
       canSeeCosts ? `Total: ${formatMoney(grandTotal)}` : "",
     ].filter(Boolean);
     const text = [`Pedido a fábrica · ${branchLabel}`, ...lines, ...extras, notes.trim() ? `Nota: ${notes.trim()}` : ""]
@@ -312,7 +311,7 @@ export function RestockReviewPage() {
       <div className="page-stack">
         <Link href={backHref} className="mb-2 inline-flex items-center gap-1 text-sm text-[var(--muted)] hover:text-[var(--glam-navy)]">
           <ArrowLeft size={16} />
-          Volver a pedidos a fábrica
+          Volver a los pedidos
         </Link>
         <section className="panel p-5 restock-result">
           <RestockSteps current="transit" />
@@ -320,8 +319,14 @@ export function RestockReviewPage() {
           <h1 className="page-title" style={{ margin: 0 }}>Pedido enviado a fábrica</h1>
           <p className="page-kicker" style={{ margin: 0 }}>
             {branchLabel} · {captured.length} {captured.length === 1 ? "producto" : "productos"}
-            {canSeeCosts ? ` · ${formatMoney(grandTotal)}` : ""}. El PDF se descargó: mándaselo a fábrica como siempre.
-            Cuando llegue el producto, usa <strong>Recibir</strong> en el pedido.
+            {canSeeCosts ? ` · ${formatMoney(grandTotal)}` : ""}. El PDF se descargó: mándaselo a fábrica como siempre.{" "}
+            {canDispatch ? (
+              <>
+                Cuando llegue el producto, usa <strong>Recibir</strong> en el pedido.
+              </>
+            ) : (
+              "Cuando llegue el producto, la oficina lo recibe en el panel."
+            )}
           </p>
           <div className="restock-result-actions">
             <Button variant="contained" startIcon={<Download size={16} />} disabled={downloading} onClick={() => void downloadPdf(sent.id)}>
@@ -330,11 +335,11 @@ export function RestockReviewPage() {
             <Button variant="outlined" startIcon={<ClipboardCopy size={16} />} onClick={() => void copySummary()}>
               Copiar resumen para WhatsApp
             </Button>
-            <Button variant="outlined" startIcon={<Eye size={16} />} component={Link} href={restockOrderSheetHref(sent.id)}>
+            <Button variant="outlined" startIcon={<Eye size={16} />} component={Link} href={links.orderSheet(sent.id)}>
               Ver pedido
             </Button>
             <Button color="inherit" component={Link} href={backHref}>
-              Volver a la sucursal
+              Volver a los pedidos
             </Button>
           </div>
         </section>
@@ -346,7 +351,7 @@ export function RestockReviewPage() {
     <div className="page-stack msf-page">
       <Link href={backHref} className="inline-flex items-center gap-1 text-sm text-[var(--muted)] hover:text-[var(--glam-navy)]">
         <ArrowLeft size={16} />
-        Volver a pedidos a fábrica
+        Volver a los pedidos
       </Link>
 
       <section className="pos-day pos-cut is-overall restock-review-head">
@@ -383,7 +388,7 @@ export function RestockReviewPage() {
         {locked ? null : (
         <div className={`restock-review-stats${canSeeCosts ? "" : " is-no-total"}`} aria-label="Totales del pedido">
           <Stat icon={ListChecks} label="Productos" value={formatQuantity(captured.length)} note={changed ? `${changed} cambiado${changed === 1 ? "" : "s"}` : draft ? "igual al pedido" : "igual al faltante"} />
-          <Stat icon={Droplets} label="Bidones" value={formatQuantity(counts.bidones)} note={`${formatQuantity(counts.liters)} L de líquidos`} />
+          <Stat icon={Droplets} label="Líquidos" value={formatQuantity(counts.bidones)} note={`${formatQuantity(counts.liters)} L en bidón o garrafa`} />
           <Stat icon={Package} label="Cajas" value={formatQuantity(counts.cajas)} note={`${formatQuantity(counts.boxPieces)} piezas`} />
           <Stat icon={Boxes} label="Piezas sueltas" value={formatQuantity(counts.piezas)} />
           {canSeeCosts ? (
@@ -404,7 +409,7 @@ export function RestockReviewPage() {
           severity="info"
           action={
             <span style={{ display: "inline-flex", gap: 8, alignItems: "center" }}>
-              <Button size="small" startIcon={<Eye size={14} />} component={Link} href={restockOrderSheetHref(inTransit.id)} sx={{ whiteSpace: "nowrap" }}>
+              <Button size="small" startIcon={<Eye size={14} />} component={Link} href={links.orderSheet(inTransit.id)} sx={{ whiteSpace: "nowrap" }}>
                 Ver pedido
               </Button>
               <RestockOrderActions order={inTransit} canUpdate={canUpdate} canDispatch={canDispatch} onChanged={() => void load()} />
@@ -412,8 +417,11 @@ export function RestockReviewPage() {
           }
         >
           <strong>Ya hay un pedido en camino</strong> ({RESTOCK_STATUS_LABELS[inTransit.status]}, {formatDateTime(inTransit.createdAt)},{" "}
-          {relativeDays(inTransit.createdAt)}). Recíbelo cuando llegue o cancélalo para hacer uno nuevo. Abajo puedes ver el
-          faltante de hoy, solo para consultarlo.
+          {relativeDays(inTransit.createdAt)}).{" "}
+          {canUpdate
+            ? "Recíbelo cuando llegue o cancélalo para hacer uno nuevo."
+            : "Cuando llegue, la oficina lo recibe en el panel; entonces podrás hacer el siguiente."}{" "}
+          Abajo puedes ver el faltante de hoy, solo para consultarlo.
         </Alert>
       ) : null}
 
@@ -435,6 +443,7 @@ export function RestockReviewPage() {
               onChange={(key, value) => setValues((prev) => ({ ...prev, [key]: value }))}
               canSeeCosts={canSeeCosts}
               disabled={!canCreate || saving || locked}
+              readOnly={locked || !canCreate}
               emptyText="La sucursal está completa en su stock: no hay faltante. Agrega lo que quieras pedir."
             />
           </section>
@@ -453,6 +462,7 @@ export function RestockReviewPage() {
               baseline={suggested}
               onChange={(key, value) => setValues((prev) => ({ ...prev, [key]: value }))}
               disabled={!canCreate || saving || locked}
+              readOnly={locked || !canCreate}
               onlyFilled={onlyFilled}
               qtyHeader="Cant"
               inputLabel="Cantidad de"
@@ -513,10 +523,10 @@ export function RestockReviewPage() {
         <DialogContent dividers>
           <p style={{ marginTop: 0 }}>
             Vas a enviar a fábrica el pedido de <strong>{branchLabel}</strong>: {captured.length}{" "}
-            {captured.length === 1 ? "producto" : "productos"} ({formatQuantity(counts.bidones)} bidones,{" "}
+            {captured.length === 1 ? "producto" : "productos"} ({formatQuantity(counts.bidones)} bidones o garrafas,{" "}
             {formatQuantity(counts.cajas)} cajas, {formatQuantity(counts.piezas)} piezas
-            {charges.publicityAmount ? `, publicidad ${formatMoney(charges.publicityAmount)}` : ""}
-            {charges.shippingAmount ? `, envío ${formatMoney(charges.shippingAmount)}` : ""})
+            {charges.publicityAmount && !form?.amountsHidden ? (canSeeCosts ? `, publicidad ${formatMoney(charges.publicityAmount)}` : ", publicidad del mes") : ""}
+            {charges.shippingAmount ? (canSeeCosts ? `, envío ${formatMoney(charges.shippingAmount)}` : ", envío") : ""})
             {canSeeCosts ? (
               <>
                 {" "}por <strong>{formatMoney(grandTotal)}</strong>

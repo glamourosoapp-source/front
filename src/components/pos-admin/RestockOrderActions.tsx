@@ -22,7 +22,8 @@ import { restockCancelBlocker } from "@glamouroso/shared/pos-restock";
 import { config } from "@/config";
 import { httpClient, getApiErrorMessage } from "@/services/http-client";
 import type { RestockOrder } from "@/types";
-import { approvedRestockMessage, formatDateTime, restockOrderSheetHref, restockReviewHref } from "./pos-labels";
+import { approvedRestockMessage, formatDateTime } from "./pos-labels";
+import { usePosLinks } from "./pos-links";
 import { RestockSendDialog } from "./RestockSendDialog";
 import { useFactoryFormDownload } from "./useFactoryFormDownload";
 
@@ -89,6 +90,7 @@ export function RestockOrderActions({
   const [sending, setSending] = useState(false);
   const [busy, setBusy] = useState(false);
   const { download, downloading } = useFactoryFormDownload();
+  const links = usePosLinks();
 
   const factoryOn = config.factoryModuleEnabled;
   const isFranchise = order.origin === RESTOCK_ORIGIN.FRANCHISE || order.branch?.type === "franchise";
@@ -150,7 +152,7 @@ export function RestockOrderActions({
         variant="contained"
         startIcon={<Send size={14} />}
         component={Link}
-        href={restockReviewHref(order.branchId)}
+        href={links.review(order.branchId)}
         title="Revisa el pedido y envíalo a fábrica; se descarga su PDF para mandárselo"
       >
         Revisar y enviar
@@ -164,7 +166,7 @@ export function RestockOrderActions({
         color="success"
         startIcon={<PackagePlus size={14} />}
         component={Link}
-        href={restockArrivalHref(order)}
+        href={links.arrival(order)}
         title="Captura lo que llegó, precargado con este pedido: queda recibido y sube al inventario"
       >
         Recibir
@@ -189,7 +191,7 @@ export function RestockOrderActions({
   const menuItems: React.ReactNode[] = [];
   if (!inSheet) {
     menuItems.push(
-      <MenuItem key="view" component={Link} href={restockOrderSheetHref(order.id)} onClick={closeMenu}>
+      <MenuItem key="view" component={Link} href={links.orderSheet(order.id)} onClick={closeMenu}>
         <ListItemIcon><Eye size={16} /></ListItemIcon>
         <ListItemText>Ver pedido</ListItemText>
       </MenuItem>,
@@ -211,7 +213,7 @@ export function RestockOrderActions({
   }
   if (!factoryOn && pending && dispatch) {
     menuItems.push(
-      <MenuItem key="arrival" component={Link} href={restockArrivalHref(order)} onClick={closeMenu}>
+      <MenuItem key="arrival" component={Link} href={links.arrival(order)} onClick={closeMenu}>
         <ListItemIcon><PackagePlus size={16} /></ListItemIcon>
         <ListItemText primary="Recibir" secondary="Si ya llegó sin haberlo enviado aquí" />
       </MenuItem>
@@ -219,7 +221,7 @@ export function RestockOrderActions({
   }
   if (factoryOn && open && dispatch) {
     menuItems.push(
-      <MenuItem key="arrival" component={Link} href={restockArrivalHref(order)} onClick={closeMenu}>
+      <MenuItem key="arrival" component={Link} href={links.arrival(order)} onClick={closeMenu}>
         <ListItemIcon><PackagePlus size={16} /></ListItemIcon>
         <ListItemText>Registrar llegada</ListItemText>
       </MenuItem>,
@@ -233,7 +235,7 @@ export function RestockOrderActions({
         <ListItemIcon><Send size={16} /></ListItemIcon>
         <ListItemText>Enviado a sucursal</ListItemText>
       </MenuItem>,
-      <MenuItem key="edit" component={Link} href={restockOrderSheetHref(order.id, true)} onClick={closeMenu}>
+      <MenuItem key="edit" component={Link} href={links.orderSheet(order.id, true)} onClick={closeMenu}>
         <ListItemIcon><Pencil size={16} /></ListItemIcon>
         <ListItemText>Editar envío</ListItemText>
       </MenuItem>
@@ -241,7 +243,7 @@ export function RestockOrderActions({
   }
   if (canCorrect) {
     menuItems.push(
-      <MenuItem key="correct" component={Link} href={restockOrderSheetHref(order.id, true)} onClick={closeMenu}>
+      <MenuItem key="correct" component={Link} href={links.orderSheet(order.id, true)} onClick={closeMenu}>
         <ListItemIcon><Pencil size={16} /></ListItemIcon>
         <ListItemText
           primary={factoryOn ? "Corregir envío" : "Corregir lo recibido"}
@@ -349,7 +351,7 @@ export function RestockOrderActions({
       {sending ? (
         <RestockSendDialog
           order={order}
-          editHref={restockOrderSheetHref(order.id, true)}
+          editHref={links.orderSheet(order.id, true)}
           onClose={() => setSending(false)}
           onSent={() => {
             setSending(false);
