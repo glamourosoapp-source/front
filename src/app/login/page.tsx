@@ -1,17 +1,33 @@
 "use client";
 
-import { FormEvent, useState } from "react";
-import { useRouter } from "next/navigation";
+import { FormEvent, Suspense, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { Sparkles } from "lucide-react";
 import { useAuthStore } from "@/stores/auth.store";
 import { landingRouteFor } from "@/lib/permissions";
 import { resolvePermissions } from "@glamouroso/shared";
 import { getApiErrorMessage } from "@/services/http-client";
+import { canUseSupervisorApp, clearSession } from "@/lib/session";
 import "./login.css";
 
+/**
+ * Con `?app=supervisor` es el login de la app del supervisor de caja: guarda
+ * la sesión en su propia llave (`lib/session.ts`), así que entrar en la PC de
+ * la tienda no cierra la caja del cajero. Solo acepta usuarios con esa app.
+ */
 export default function LoginPage() {
+  return (
+    <Suspense fallback={null}>
+      <LoginForm />
+    </Suspense>
+  );
+}
+
+function LoginForm() {
   const router = useRouter();
+  const supervisorApp = useSearchParams().get("app") === "supervisor";
   const login = useAuthStore((s) => s.login);
+  const logout = useAuthStore((s) => s.logout);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
@@ -21,6 +37,19 @@ export default function LoginPage() {
     setLoading(true);
     const form = new FormData(event.currentTarget);
     try {
+      if (supervisorApp) {
+        await login(String(form.get("email")), String(form.get("password")), { space: "supervisor" });
+        if (!canUseSupervisorApp(useAuthStore.getState().user)) {
+          // Un cajero que escribe aquí sus datos no se queda con sesión de supervisor.
+          logout();
+          clearSession("supervisor");
+          setError("Este usuario no tiene la app de supervisor de caja.");
+          setLoading(false);
+          return;
+        }
+        router.push("/supervisor");
+        return;
+      }
       await login(String(form.get("email")), String(form.get("password")));
       // Un cajero, fábrica o franquicia no tienen dashboard: entran a su propia
       // pantalla. El resto sigue aterrizando en /dashboard como siempre.
@@ -71,8 +100,12 @@ export default function LoginPage() {
             alt="Glamouroso"
           />
           <div>
-            <h2 className="page-title login-card-title">Bienvenido de nuevo</h2>
-            <p className="page-kicker">Ingresa a tu panel de pedidos, clientes y WhatsApp IA.</p>
+            <h2 className="page-title login-card-title">{supervisorApp ? "Supervisor de caja" : "Bienvenido de nuevo"}</h2>
+            <p className="page-kicker">
+              {supervisorApp
+                ? "Entra con tu usuario de supervisor. Si en esta computadora está abierta la caja, sigue abierta con su cajero."
+                : "Ingresa a tu panel de pedidos, clientes y WhatsApp IA."}
+            </p>
           </div>
 
           <input className="input" name="email" placeholder="Correo" type="email" required />

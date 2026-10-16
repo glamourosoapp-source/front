@@ -3,6 +3,7 @@
 import { config } from "@/config";
 import { REALTIME_WS_PATH } from "@glamouroso/shared";
 import type { RealtimeServerEvent } from "@glamouroso/shared";
+import { activeToken } from "@/lib/session";
 
 export type ConnectionState = "connecting" | "open" | "closed";
 
@@ -36,7 +37,7 @@ class RealtimeClient {
     if (this.ws && (this.ws.readyState === WebSocket.OPEN || this.ws.readyState === WebSocket.CONNECTING)) {
       return;
     }
-    const token = localStorage.getItem("token");
+    const token = activeToken();
     if (!token) return;
 
     this.setState("connecting");

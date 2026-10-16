@@ -19,6 +19,7 @@ import { Check, Eye, EyeOff, X } from "lucide-react";
 import { evaluatePasswordRules, isStrongPassword } from "@glamouroso/shared/schemas/auth";
 import { httpClient, getApiErrorMessage } from "@/services/http-client";
 import { useAuthStore } from "@/stores/auth.store";
+import { loginRoute } from "@/lib/session";
 import { User } from "@/types";
 import { toast } from "sonner";
 
@@ -159,8 +160,10 @@ export function ForcePasswordChangeDialog({ open }: { open: boolean }) {
         <DialogActions>
           <Button
             onClick={() => {
+              // Al login de su app: en /supervisor, el del supervisor.
+              const target = loginRoute();
               logout();
-              router.push("/login");
+              router.push(target);
             }}
           >
             Cerrar sesión

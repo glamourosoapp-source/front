@@ -3,6 +3,7 @@
 import axios, { AxiosInstance } from "axios";
 import type { ApiResponse } from "@glamouroso/shared";
 import { config } from "@/config";
+import { activeSpace, activeToken, activeUserRaw, clearSession, loginRoute, writeSessionToken } from "@/lib/session";
 
 class HttpClient {
   private api: AxiosInstance;
@@ -10,7 +11,8 @@ class HttpClient {
   constructor() {
     this.api = axios.create({ baseURL: config.apiBaseUrl, headers: { "Content-Type": "application/json" } });
     this.api.interceptors.request.use((request) => {
-      const token = typeof window !== "undefined" ? localStorage.getItem("token") : null;
+      // La sesión de esta pantalla: la principal, o la del supervisor en /supervisor (ver lib/session.ts).
+      const token = typeof window !== "undefined" ? activeToken() : null;
       if (token) request.headers.Authorization = `Bearer ${token}`;
       if (typeof window !== "undefined") {
         const organizationId = this.readOrganizationId();
@@ -24,7 +26,7 @@ class HttpClient {
         // sucursal (la caja): se guarda para que no caduque mientras se use.
         const renewed = response.headers?.["x-renewed-token"];
         if (typeof renewed === "string" && renewed && typeof window !== "undefined") {
-          localStorage.setItem("token", renewed);
+          writeSessionToken(activeSpace(), renewed);
         }
         return response;
       },
@@ -34,9 +36,9 @@ class HttpClient {
         const url: string = error.config?.url ?? "";
         const isAuthAttempt = url.includes("/auth/login") || url.includes("/auth/register");
         if (error.response?.status === 401 && !isAuthAttempt && typeof window !== "undefined") {
-          localStorage.removeItem("token");
-          localStorage.removeItem("user");
-          window.location.href = "/login";
+          // Solo la sesión de esta pantalla: un 401 del supervisor no cierra la caja.
+          clearSession(activeSpace());
+          window.location.href = loginRoute();
         }
         return Promise.reject(error);
       }
@@ -45,7 +47,7 @@ class HttpClient {
 
   private readOrganizationId(): string | null {
     try {
-      const raw = localStorage.getItem("user");
+      const raw = activeUserRaw();
       if (!raw) return null;
       const user = JSON.parse(raw) as { organizationId?: string };
       return user?.organizationId ?? null;

@@ -40,9 +40,11 @@ export default function SupervisorShell({ children }: { children: ReactNode }) {
     void Promise.resolve(hydrate()).finally(() => setChecked(true));
   }, [hydrate]);
 
+  // Su propia sesión (lib/session.ts): sin ella, a su login, aunque el
+  // navegador tenga abierta la caja con el cajero.
   useEffect(() => {
-    if (!window.localStorage.getItem("token") && !isAuthenticated) router.push("/login");
-  }, [isAuthenticated, router]);
+    if (checked && !isAuthenticated) router.replace("/login?app=supervisor");
+  }, [checked, isAuthenticated, router]);
 
   if (!checked || !user) {
     return <main className="sup-center">Cargando…</main>;
@@ -94,7 +96,7 @@ export default function SupervisorShell({ children }: { children: ReactNode }) {
               className="sup-logout"
               onClick={() => {
                 logout();
-                router.push("/login");
+                router.push("/login?app=supervisor");
               }}
               aria-label="Salir"
               title="Salir"
