@@ -5,9 +5,9 @@ import Link from "next/link";
 import { AlertTriangle, ChevronRight, Clock, RefreshCw, Search, Store } from "lucide-react";
 import { toast } from "sonner";
 import { BRANCH_TYPES } from "@glamouroso/shared/constants";
-import type { StoreDayEvaluation } from "@glamouroso/shared";
 import { httpClient, getApiErrorMessage } from "@/services/http-client";
 import { storeTime } from "@/components/pos-admin/BranchStoreTodayCell";
+import { StoreLight } from "@/components/pos-admin/BranchListPage";
 import type { BranchStats } from "@/types";
 
 type Filter = "all" | "open" | "closed" | "not_opened";
@@ -25,27 +25,25 @@ function scheduleTime(hhmm: string): string {
   return at.toLocaleTimeString("es-MX", { hour: "numeric", minute: "2-digit" });
 }
 
-function statusLabel(day: StoreDayEvaluation | null): string {
-  if (!day) return "Sin datos";
-  if (day.status === "open") return "Abierta";
-  if (day.status === "closed") return "Cerrada";
-  return day.hasSchedule && !day.hours ? "Descanso" : "Sin abrir";
-}
-
 function BranchCard({ row }: { row: BranchStats }) {
   const day = row.storeToday;
   const status = day?.status ?? "not_opened";
   return (
     <article className={`sup-card sup-branch is-${status}`}>
       <div className="sup-branch-head">
-        <span className={`sup-light is-${status}`} aria-hidden>
-          <Store size={16} />
-        </span>
+        {/* El mismo foco con ondas de Sucursales en el panel: verde abierta, rojo cerrada o sin abrir. */}
+        {day ? (
+          <StoreLight day={day} />
+        ) : (
+          <span className="sup-light" aria-hidden>
+            <Store size={16} />
+          </span>
+        )}
         <div className="sup-branch-name">
           <strong>{row.name}</strong>
           <small>{[row.code, row.city].filter(Boolean).join(" · ")}</small>
         </div>
-        <span className={`sup-pill is-${status}`}>{statusLabel(day)}</span>
+        {day ? null : <span className="sup-pill">Sin datos</span>}
       </div>
 
       <dl className="sup-times">

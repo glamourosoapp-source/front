@@ -34,7 +34,7 @@ function RowStat({ label, value, note, total }: { label: string; value: string; 
  * Foco de la tienda: verde con ondas mientras está abierta, rojo si no ha
  * abierto o ya cerró. Es lo primero que se busca al recorrer la lista.
  */
-function StoreLight({ day }: { day: StoreDayEvaluation }) {
+export function StoreLight({ day }: { day: StoreDayEvaluation }) {
   const open = day.status === "open";
   const label = open ? "Abierta" : day.status === "closed" ? "Cerrada" : "Sin abrir";
   const title = open
