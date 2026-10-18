@@ -1,7 +1,11 @@
 import type { ContainerMaterial } from "./constants";
 import type {
+  AbcClass,
   BranchType,
   FactoryReturnReason,
+  InventoryCountItemStatus,
+  InventoryCountSelection,
+  InventoryCountStatus,
   InventoryMovementType,
   NotificationType,
   PosPaymentMethod,
@@ -1070,4 +1074,107 @@ export interface RestockOrdersChangedEvent {
   action: "created" | "updated" | "sent" | "received" | "cancelled";
   branchId: string;
   restockOrderId: string;
+}
+
+/**
+ * Un renglón de un conteo cíclico. Ciego: mientras el conteo está abierto no
+ * trae lo esperado; al cerrar, quien no ve existencias (`posInventory`) recibe
+ * solo la diferencia, y quien no ve montos (supervisor) recibe `varianceAmount`
+ * en `null`.
+ */
+export interface InventoryCountItem {
+  id: string;
+  countId: string;
+  lineId: string | null;
+  productId: string | null;
+  name: string;
+  sku?: string | null;
+  /** `liters` para líneas de líquido, `pieces` para productos (envases y tapas incluidos). */
+  unit: "liters" | "pieces";
+  /** Litros por bidón/garrafa o piezas por caja: para capturar "envases llenos + abierto". */
+  packSize: number;
+  /** "bidón", "garrafa", "caja", "pieza"… */
+  packLabel: string;
+  /** Envase, tapa o similar (categoría Envase o producto de una regla de envase de la caja). */
+  isContainer: boolean;
+  abcClass: AbcClass;
+  selectionReason: InventoryCountSelection;
+  countedQty: number | null;
+  countedAt: string | null;
+  recountQty: number | null;
+  recountedAt: string | null;
+  /** Fuera de tolerancia con el primer conteo: hay que recontar antes de cerrar. */
+  needsRecount: boolean;
+  /** Lo esperado a la hora del conteo; null si el conteo sigue abierto o si quien pregunta no ve existencias. */
+  expectedQty: number | null;
+  /** Contado (o recontado) − esperado; null mientras está abierto. */
+  varianceQty: number | null;
+  /** Diferencia a precio de tienda; null para quien no ve montos. */
+  varianceAmount: number | null;
+  status: InventoryCountItemStatus;
+  revertedAt?: string | null;
+  revertReason?: string | null;
+}
+
+export interface InventoryCount {
+  id: string;
+  organizationId?: string;
+  branchId: string;
+  branch?: { id: string; code: string; name: string } | null;
+  status: InventoryCountStatus;
+  kind: "random";
+  startedBy: string | null;
+  startedByUser?: { id: string; name: string } | null;
+  startedAt: string;
+  closedAt: string | null;
+  closedBy: string | null;
+  closedByUser?: { id: string; name: string } | null;
+  cancelledAt?: string | null;
+  /** La caja tenía ventas sin subir al cerrar: la diferencia se recalcula al sincronizar. */
+  pendingSync: boolean;
+  notes: string | null;
+  items?: InventoryCountItem[];
+  /** Renglones contados / total (en listados, sin `items`). */
+  countedItems?: number;
+  totalItems?: number;
+  /** Renglones cuyo ajuste revirtió el administrador. */
+  revertedItems?: number;
+  /** Renglones del conteo cerrado con diferencia distinta de 0 (ajustados o revertidos). */
+  varianceItems?: number;
+  /** % (0–100, 1 decimal) de renglones dentro de tolerancia al cerrar (exactitud del conteo); null si está abierto. */
+  accuracy?: number | null;
+  /** Suma de diferencias a precio de tienda (negativo = merma); null para quien no ve montos. */
+  netVarianceAmount?: number | null;
+}
+
+/** Indicadores de conteos por sucursal en un periodo (panel). */
+export interface InventoryCountBranchStats {
+  branchId: string;
+  code: string;
+  name: string;
+  counts: number;
+  itemsCounted: number;
+  /** % (0–100, 1 decimal) de renglones dentro de tolerancia en el periodo. */
+  accuracy: number | null;
+  /** Merma neta a precio de tienda (negativo = faltante). */
+  netVarianceAmount: number;
+  /** % (0–100, 1 decimal) del catálogo de la sucursal contado en el periodo. */
+  coverage: number | null;
+  lastCountAt: string | null;
+}
+
+export interface InventoryCountStats {
+  from: string;
+  to: string;
+  branches: InventoryCountBranchStats[];
+  /** Productos con más diferencia en el periodo (por valor absoluto en pesos). */
+  topVariances: Array<{
+    lineId: string | null;
+    productId: string | null;
+    name: string;
+    unit: "liters" | "pieces";
+    varianceQty: number;
+    varianceAmount: number;
+    counts: number;
+  }>;
 }

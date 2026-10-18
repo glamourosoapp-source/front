@@ -3,7 +3,7 @@
 import { ReactNode, useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { LogOut, ShieldAlert, Store, Truck } from "lucide-react";
+import { ClipboardCheck, LogOut, ShieldAlert, Store, Truck } from "lucide-react";
 import { RealtimeProvider } from "@/components/realtime/RealtimeProvider";
 import { ForcePasswordChangeDialog } from "@/components/auth/ForcePasswordChangeDialog";
 import { PosLinksProvider, SUPERVISOR_POS_LINKS } from "@/components/pos-admin/pos-links";
@@ -14,6 +14,8 @@ import "./supervisor.css";
 const NAV = [
   { href: "/supervisor", label: "Sucursales", icon: Store },
   { href: "/supervisor/pedidos", label: "Pedidos", icon: Truck },
+  // Solo con el permiso de conteos (perfil Supervisor de caja desde la migración de conteos).
+  { href: "/supervisor/conteos", label: "Conteos", icon: ClipboardCheck, module: "posCounts" },
 ] as const;
 
 function isActive(pathname: string, href: string): boolean {
@@ -22,9 +24,10 @@ function isActive(pathname: string, href: string): boolean {
 
 /**
  * Marco de la app del supervisor: barra de arriba con el logo y, para
- * moverse, dos secciones (Sucursales y Pedidos). En el celular la navegación
- * baja a una barra fija abajo, al alcance del pulgar; dentro de un pedido se
- * esconde para dejarle la pantalla a la hoja y a su barra de enviar.
+ * moverse, tres secciones (Sucursales, Pedidos y Conteos). En el celular la
+ * navegación baja a una barra fija abajo, al alcance del pulgar; dentro de un
+ * pedido o de un conteo se esconde para dejarle la pantalla a la hoja y a su
+ * barra de enviar o de cerrar.
  */
 export default function SupervisorShell({ children }: { children: ReactNode }) {
   const router = useRouter();
@@ -68,8 +71,9 @@ export default function SupervisorShell({ children }: { children: ReactNode }) {
     );
   }
 
-  // Dentro de un pedido (revisar o ver la hoja) la barra de abajo estorba.
-  const inOrder = pathname.startsWith("/supervisor/pedidos/");
+  // Dentro de un pedido (revisar o ver la hoja) o de un conteo la barra de abajo estorba.
+  const inOrder = pathname.startsWith("/supervisor/pedidos/") || pathname.startsWith("/supervisor/conteos/");
+  const nav = NAV.filter((item) => !("module" in item) || can(item.module, "view"));
 
   return (
     <RealtimeProvider>
@@ -84,7 +88,7 @@ export default function SupervisorShell({ children }: { children: ReactNode }) {
               </span>
             </Link>
             <nav className="sup-nav" aria-label="Secciones">
-              {NAV.map(({ href, label, icon: Icon }) => (
+              {nav.map(({ href, label, icon: Icon }) => (
                 <Link key={href} href={href} className={isActive(pathname, href) ? "is-active" : undefined}>
                   <Icon size={18} />
                   <span>{label}</span>

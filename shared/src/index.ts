@@ -11,6 +11,7 @@ export * from "./pos-health";
 export * from "./pos-sync";
 export * from "./pos-stock-sheet";
 export * from "./pos-store-hours";
+export * from "./pos-counts";
 export * from "./utils/customer-address";
 export * from "./utils/customer-billing";
 export * from "./utils/delivery-schedule";

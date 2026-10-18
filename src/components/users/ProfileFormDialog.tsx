@@ -49,6 +49,8 @@ const MODULE_ACTIONS: Partial<Record<PermissionModule, readonly PermissionAction
   orderPrint: ["view"],
   customerFollowup: ["view"],
   posSupervisor: ["view"],
+  // view/create = contar y cerrar (supervisor); update = revertir ajustes y ver indicadores (admin).
+  posCounts: ["view", "create", "update"],
 };
 
 const actionApplies = (module: PermissionModule, action: PermissionAction) =>

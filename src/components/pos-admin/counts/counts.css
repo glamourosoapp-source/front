@@ -1,0 +1,257 @@
+/* ---- Conteos cíclicos del panel (Punto de venta → Conteos) ----
+
+   Mismas tarjetas que Sucursales y Cortes (`.pos-day .pos-cut .pos-branch`):
+   la luz de la izquierda dice el estado del conteo y, ya cerrado, qué tan
+   exacto salió. Plan: docs/exec-plans/active/pos-inventarios-ciclicos.md. */
+
+.count-rows {
+  display: grid;
+  gap: 12px;
+}
+
+/* Luz del conteo: solo late el que sigue en curso. */
+.count-light.is-progress {
+  --light: #0284c7;
+  --light-soft: #e0f2fe;
+}
+
+.count-light.is-good {
+  --light: #16a34a;
+  --light-soft: #dcfce7;
+}
+
+.count-light.is-warn {
+  --light: #d97706;
+  --light-soft: #fef3c7;
+}
+
+.count-light.is-bad {
+  --light: #dc2626;
+  --light-soft: #fee2e2;
+}
+
+.count-light.is-none,
+.count-light.is-cancelled {
+  --light: #94a3b8;
+  --light-soft: #f1f5f9;
+}
+
+.count-light:not(.is-progress) .store-light-dot::before,
+.count-light:not(.is-progress) .store-light-dot::after {
+  animation: none;
+  opacity: 0;
+}
+
+.count-card.is-cancelled {
+  opacity: 0.75;
+}
+
+.count-card .pos-day-weekday {
+  flex-wrap: wrap;
+}
+
+.count-sync-badge {
+  background: #fef3c7 !important;
+  color: #92400e !important;
+}
+
+.count-negative {
+  color: #c62828 !important;
+}
+
+.count-positive {
+  color: #15803d !important;
+}
+
+.count-sync-note {
+  color: #92400e;
+}
+
+/* ---- Tablas: scroll horizontal propio, nunca de la página ---- */
+.counts-table-wrap {
+  max-width: 100%;
+  overflow-x: auto;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--card, #fff);
+  box-shadow: var(--shadow-sm);
+  -webkit-overflow-scrolling: touch;
+}
+
+.counts-table-wrap .table {
+  min-width: 760px;
+  border: 0;
+  border-radius: 0;
+}
+
+.counts-table-wrap .table th,
+.counts-table-wrap .table td {
+  white-space: nowrap;
+  vertical-align: middle;
+}
+
+.counts-table-wrap .table td.is-num,
+.counts-table-wrap .table th.is-num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.counts-table-wrap .table tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+.counts-table-wrap .table tr.is-reverted td {
+  color: var(--muted);
+  background: #fafbfd;
+}
+
+.counts-table-wrap .table tr.is-reverted td.count-name b {
+  text-decoration: line-through;
+  text-decoration-color: rgba(100, 116, 139, 0.5);
+}
+
+.count-name {
+  display: grid;
+  gap: 2px;
+  min-width: 200px;
+  white-space: normal !important;
+}
+
+.count-name b {
+  color: var(--glam-navy);
+  font-weight: 600;
+}
+
+.count-name small {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.count-abc {
+  display: inline-grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.count-abc.is-A {
+  background: var(--glam-navy);
+  color: #fff;
+}
+
+.count-abc.is-B {
+  background: var(--soft-blue);
+  color: var(--glam-navy);
+}
+
+.count-abc.is-C {
+  background: #f1f5f9;
+  color: var(--muted);
+}
+
+/* Barra de exactitud / cobertura dentro de la tabla de indicadores. */
+.count-meter {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 130px;
+}
+
+.count-meter-bar {
+  flex: 1;
+  height: 6px;
+  border-radius: 999px;
+  background: var(--border);
+  overflow: hidden;
+}
+
+.count-meter-bar > i {
+  display: block;
+  height: 100%;
+  border-radius: 999px;
+  background: var(--glam-blue);
+}
+
+.count-meter-bar.is-good > i {
+  background: #16a34a;
+}
+
+.count-meter-bar.is-warn > i {
+  background: #d97706;
+}
+
+.count-meter-bar.is-bad > i {
+  background: #dc2626;
+}
+
+.count-meter b {
+  min-width: 44px;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.counts-table-wrap .table tr.clickable-row {
+  cursor: pointer;
+}
+
+.count-section-title {
+  margin: 4px 0 0;
+  color: var(--glam-navy);
+  font-size: 16px;
+  font-weight: 700;
+}
+
+.count-head-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.count-progress {
+  display: grid;
+  gap: 8px;
+}
+
+.count-progress-bar {
+  height: 10px;
+  border-radius: 999px;
+  background: var(--border);
+  overflow: hidden;
+}
+
+.count-progress-bar > i {
+  display: block;
+  height: 100%;
+  border-radius: 999px;
+  background: var(--glam-blue);
+  transition: width 200ms ease;
+}
+
+.count-notes {
+  margin: 0;
+  white-space: pre-wrap;
+}
+
+.count-load-more {
+  display: flex;
+  justify-content: center;
+}
+
+@media (max-width: 640px) {
+  .counts-table-wrap .table th,
+  .counts-table-wrap .table td {
+    padding: 10px;
+    font-size: 13px;
+  }
+}
+
+/* En tablet las cuatro cifras van de dos en dos (el panel las apila de una en una bajo 1180 px). */
+@media (min-width: 560px) and (max-width: 1180px) {
+  .grid.counts-metrics {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}

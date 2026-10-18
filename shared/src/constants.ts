@@ -337,6 +337,58 @@ export const INVENTORY_MOVEMENT_TYPES = {
   FACTORY_RETURN: "factory_return",
   /** Lo que un cliente regresó en buen estado y vuelve al anaquel. */
   CUSTOMER_RETURN: "customer_return",
+  /** Diferencia de un conteo cíclico (o su reversa), ligada al renglón del conteo. */
+  COUNT_ADJUSTMENT: "count_adjustment",
+} as const;
+
+/**
+ * Conteos cíclicos (inventarios aleatorios) de una sucursal: el supervisor
+ * cuenta a ciegas una lista sorpresa y, al cerrar, la diferencia se ajusta por
+ * kardex. Plan: docs/exec-plans/active/pos-inventarios-ciclicos.md.
+ */
+export const INVENTORY_COUNT_STATUS = {
+  IN_PROGRESS: "in_progress",
+  CLOSED: "closed",
+  CANCELLED: "cancelled",
+} as const;
+
+export const INVENTORY_COUNT_ITEM_STATUS = {
+  /** Sin cerrar el conteo (contado o no). */
+  PENDING: "pending",
+  /** El cierre aplicó la diferencia al inventario (puede ser 0). */
+  ADJUSTED: "adjusted",
+  /** El administrador revirtió el ajuste con un movimiento contrario. */
+  REVERTED: "reverted",
+} as const;
+
+/** Por qué entró un renglón a la lista. */
+export const INVENTORY_COUNT_SELECTION = {
+  /** Le toca por su clase ABC (o nunca se ha contado). */
+  DUE: "due",
+  /** Diferencias previas o existencia negativa. */
+  RISK: "risk",
+  /** Puro azar, para que la lista no se pueda adivinar. */
+  RANDOM: "random",
+} as const;
+
+export const INVENTORY_COUNT_DEFAULTS = {
+  /** Renglones por conteo (decisión D2 del 2026-10-17). */
+  ITEMS: 30,
+  /** Reparto de la lista: vencidos, riesgo y azar (el resto). */
+  DUE_SHARE: 0.6,
+  RISK_SHARE: 0.2,
+  /** Un renglón contado hace menos de esto no se repite (salvo riesgo). */
+  RECENT_DAYS: 7,
+  /** Ventana de venta para la clase ABC (decisión D6). */
+  ABC_WINDOW_DAYS: 90,
+  /** Corte acumulado de la venta: A hasta 80 %, B hasta 95 %, C el resto. */
+  ABC_A_CUTOFF: 0.8,
+  ABC_B_CUTOFF: 0.95,
+  /** Cada cuántos días le toca contarse a cada clase. */
+  FREQUENCY_DAYS: { A: 30, B: 60, C: 90 },
+  /** Tolerancia de reconteo (decisión D4): ±1 L o ±1 pieza, o ±2 %, lo que sea mayor. */
+  TOLERANCE_UNITS: 1,
+  TOLERANCE_RATIO: 0.02,
 } as const;
 
 /**
@@ -457,6 +509,7 @@ export const PERMISSION_MODULES = [
   { key: "posReturns", label: "POS: devoluciones a fábrica" },
   { key: "posCustomerReturns", label: "POS: devoluciones de cliente" },
   { key: "posSupervisor", label: "POS: app de supervisor de caja" },
+  { key: "posCounts", label: "POS: conteos de inventario" },
   { key: "factory", label: "Fábrica: pedidos por enviar" },
   { key: "franchise", label: "Franquicia: pedidos a fábrica" },
 ] as const;
@@ -503,6 +556,12 @@ export type PosSaleUnit = (typeof POS_SALE_UNITS)[keyof typeof POS_SALE_UNITS];
 export type InventoryMovementType =
   (typeof INVENTORY_MOVEMENT_TYPES)[keyof typeof INVENTORY_MOVEMENT_TYPES];
 export type RestockOrigin = (typeof RESTOCK_ORIGIN)[keyof typeof RESTOCK_ORIGIN];
+export type InventoryCountStatus = (typeof INVENTORY_COUNT_STATUS)[keyof typeof INVENTORY_COUNT_STATUS];
+export type InventoryCountItemStatus =
+  (typeof INVENTORY_COUNT_ITEM_STATUS)[keyof typeof INVENTORY_COUNT_ITEM_STATUS];
+export type InventoryCountSelection =
+  (typeof INVENTORY_COUNT_SELECTION)[keyof typeof INVENTORY_COUNT_SELECTION];
+export type AbcClass = "A" | "B" | "C";
 export type RestockOrderStatus =
   (typeof RESTOCK_ORDER_STATUS)[keyof typeof RESTOCK_ORDER_STATUS];
 export type RestockItemUnit = (typeof RESTOCK_ITEM_UNITS)[keyof typeof RESTOCK_ITEM_UNITS];

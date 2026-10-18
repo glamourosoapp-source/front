@@ -8,6 +8,7 @@ import { BRANCH_TYPES } from "@glamouroso/shared/constants";
 import { httpClient, getApiErrorMessage } from "@/services/http-client";
 import { storeTime } from "@/components/pos-admin/BranchStoreTodayCell";
 import { StoreLight } from "@/components/pos-admin/BranchListPage";
+import { usePermissions } from "@/lib/permissions";
 import type { BranchStats } from "@/types";
 
 type Filter = "all" | "open" | "closed" | "not_opened";
@@ -25,7 +26,7 @@ function scheduleTime(hhmm: string): string {
   return at.toLocaleTimeString("es-MX", { hour: "numeric", minute: "2-digit" });
 }
 
-function BranchCard({ row }: { row: BranchStats }) {
+function BranchCard({ row, canCount }: { row: BranchStats; canCount: boolean }) {
   const day = row.storeToday;
   const status = day?.status ?? "not_opened";
   return (
@@ -83,10 +84,19 @@ function BranchCard({ row }: { row: BranchStats }) {
         </div>
       ) : null}
 
-      <Link href={`/supervisor/pedidos/${row.branchId}`} className="sup-card-link">
-        Pedido a fábrica
-        <ChevronRight size={16} />
-      </Link>
+      <div className="sup-card-links">
+        <Link href={`/supervisor/pedidos/${row.branchId}`} className="sup-card-link">
+          Pedido a fábrica
+          <ChevronRight size={16} />
+        </Link>
+        {/* Conteos abre el de esta sucursal: continúa el que está en curso o confirma el inicio. */}
+        {canCount ? (
+          <Link href={`/supervisor/conteos?sucursal=${row.branchId}`} className="sup-card-link">
+            Contar inventario
+            <ChevronRight size={16} />
+          </Link>
+        ) : null}
+      </div>
     </article>
   );
 }
@@ -97,6 +107,8 @@ function BranchCard({ row }: { row: BranchStats }) {
  * han abierto, con su horario. Se refresca sola cada minuto.
  */
 export function SupervisorBranchesPage() {
+  const { can } = usePermissions();
+  const canCount = can("posCounts", "create");
   const [rows, setRows] = useState<BranchStats[]>([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<Filter>("all");
@@ -221,7 +233,7 @@ export function SupervisorBranchesPage() {
 
       <div className="sup-grid">
         {shown.map((row) => (
-          <BranchCard key={row.branchId} row={row} />
+          <BranchCard key={row.branchId} row={row} canCount={canCount} />
         ))}
       </div>
     </div>
