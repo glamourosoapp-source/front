@@ -65,4 +65,8 @@ export const queryCustomerSchema = paginationSchema.extend({
   tag: optionalString,
   zone: optionalString,
   teamId: z.union([z.string().uuid(), z.literal(""), z.null()]).optional(),
+  /** "branch": solo los clientes que registró una caja (vista Clientes de sucursal). */
+  origin: z.union([z.literal("branch"), z.literal(""), z.null()]).optional(),
+  /** Sucursal donde la caja registró al cliente. */
+  originBranchId: z.union([z.string().uuid(), z.literal(""), z.null()]).optional(),
 });

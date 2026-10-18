@@ -115,6 +115,7 @@ const sections: NavSection[] = [
     label: "Punto de venta",
     links: [
       { href: "/dashboard/pos/sucursales", label: "Sucursales", icon: Store, module: "posBranches" },
+      { href: "/dashboard/pos/clientes", label: "Clientes de sucursal", icon: Users, module: "customers" },
       { href: "/dashboard/pos/surtido", label: "Faltantes y surtido", icon: Truck, module: "posRestock" },
       { href: "/dashboard/pos/inventario", label: "Inventario", icon: Warehouse, module: "posInventory" },
       { href: "/dashboard/pos/conteos", label: "Conteos", icon: ClipboardCheck, module: "posCounts" },

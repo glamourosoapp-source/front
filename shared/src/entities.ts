@@ -107,6 +107,10 @@ export interface Customer {
   creator?: { id: string; name: string } | null;
   teamId?: string | null;
   team?: Team | null;
+  /** Sucursal donde la caja registró al cliente; null para los del CRM. */
+  originBranchId?: string | null;
+  originBranch?: Pick<Branch, "id" | "code" | "name"> | null;
+  createdAt?: string;
   tags?: Array<{ id: string; name: string; color: string }>;
   locations?: CustomerLocation[];
 }
