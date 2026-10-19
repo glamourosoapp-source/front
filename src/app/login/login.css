@@ -188,3 +188,11 @@
     margin-top: 12px;
   }
 }
+
+.login-switch {
+  align-self: center;
+  color: var(--glam-navy);
+  font-size: 13px;
+  font-weight: 600;
+  text-decoration: underline;
+}

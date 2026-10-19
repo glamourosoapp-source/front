@@ -7,13 +7,14 @@ import { useAuthStore } from "@/stores/auth.store";
 import { landingRouteFor } from "@/lib/permissions";
 import { resolvePermissions } from "@glamouroso/shared";
 import { getApiErrorMessage } from "@/services/http-client";
-import { canUseSupervisorApp, clearSession } from "@/lib/session";
+import { canUseSupervisorApp } from "@/lib/session";
 import "./login.css";
 
 /**
  * Con `?app=supervisor` es el login de la app del supervisor de caja: guarda
  * la sesión en su propia llave (`lib/session.ts`), así que entrar en la PC de
- * la tienda no cierra la caja del cajero. Solo acepta usuarios con esa app.
+ * la tienda no cierra la caja del cajero. Quien no tiene esa app (un cajero)
+ * entra normal a su pantalla con la sesión principal.
  */
 export default function LoginPage() {
   return (
@@ -27,7 +28,6 @@ function LoginForm() {
   const router = useRouter();
   const supervisorApp = useSearchParams().get("app") === "supervisor";
   const login = useAuthStore((s) => s.login);
-  const logout = useAuthStore((s) => s.logout);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
@@ -38,19 +38,19 @@ function LoginForm() {
     const form = new FormData(event.currentTarget);
     try {
       if (supervisorApp) {
-        await login(String(form.get("email")), String(form.get("password")), { space: "supervisor" });
-        if (!canUseSupervisorApp(useAuthStore.getState().user)) {
-          // Un cajero que escribe aquí sus datos no se queda con sesión de supervisor.
-          logout();
-          clearSession("supervisor");
-          setError("Este usuario no tiene la app de supervisor de caja.");
-          setLoading(false);
+        // Quien tiene la app del supervisor queda en su llave. Un cajero (o
+        // cualquier otro) que escribe aquí sus datos entra normal a su pantalla,
+        // con la sesión principal: no se le rechaza ni se queda como supervisor.
+        await login(String(form.get("email")), String(form.get("password")), {
+          space: (user) => (canUseSupervisorApp(user) ? "supervisor" : "main"),
+        });
+        if (useAuthStore.getState().space === "supervisor") {
+          router.push("/supervisor");
           return;
         }
-        router.push("/supervisor");
-        return;
+      } else {
+        await login(String(form.get("email")), String(form.get("password")));
       }
-      await login(String(form.get("email")), String(form.get("password")));
       // Un cajero, fábrica o franquicia no tienen dashboard: entran a su propia
       // pantalla. El resto sigue aterrizando en /dashboard como siempre.
       const user = useAuthStore.getState().user;
@@ -123,6 +123,12 @@ function LoginForm() {
           <button className="button" type="submit" disabled={loading}>
             {loading ? "Ingresando..." : "Entrar"}
           </button>
+
+          {supervisorApp && (
+            <a className="login-switch" href="/login">
+              ¿Vas a la caja o al panel? Entra aquí
+            </a>
+          )}
         </form>
       </section>
     </main>

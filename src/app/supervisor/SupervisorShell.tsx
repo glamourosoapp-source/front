@@ -1,6 +1,6 @@
 "use client";
 
-import { ReactNode, useEffect, useState } from "react";
+import { ReactNode, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { ClipboardCheck, LogOut, ShieldAlert, Store, Truck } from "lucide-react";
@@ -38,6 +38,8 @@ export default function SupervisorShell({ children }: { children: ReactNode }) {
   const logout = useAuthStore((s) => s.logout);
   const { can } = usePermissions();
   const [checked, setChecked] = useState(false);
+  // Al salir a propósito no se manda al login del supervisor (ver "Salir").
+  const leaving = useRef(false);
 
   useEffect(() => {
     void Promise.resolve(hydrate()).finally(() => setChecked(true));
@@ -46,7 +48,7 @@ export default function SupervisorShell({ children }: { children: ReactNode }) {
   // Su propia sesión (lib/session.ts): sin ella, a su login, aunque el
   // navegador tenga abierta la caja con el cajero.
   useEffect(() => {
-    if (checked && !isAuthenticated) router.replace("/login?app=supervisor");
+    if (checked && !isAuthenticated && !leaving.current) router.replace("/login?app=supervisor");
   }, [checked, isAuthenticated, router]);
 
   if (!checked || !user) {
@@ -99,8 +101,11 @@ export default function SupervisorShell({ children }: { children: ReactNode }) {
               type="button"
               className="sup-logout"
               onClick={() => {
+                leaving.current = true;
                 logout();
-                router.push("/login?app=supervisor");
+                // Al login de siempre: en la misma PC el siguiente puede ser el
+                // admin o el cajero, y ahí cada quien entra a su pantalla.
+                router.push("/login");
               }}
               aria-label="Salir"
               title="Salir"

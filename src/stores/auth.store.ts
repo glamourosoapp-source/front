@@ -21,10 +21,11 @@ interface AuthState {
   /** Llave donde vive la sesión de esta pantalla: la principal o la del supervisor (ver `lib/session.ts`). */
   space: SessionSpace;
   /**
-   * `space` fuerza dónde se guarda (el login de la app del supervisor); sin él,
-   * el supervisor de caja va a su llave y el resto a la principal.
+   * `space` decide dónde se guarda según el usuario que entró (el login de la
+   * app del supervisor); sin él, el supervisor de caja va a su llave y el resto
+   * a la principal.
    */
-  login: (email: string, password: string, options?: { space?: SessionSpace }) => Promise<boolean>;
+  login: (email: string, password: string, options?: { space?: (user: User) => SessionSpace }) => Promise<boolean>;
   register: (payload: { name: string; email: string; password: string; organizationName?: string }) => Promise<boolean>;
   hydrate: () => void;
   applySession: (token: string, user: User) => void;
@@ -40,7 +41,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     const response = await httpClient.post<{ token: string; user: User }>("/auth/login", { email, password });
     // El supervisor de caja nunca pisa la sesión principal: en la PC de la
     // tienda esa es la del cajero.
-    const space = options?.space ?? (landsOnSupervisorApp(response.user) ? "supervisor" : "main");
+    const space = options?.space?.(response.user) ?? (landsOnSupervisorApp(response.user) ? "supervisor" : "main");
     writeSession(space, response.token, response.user);
     set({ token: response.token, user: response.user, isAuthenticated: true, space });
     return true;
