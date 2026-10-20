@@ -1,9 +1,9 @@
 "use client";
 
 import Link from "next/link";
-import { useParams, useRouter } from "next/navigation";
-import { useCallback, useEffect, useMemo, useState } from "react";
-import { Box, Button, Checkbox, Chip, FormControlLabel, MenuItem, TextField } from "@mui/material";
+import { useParams, useRouter, useSearchParams } from "next/navigation";
+import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
+import { Box, Button, Checkbox, Chip, FormControlLabel, MenuItem, Tab, Tabs, TextField } from "@mui/material";
 import {
   ArrowLeft,
   Cake,
@@ -83,6 +83,8 @@ const PAYMENT_COLORS: Record<string, ChipColor> = {
   refunded: "default",
 };
 
+type TabKey = "pedidos" | "datos";
+
 /** Pedidos que no cuentan para "lo que más pide". */
 const NOT_SOLD = new Set(["cancelled", "deleted", "draft"]);
 
@@ -101,12 +103,24 @@ function formatBirthday(value: string | null | undefined): string | null {
 
 /**
  * Perfil del cliente en el CRM, con el formato del detalle de Clientes de
- * sucursal: métricas arriba, historial de pedidos y a la derecha lo que más
- * pide, su ficha, ubicaciones y facturación.
+ * sucursal: métricas arriba y dos pestañas (`?tab=`). "Pedidos" lleva el
+ * historial con lo que más pide; "Datos del cliente", la ficha, ubicaciones y
+ * facturación, que en una sola columna lateral quedaban demasiado largas.
  */
 export default function CustomerDetailPage() {
+  // useSearchParams pide un límite de Suspense en una página del App Router.
+  return (
+    <Suspense fallback={<div className="page-stack"><p className="page-kicker">Cargando cliente...</p></div>}>
+      <CustomerDetail />
+    </Suspense>
+  );
+}
+
+function CustomerDetail() {
   const params = useParams<{ id: string }>();
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const tab: TabKey = searchParams.get("tab") === "datos" ? "datos" : "pedidos";
   const { can } = usePermissions();
   const { subscribe } = useRealtime();
   const customerId = params.id;
@@ -227,6 +241,14 @@ export default function CustomerDetailPage() {
     }
   }
 
+  function selectTab(next: TabKey) {
+    const query = new URLSearchParams(searchParams.toString());
+    if (next === "pedidos") query.delete("tab");
+    else query.set("tab", next);
+    const qs = query.toString();
+    router.replace(`${LIST_HREF}/${customerId}${qs ? `?${qs}` : ""}`, { scroll: false });
+  }
+
   function clearFilters() {
     setSearch("");
     setStatus("");
@@ -254,6 +276,7 @@ export default function CustomerDetailPage() {
   const locations = customer.locations ?? [];
   const posPurchases = Number(customer.posSalesCount ?? 0);
   const fromBranch = Boolean(customer.originBranch) || posPurchases > 0;
+  const hasSide = products.length > 0 || fromBranch;
   const hasFilters = Boolean(search || status || paymentStatus || range.from || range.to || undelivered);
 
   return (
@@ -347,323 +370,335 @@ export default function CustomerDetailPage() {
         />
       </div>
 
-      <div className="customer-detail-grid">
-        <div className="page-stack" style={{ minWidth: 0 }}>
-          <section className="panel p-5">
-            <div className="customer-section-head">
-              <h2>Pedidos</h2>
-              <span className="page-kicker" style={{ margin: 0, display: "flex", alignItems: "center", gap: 8 }}>
-                {hasFilters ? (
-                  <Button size="small" variant="text" onClick={clearFilters}>
-                    Limpiar filtros
-                  </Button>
-                ) : null}
-                {loadingOrders ? "Cargando…" : <><strong>{ordersTotal.toLocaleString("es-MX")}</strong> {ordersTotal === 1 ? "pedido" : "pedidos"}</>}
-              </span>
-            </div>
+      <Tabs value={tab} onChange={(_e, value) => selectTab(value as TabKey)} variant="scrollable" allowScrollButtonsMobile>
+        <Tab value="pedidos" label={`Pedidos (${ordersCount.toLocaleString("es-MX")})`} />
+        <Tab value="datos" label="Datos del cliente" />
+      </Tabs>
 
-            {ordersCount || hasFilters ? (
-              <FilterBar>
-                <FilterSearch value={search} placeholder="Buscar por folio" onChange={setSearch} />
-                <TextField
-                  select
-                  size="small"
-                  label="Estado"
-                  value={status}
-                  disabled={undelivered}
-                  onChange={(e) => setStatus(e.target.value)}
-                  InputLabelProps={{ shrink: true }}
-                  SelectProps={{ displayEmpty: true }}
-                  sx={{ minWidth: 150 }}
-                >
-                  <MenuItem value="">Todos</MenuItem>
-                  {ORDER_STATUS_OPTIONS.map((option) => (
-                    <MenuItem key={option.value} value={option.value}>
-                      {option.label}
-                    </MenuItem>
-                  ))}
-                </TextField>
-                <TextField
-                  select
-                  size="small"
-                  label="Pago"
-                  value={paymentStatus}
-                  onChange={(e) => setPaymentStatus(e.target.value)}
-                  InputLabelProps={{ shrink: true }}
-                  SelectProps={{ displayEmpty: true }}
-                  sx={{ minWidth: 150 }}
-                >
-                  <MenuItem value="">Todos</MenuItem>
-                  {PAYMENT_STATUS_OPTIONS.map((option) => (
-                    <MenuItem key={option.value} value={option.value}>
-                      {option.label}
-                    </MenuItem>
-                  ))}
-                </TextField>
-                <FilterDateRange
-                  from={range.from}
-                  to={range.to}
-                  onChange={setRange}
-                  options={DATE_OPTIONS}
-                  collapsible
-                />
-                <FormControlLabel
-                  control={
-                    <Checkbox
-                      size="small"
-                      checked={undelivered}
-                      onChange={(e) => {
-                        setUndelivered(e.target.checked);
-                        if (e.target.checked) setStatus("");
-                      }}
-                    />
-                  }
-                  label="Solo sin entregar"
-                  sx={{ mr: 0 }}
-                />
-              </FilterBar>
-            ) : null}
-
-            {!orders.length ? (
-              <p className="customer-empty">
-                {loadingOrders
-                  ? "Cargando pedidos..."
-                  : hasFilters
-                    ? "Ningún pedido coincide con los filtros."
-                    : "Este cliente todavía no tiene pedidos."}
-              </p>
-            ) : (
-              <div style={{ overflowX: "auto", marginTop: 12 }}>
-                <table className="table customer-sales-table">
-                  <thead>
-                    <tr>
-                      <th>Fecha</th>
-                      <th>Folio</th>
-                      <th>Entrega</th>
-                      <th>Vendedor</th>
-                      <th>Estado</th>
-                      <th>Pago</th>
-                      <th style={{ textAlign: "right" }}>Total</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {orders.map((order) => {
-                      const cancelled = order.status === "cancelled" || order.status === "deleted";
-                      return (
-                        <tr
-                          key={order.id}
-                          className={cancelled ? "is-voided" : ""}
-                          onClick={() => router.push(`/dashboard/orders/${order.id}`)}
-                          title="Ver el pedido"
-                        >
-                          <td>
-                            <div style={{ fontWeight: 600, color: "var(--glam-navy)" }}>{formatDate(order.createdAt)}</div>
-                            <div className="customer-cell-sub">{formatBusinessTime(order.createdAt)}</div>
-                          </td>
-                          <td>{order.orderNumber}</td>
-                          <td>
-                            {order.scheduledDeliveryDate ? (
-                              formatDateOnly(order.scheduledDeliveryDate)
-                            ) : (
-                              <span className="customer-cell-sub">—</span>
-                            )}
-                          </td>
-                          <td>{orderCreatorLabel(order)}</td>
-                          <td>
-                            <Chip
-                              label={orderStatusLabel(order.status)}
-                              size="small"
-                              color={STATUS_COLORS[order.status] ?? "default"}
-                            />
-                          </td>
-                          <td>
-                            <Chip
-                              label={paymentStatusLabel(order.paymentStatus)}
-                              size="small"
-                              variant="outlined"
-                              color={PAYMENT_COLORS[order.paymentStatus] ?? "default"}
-                            />
-                          </td>
-                          <td
-                            style={{
-                              textAlign: "right",
-                              fontWeight: 700,
-                              textDecoration: cancelled ? "line-through" : undefined,
-                            }}
-                          >
-                            {formatMoney(order.total)}
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-                {ordersTotal > orders.length ? (
-                  <p className="page-kicker" style={{ marginTop: 8 }}>
-                    Se muestran los {orders.length} más recientes de {ordersTotal}.
-                  </p>
-                ) : null}
-              </div>
-            )}
-          </section>
-        </div>
-
-        <div className="page-stack" style={{ minWidth: 0 }}>
-          {products.length ? (
+      {tab === "pedidos" ? (
+        <div className={hasSide ? "customer-detail-grid" : undefined}>
+          <div className="page-stack" style={{ minWidth: 0 }}>
             <section className="panel p-5">
               <div className="customer-section-head">
-                <h2>Lo que más pide</h2>
+                <h2>Pedidos</h2>
+                <span className="page-kicker" style={{ margin: 0, display: "flex", alignItems: "center", gap: 8 }}>
+                  {hasFilters ? (
+                    <Button size="small" variant="text" onClick={clearFilters}>
+                      Limpiar filtros
+                    </Button>
+                  ) : null}
+                  {loadingOrders ? "Cargando…" : <><strong>{ordersTotal.toLocaleString("es-MX")}</strong> {ordersTotal === 1 ? "pedido" : "pedidos"}</>}
+                </span>
               </div>
-              <ul className="customer-products">
-                {products.map((product) => (
-                  <li key={product.key}>
-                    <div className="customer-products-row">
-                      <span className="customer-products-name">{product.name}</span>
-                      <strong>{formatMoney(product.total)}</strong>
-                    </div>
-                    <div className="customer-products-bar">
-                      <span style={{ width: `${topTotal ? Math.max(4, (product.total / topTotal) * 100) : 0}%` }} />
-                    </div>
-                    <div className="customer-cell-sub">
-                      {/* La unidad del renglón es la del producto ("litro" en un bidón de 20 L): se cuenta en piezas pedidas. */}
-                      ×{formatQuantity(product.quantity)} · en {product.orders}{" "}
-                      {product.orders === 1 ? "pedido" : "pedidos"}
-                    </div>
-                  </li>
-                ))}
-              </ul>
-            </section>
-          ) : null}
-
-          {fromBranch ? (
-            <section className="panel p-5">
-              <div className="customer-section-head">
-                <h2>En sucursal</h2>
-                <Link href={`/dashboard/pos/clientes/${customer.id}`} className="text-sm">
-                  Ver tickets
-                </Link>
-              </div>
-              <div className="customer-info">
-                <InfoRow
-                  icon={Store}
-                  label="Sucursal de alta"
-                  value={customer.originBranch ? `${customer.originBranch.code} · ${customer.originBranch.name}` : null}
-                  empty="Del CRM"
-                />
-                <InfoRow
-                  icon={Receipt}
-                  label="Compras en caja"
-                  value={
-                    posPurchases
-                      ? `${posPurchases} ${posPurchases === 1 ? "ticket" : "tickets"} · ${formatMoney(customer.posSpent)}`
-                      : null
-                  }
-                  empty="Sin compras"
-                />
-                {customer.lastPosSaleAt ? (
-                  <InfoRow
-                    icon={Clock}
-                    label="Última compra en caja"
-                    value={`${capitalize(relativeDays(customer.lastPosSaleAt))} · ${formatDate(customer.lastPosSaleAt)}`}
+  
+              {ordersCount || hasFilters ? (
+                <FilterBar>
+                  <FilterSearch value={search} placeholder="Buscar por folio" onChange={setSearch} />
+                  <TextField
+                    select
+                    size="small"
+                    label="Estado"
+                    value={status}
+                    disabled={undelivered}
+                    onChange={(e) => setStatus(e.target.value)}
+                    InputLabelProps={{ shrink: true }}
+                    SelectProps={{ displayEmpty: true }}
+                    sx={{ minWidth: 150 }}
+                  >
+                    <MenuItem value="">Todos</MenuItem>
+                    {ORDER_STATUS_OPTIONS.map((option) => (
+                      <MenuItem key={option.value} value={option.value}>
+                        {option.label}
+                      </MenuItem>
+                    ))}
+                  </TextField>
+                  <TextField
+                    select
+                    size="small"
+                    label="Pago"
+                    value={paymentStatus}
+                    onChange={(e) => setPaymentStatus(e.target.value)}
+                    InputLabelProps={{ shrink: true }}
+                    SelectProps={{ displayEmpty: true }}
+                    sx={{ minWidth: 150 }}
+                  >
+                    <MenuItem value="">Todos</MenuItem>
+                    {PAYMENT_STATUS_OPTIONS.map((option) => (
+                      <MenuItem key={option.value} value={option.value}>
+                        {option.label}
+                      </MenuItem>
+                    ))}
+                  </TextField>
+                  <FilterDateRange
+                    from={range.from}
+                    to={range.to}
+                    onChange={setRange}
+                    options={DATE_OPTIONS}
+                    collapsible
                   />
-                ) : null}
-              </div>
-            </section>
-          ) : null}
-
-          <section className="panel p-5">
-            <div className="customer-section-head">
-              <h2>Datos del cliente</h2>
-            </div>
-            <div className="customer-info">
-              <InfoRow icon={Phone} label="WhatsApp" value={formatMxPhone(customer.phone)} />
-              <InfoRow icon={Mail} label="Correo" value={customer.email || null} empty="Sin correo" />
-              <InfoRow icon={Cake} label="Cumpleaños" value={birthday} empty="Sin capturar" />
-              <InfoRow icon={MapPin} label="Domicilio predeterminado" value={address || null} empty="Sin domicilio" />
-              <InfoRow
-                icon={Navigation}
-                label="Zona"
-                value={[customer.zone, customer.colony, customer.postalCode].filter(Boolean).join(" · ") || null}
-                empty="Sin zona"
-              />
-              <InfoRow icon={Tag} label="Lista de precios" value={isWholesale ? "Mayoreo" : "Menudeo"} />
-              <InfoRow icon={Users} label="Equipo" value={customer.team?.name ?? null} empty="Sin equipo" />
-              <InfoRow icon={UserCog} label="Registró" value={customer.creator?.name ?? null} empty="Sin dato" />
-              {customer.tags?.length ? (
-                <InfoRow icon={Tag} label="Etiquetas" value={customer.tags.map((tag) => tag.name).join(", ")} />
+                  <FormControlLabel
+                    control={
+                      <Checkbox
+                        size="small"
+                        checked={undelivered}
+                        onChange={(e) => {
+                          setUndelivered(e.target.checked);
+                          if (e.target.checked) setStatus("");
+                        }}
+                      />
+                    }
+                    label="Solo sin entregar"
+                    sx={{ mr: 0 }}
+                  />
+                </FilterBar>
               ) : null}
-              {customer.notes ? <InfoRow icon={StickyNote} label="Notas" value={customer.notes} /> : null}
+  
+              {!orders.length ? (
+                <p className="customer-empty">
+                  {loadingOrders
+                    ? "Cargando pedidos..."
+                    : hasFilters
+                      ? "Ningún pedido coincide con los filtros."
+                      : "Este cliente todavía no tiene pedidos."}
+                </p>
+              ) : (
+                <div style={{ overflowX: "auto", marginTop: 12 }}>
+                  <table className="table customer-sales-table">
+                    <thead>
+                      <tr>
+                        <th>Fecha</th>
+                        <th>Folio</th>
+                        <th>Entrega</th>
+                        <th>Vendedor</th>
+                        <th>Estado</th>
+                        <th>Pago</th>
+                        <th style={{ textAlign: "right" }}>Total</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {orders.map((order) => {
+                        const cancelled = order.status === "cancelled" || order.status === "deleted";
+                        return (
+                          <tr
+                            key={order.id}
+                            className={cancelled ? "is-voided" : ""}
+                            onClick={() => router.push(`/dashboard/orders/${order.id}`)}
+                            title="Ver el pedido"
+                          >
+                            <td>
+                              <div style={{ fontWeight: 600, color: "var(--glam-navy)" }}>{formatDate(order.createdAt)}</div>
+                              <div className="customer-cell-sub">{formatBusinessTime(order.createdAt)}</div>
+                            </td>
+                            <td>{order.orderNumber}</td>
+                            <td>
+                              {order.scheduledDeliveryDate ? (
+                                formatDateOnly(order.scheduledDeliveryDate)
+                              ) : (
+                                <span className="customer-cell-sub">—</span>
+                              )}
+                            </td>
+                            <td>{orderCreatorLabel(order)}</td>
+                            <td>
+                              <Chip
+                                label={orderStatusLabel(order.status)}
+                                size="small"
+                                color={STATUS_COLORS[order.status] ?? "default"}
+                              />
+                            </td>
+                            <td>
+                              <Chip
+                                label={paymentStatusLabel(order.paymentStatus)}
+                                size="small"
+                                variant="outlined"
+                                color={PAYMENT_COLORS[order.paymentStatus] ?? "default"}
+                              />
+                            </td>
+                            <td
+                              style={{
+                                textAlign: "right",
+                                fontWeight: 700,
+                                textDecoration: cancelled ? "line-through" : undefined,
+                              }}
+                            >
+                              {formatMoney(order.total)}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                  {ordersTotal > orders.length ? (
+                    <p className="page-kicker" style={{ marginTop: 8 }}>
+                      Se muestran los {orders.length} más recientes de {ordersTotal}.
+                    </p>
+                  ) : null}
+                </div>
+              )}
+            </section>
+          </div>
+          {hasSide ? (
+            <div className="page-stack" style={{ minWidth: 0 }}>
+              {products.length ? (
+                <section className="panel p-5">
+                  <div className="customer-section-head">
+                    <h2>Lo que más pide</h2>
+                  </div>
+                  <ul className="customer-products">
+                    {products.map((product) => (
+                      <li key={product.key}>
+                        <div className="customer-products-row">
+                          <span className="customer-products-name">{product.name}</span>
+                          <strong>{formatMoney(product.total)}</strong>
+                        </div>
+                        <div className="customer-products-bar">
+                          <span style={{ width: `${topTotal ? Math.max(4, (product.total / topTotal) * 100) : 0}%` }} />
+                        </div>
+                        <div className="customer-cell-sub">
+                          {/* La unidad del renglón es la del producto ("litro" en un bidón de 20 L): se cuenta en piezas pedidas. */}
+                          ×{formatQuantity(product.quantity)} · en {product.orders}{" "}
+                          {product.orders === 1 ? "pedido" : "pedidos"}
+                        </div>
+                      </li>
+                    ))}
+                  </ul>
+                </section>
+              ) : null}
+              {fromBranch ? (
+                <section className="panel p-5">
+                  <div className="customer-section-head">
+                    <h2>En sucursal</h2>
+                    <Link href={`/dashboard/pos/clientes/${customer.id}`} className="text-sm">
+                      Ver tickets
+                    </Link>
+                  </div>
+                  <div className="customer-info">
+                    <InfoRow
+                      icon={Store}
+                      label="Sucursal de alta"
+                      value={customer.originBranch ? `${customer.originBranch.code} · ${customer.originBranch.name}` : null}
+                      empty="Del CRM"
+                    />
+                    <InfoRow
+                      icon={Receipt}
+                      label="Compras en caja"
+                      value={
+                        posPurchases
+                          ? `${posPurchases} ${posPurchases === 1 ? "ticket" : "tickets"} · ${formatMoney(customer.posSpent)}`
+                          : null
+                      }
+                      empty="Sin compras"
+                    />
+                    {customer.lastPosSaleAt ? (
+                      <InfoRow
+                        icon={Clock}
+                        label="Última compra en caja"
+                        value={`${capitalize(relativeDays(customer.lastPosSaleAt))} · ${formatDate(customer.lastPosSaleAt)}`}
+                      />
+                    ) : null}
+                  </div>
+                </section>
+              ) : null}
             </div>
-          </section>
-
-          {locations.length ? (
+          ) : null}
+        </div>
+      ) : (
+        <div className="customer-data-grid">
+          <div className="page-stack" style={{ minWidth: 0 }}>
             <section className="panel p-5">
               <div className="customer-section-head">
-                <h2>Ubicaciones guardadas</h2>
+                <h2>Datos del cliente</h2>
               </div>
               <div className="customer-info">
-                {locations.map((location: CustomerLocation) => {
-                  const written =
-                    location.formattedAddress?.trim() ||
-                    formatCustomerDeliveryAddress({
-                      street: location.street,
-                      colony: location.colony,
-                      postalCode: location.postalCode,
-                      city: location.city,
-                      address: location.reference,
-                    });
-                  const mapsUrl = customerLocationMapsUrl(location);
-                  return (
-                    <div key={location.id} className="info-row">
-                      <MapPin size={16} className="info-row-icon" />
-                      <div style={{ minWidth: 0 }}>
-                        <div className="stat-tile-label">
-                          {location.label || "Ubicación"}
-                          {location.isDefault ? " · predeterminada" : ""}
-                        </div>
-                        <div className="info-row-value">
-                          {written || (mapsUrl ? "Ubicación por pin" : "Sin dirección")}
-                        </div>
-                        {mapsUrl ? (
-                          <a href={mapsUrl} target="_blank" rel="noreferrer" className="text-sm">
-                            Ver en Google Maps
-                          </a>
-                        ) : null}
-                      </div>
-                    </div>
-                  );
-                })}
+                <InfoRow icon={Phone} label="WhatsApp" value={formatMxPhone(customer.phone)} />
+                <InfoRow icon={Mail} label="Correo" value={customer.email || null} empty="Sin correo" />
+                <InfoRow icon={Cake} label="Cumpleaños" value={birthday} empty="Sin capturar" />
+                <InfoRow icon={MapPin} label="Domicilio predeterminado" value={address || null} empty="Sin domicilio" />
+                <InfoRow
+                  icon={Navigation}
+                  label="Zona"
+                  value={[customer.zone, customer.colony, customer.postalCode].filter(Boolean).join(" · ") || null}
+                  empty="Sin zona"
+                />
+                <InfoRow icon={Tag} label="Lista de precios" value={isWholesale ? "Mayoreo" : "Menudeo"} />
+                <InfoRow icon={Users} label="Equipo" value={customer.team?.name ?? null} empty="Sin equipo" />
+                <InfoRow icon={UserCog} label="Registró" value={customer.creator?.name ?? null} empty="Sin dato" />
+                {customer.tags?.length ? (
+                  <InfoRow icon={Tag} label="Etiquetas" value={customer.tags.map((tag) => tag.name).join(", ")} />
+                ) : null}
+                {customer.notes ? <InfoRow icon={StickyNote} label="Notas" value={customer.notes} /> : null}
               </div>
             </section>
-          ) : null}
-
-          <section className="panel p-5">
-            <div className="customer-section-head">
-              <h2>Facturación</h2>
-            </div>
-            {hasBillingInfo(customer) ? (
-              <div className="customer-info">
-                <InfoRow icon={FileText} label="RFC" value={customer.taxId ?? null} />
-                <InfoRow icon={FileText} label="Razón social" value={customer.legalName || null} />
-                <InfoRow
-                  icon={FileText}
-                  label="Régimen fiscal"
-                  value={taxRegimeLabel(customer.taxRegime) || customer.taxRegime || null}
-                />
-                <InfoRow
-                  icon={FileText}
-                  label="Uso de CFDI"
-                  value={cfdiUseLabel(customer.cfdiUse) || customer.cfdiUse || null}
-                />
-                <InfoRow icon={MapPin} label="CP fiscal" value={customer.taxPostalCode || null} />
-                <InfoRow icon={Mail} label="Correo de facturación" value={customer.billingEmail || null} empty="Sin correo" />
+          </div>
+          <div className="page-stack" style={{ minWidth: 0 }}>
+            {locations.length ? (
+              <section className="panel p-5">
+                <div className="customer-section-head">
+                  <h2>Ubicaciones guardadas</h2>
+                </div>
+                <div className="customer-info">
+                  {locations.map((location: CustomerLocation) => {
+                    const written =
+                      location.formattedAddress?.trim() ||
+                      formatCustomerDeliveryAddress({
+                        street: location.street,
+                        colony: location.colony,
+                        postalCode: location.postalCode,
+                        city: location.city,
+                        address: location.reference,
+                      });
+                    const mapsUrl = customerLocationMapsUrl(location);
+                    return (
+                      <div key={location.id} className="info-row">
+                        <MapPin size={16} className="info-row-icon" />
+                        <div style={{ minWidth: 0 }}>
+                          <div className="stat-tile-label">
+                            {location.label || "Ubicación"}
+                            {location.isDefault ? " · predeterminada" : ""}
+                          </div>
+                          <div className="info-row-value">
+                            {written || (mapsUrl ? "Ubicación por pin" : "Sin dirección")}
+                          </div>
+                          {mapsUrl ? (
+                            <a href={mapsUrl} target="_blank" rel="noreferrer" className="text-sm">
+                              Ver en Google Maps
+                            </a>
+                          ) : null}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </section>
+            ) : null}
+  
+            <section className="panel p-5">
+              <div className="customer-section-head">
+                <h2>Facturación</h2>
               </div>
-            ) : (
-              <p className="customer-empty">Sin datos de facturación. Se capturan desde &quot;Editar&quot;.</p>
-            )}
-          </section>
+              {hasBillingInfo(customer) ? (
+                <div className="customer-info">
+                  <InfoRow icon={FileText} label="RFC" value={customer.taxId ?? null} />
+                  <InfoRow icon={FileText} label="Razón social" value={customer.legalName || null} />
+                  <InfoRow
+                    icon={FileText}
+                    label="Régimen fiscal"
+                    value={taxRegimeLabel(customer.taxRegime) || customer.taxRegime || null}
+                  />
+                  <InfoRow
+                    icon={FileText}
+                    label="Uso de CFDI"
+                    value={cfdiUseLabel(customer.cfdiUse) || customer.cfdiUse || null}
+                  />
+                  <InfoRow icon={MapPin} label="CP fiscal" value={customer.taxPostalCode || null} />
+                  <InfoRow icon={Mail} label="Correo de facturación" value={customer.billingEmail || null} empty="Sin correo" />
+                </div>
+              ) : (
+                <p className="customer-empty">Sin datos de facturación. Se capturan desde &quot;Editar&quot;.</p>
+              )}
+            </section>
+          </div>
         </div>
-      </div>
+      )}
 
       <CustomerFormDialog
         open={editOpen}
