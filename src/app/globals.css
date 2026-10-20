@@ -4242,3 +4242,200 @@ textarea.input {
     padding: 12px 14px;
   }
 }
+
+/* ---- Clientes de sucursal: lista y detalle ---- */
+.customer-avatar {
+  display: inline-grid;
+  flex: 0 0 auto;
+  place-items: center;
+  border-radius: 999px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+
+.customer-cell {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+}
+
+.customer-cell-name {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+  color: var(--glam-navy);
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.customer-cell-sub {
+  color: var(--muted);
+  font-size: 12.5px;
+}
+
+.customer-tier-pill {
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: rgba(124, 58, 237, 0.1);
+  color: #6d28d9;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.customer-branch {
+  display: inline-flex;
+  gap: 8px;
+  align-items: center;
+  color: var(--glam-navy);
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.customer-branch .branch-code-badge {
+  padding: 2px 7px;
+  font-size: 11.5px;
+}
+
+.customer-money {
+  color: var(--glam-navy);
+  font-variant-numeric: tabular-nums;
+}
+
+.customer-hero {
+  display: flex;
+  gap: 14px;
+  align-items: center;
+}
+
+.customer-detail-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 330px;
+  gap: 16px;
+  align-items: start;
+}
+
+@media (max-width: 1100px) {
+  .customer-detail-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.customer-section-head {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: baseline;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+
+.customer-empty {
+  margin: 0;
+  padding: 24px 12px;
+  border: 1px dashed var(--border);
+  border-radius: 10px;
+  color: var(--muted);
+  text-align: center;
+}
+
+.customer-sales-table tbody tr {
+  cursor: pointer;
+  transition: background 140ms ease;
+}
+
+.customer-sales-table tbody tr:hover {
+  background: var(--soft-blue);
+}
+
+.customer-sales-table tbody tr.is-voided td {
+  color: var(--muted);
+}
+
+.customer-sales-table td {
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.customer-sales-table th,
+.customer-sales-table td {
+  padding: 10px;
+  font-size: 13.5px;
+}
+
+.customer-sales-table th {
+  font-size: 11.5px;
+}
+
+.customer-products,
+.customer-branches {
+  display: grid;
+  gap: 14px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.customer-products-row {
+  display: flex;
+  gap: 12px;
+  align-items: baseline;
+  justify-content: space-between;
+  color: var(--glam-navy);
+  font-size: 13.5px;
+}
+
+.customer-products-name {
+  min-width: 0;
+  overflow: hidden;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.customer-products-bar {
+  height: 6px;
+  margin: 6px 0 4px;
+  border-radius: 999px;
+  background: rgba(38, 45, 96, 0.06);
+  overflow: hidden;
+}
+
+.customer-products-bar span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--glam-blue);
+}
+
+.customer-branches li {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 12px;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.customer-info {
+  display: grid;
+}
+
+.customer-info .info-row:last-child {
+  border-bottom: 0;
+}
+
+/* En el teléfono los botones bajan debajo del nombre en vez de apretarlo. */
+.customer-detail-toolbar {
+  flex-wrap: wrap;
+  align-items: flex-start;
+}
+
+@media (max-width: 640px) {
+  .customer-detail-toolbar > :first-child {
+    flex: 1 1 100%;
+  }
+
+  .customer-hero .page-title {
+    font-size: 24px;
+  }
+}

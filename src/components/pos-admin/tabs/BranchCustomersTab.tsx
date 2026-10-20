@@ -79,7 +79,7 @@ export function BranchCustomersTab({ branchId }: { branchId: string }) {
       <DataTable
         rows={rows}
         getKey={(row: BranchCustomerRow) => row.id}
-        onRowClick={(row: BranchCustomerRow) => router.push(`/dashboard/customers/${row.id}`)}
+        onRowClick={(row: BranchCustomerRow) => router.push(`/dashboard/pos/clientes/${row.id}`)}
         columns={[
           { key: "name", label: "Cliente", render: (row: BranchCustomerRow) => <strong>{row.name}</strong> },
           { key: "phone", label: "WhatsApp", render: (row: BranchCustomerRow) => formatMxPhone(row.phone) },

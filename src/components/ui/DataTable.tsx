@@ -25,6 +25,8 @@ interface Column {
   key: string;
   label: string;
   render?: (row: any) => React.ReactNode;
+  /** Cifras (importes, conteos) van a la derecha para leerse en columna. */
+  align?: "left" | "right" | "center";
 }
 
 /** Selección por fila (opcional): agrega una columna de checkboxes al inicio. */
@@ -111,7 +113,7 @@ export function DataTable({
                 </TableCell>
               ) : null}
               {columns.map((col) => (
-                <TableCell key={col.key} className="table-head-cell">
+                <TableCell key={col.key} align={col.align} className="table-head-cell">
                   {col.label}
                 </TableCell>
               ))}
@@ -165,7 +167,7 @@ export function DataTable({
                       </TableCell>
                     ) : null}
                     {columns.map((col) => (
-                      <TableCell key={col.key} className="table-body-cell">
+                      <TableCell key={col.key} align={col.align} className="table-body-cell">
                         {col.render ? col.render(row) : row[col.key] ?? "-"}
                       </TableCell>
                     ))}

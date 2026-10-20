@@ -61,6 +61,10 @@ export const updateCustomerSchema = z.object({
   ...billingPayload,
 });
 
+/** Órdenes de la vista Clientes de sucursal. */
+export const CUSTOMER_LIST_SORTS = ["last_purchase", "spent", "purchases", "newest", "name"] as const;
+export type CustomerListSort = (typeof CUSTOMER_LIST_SORTS)[number];
+
 export const queryCustomerSchema = paginationSchema.extend({
   tag: optionalString,
   zone: optionalString,
@@ -69,4 +73,6 @@ export const queryCustomerSchema = paginationSchema.extend({
   origin: z.union([z.literal("branch"), z.literal(""), z.null()]).optional(),
   /** Sucursal donde la caja registró al cliente. */
   originBranchId: z.union([z.string().uuid(), z.literal(""), z.null()]).optional(),
+  /** Orden de la vista Clientes de sucursal (sin valor: los movidos más recientemente). */
+  sort: z.union([z.enum(CUSTOMER_LIST_SORTS), z.literal(""), z.null()]).optional(),
 });

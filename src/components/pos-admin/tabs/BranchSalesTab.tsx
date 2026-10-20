@@ -5,10 +5,6 @@ import Link from "next/link";
 import {
   Button,
   Chip,
-  Dialog,
-  DialogActions,
-  DialogContent,
-  DialogTitle,
   FormControlLabel,
   Switch,
   Tooltip,
@@ -17,16 +13,15 @@ import { ChevronDown, CloudOff, PackageX, TriangleAlert, Truck } from "lucide-re
 import { isHomeDeliverySale } from "@/lib/pos/delivery-ticket";
 import {
   POS_PAYMENT_METHODS,
-  POS_RETURN_REASON_LABELS,
   POS_SALE_STATUS,
   posPaymentMethodLabel,
 } from "@glamouroso/shared/constants";
-import { DetailField } from "@/components/ui/DetailField";
 import { httpClient, getApiErrorMessage } from "@/services/http-client";
 import { formatMoney, formatQuantity } from "@/lib/format-money";
 import { useRealtime } from "@/components/realtime/RealtimeProvider";
 import type { ListResponse, PosSale } from "@/types";
 import { toast } from "sonner";
+import { PosSaleDialog } from "../PosSaleDialog";
 import { FilterBar, FilterDateRange, FilterMeta, type DateRangeOption } from "../FilterBar";
 import {
   businessDayOf,
@@ -375,7 +370,7 @@ export function BranchSalesTab({ branchId }: { branchId: string }) {
                           <td>
                             {sale.customer ? (
                               <Link
-                                href={`/dashboard/customers/${sale.customer.id}`}
+                                href={`/dashboard/pos/clientes/${sale.customer.id}`}
                                 onClick={(event) => event.stopPropagation()}
                               >
                                 {sale.customer.name}
@@ -422,139 +417,7 @@ export function BranchSalesTab({ branchId }: { branchId: string }) {
         </div>
       ) : null}
 
-      <Dialog open={Boolean(selected)} onClose={() => setSelected(null)} fullWidth maxWidth="sm">
-        <DialogTitle>Ticket {selected?.ticketNumber}</DialogTitle>
-        <DialogContent dividers>
-          {selected ? (
-            <div className="page-stack">
-              <div className="grid gap-3 sm:grid-cols-2">
-                <DetailField label="Fecha y hora" value={formatDateTime(selected.soldAt)} />
-                <DetailField label="Cajero" value={selected.cashier?.name ?? "—"} />
-                <DetailField label="Cliente" value={selected.customer?.name ?? "Mostrador"} />
-                <DetailField label="Forma de pago" value={posPaymentMethodLabel(selected.paymentMethod)} />
-                {isHomeDeliverySale(selected) ? (
-                  <>
-                    <DetailField
-                      label="Venta a domicilio"
-                      value={
-                        selected.deliveryOrder ? (
-                          <Link href={`/dashboard/orders/${selected.deliveryOrder.id}`}>
-                            Pedido {selected.deliveryOrder.orderNumber}
-                          </Link>
-                        ) : (
-                          "Sin pedido"
-                        )
-                      }
-                    />
-                    <DetailField label="Domicilio" value={selected.deliveryOrder?.deliveryAddress ?? "—"} />
-                  </>
-                ) : null}
-                {selected.paymentMethod === POS_PAYMENT_METHODS.CASH ? (
-                  <DetailField
-                    label="Pagó con / cambio"
-                    value={`${formatMoney(selected.amountTendered)} / ${formatMoney(selected.changeAmount)}`}
-                  />
-                ) : null}
-              </div>
-              <table className="table">
-                <thead>
-                  <tr>
-                    <th>Producto</th>
-                    <th style={{ textAlign: "right" }}>Cant.</th>
-                    <th style={{ textAlign: "right" }}>Precio</th>
-                    <th style={{ textAlign: "right" }}>Importe</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {(selected.items ?? []).map((item) => (
-                    <tr key={item.id}>
-                      <td>
-                        {item.productName}
-                        {item.priceTier === "wholesale" ? (
-                          <span className="page-kicker" style={{ margin: "0 0 0 6px", color: "#c62828" }}>
-                            mayoreo
-                          </span>
-                        ) : null}
-                        {item.containerWarning ? (
-                          <p className="page-kicker" style={{ margin: "2px 0 0", color: "#b45309" }}>
-                            {item.containerWarning}
-                          </p>
-                        ) : null}
-                      </td>
-                      <td style={{ textAlign: "right" }}>
-                        {formatQuantity(item.quantity)} {item.saleUnit === "liter" ? "L" : "pz"}
-                      </td>
-                      <td style={{ textAlign: "right" }}>{formatMoney(item.unitPrice)}</td>
-                      <td style={{ textAlign: "right", fontWeight: 700 }}>{formatMoney(item.total)}</td>
-                    </tr>
-                  ))}
-                </tbody>
-                <tfoot>
-                  <tr>
-                    <td colSpan={2} style={{ color: "var(--muted)" }}>
-                      {formatQuantity(selected.itemsCount)}{" "}
-                      {Number(selected.itemsCount) === 1 ? "producto" : "productos"}
-                    </td>
-                    <td style={{ textAlign: "right", fontWeight: 700 }}>Total</td>
-                    <td style={{ textAlign: "right", fontWeight: 700 }}>{formatMoney(selected.total)}</td>
-                  </tr>
-                </tfoot>
-              </table>
-              {selected.status === POS_SALE_STATUS.VOIDED ? (
-                <p className="page-kicker" style={{ color: "#c62828" }}>
-                  Anulado {formatDateTime(selected.voidedAt)}
-                  {selected.voidReason ? `: ${selected.voidReason}` : ""}
-                </p>
-              ) : null}
-              {selected.returns?.length ? (
-                <div className="page-stack" style={{ gap: 6 }}>
-                  <strong style={{ color: "#c62828" }}>Devoluciones de cliente</strong>
-                  {[...selected.returns]
-                    .sort((a, b) => a.returnedAt.localeCompare(b.returnedAt))
-                    .map((ret) => (
-                    <div key={ret.id} className="page-kicker" style={{ margin: 0, color: "#7f1d1d" }}>
-                      <b>{ret.returnNumber}</b> · {formatDateTime(ret.returnedAt)} · regresó{" "}
-                      {formatMoney(ret.total)} en {posPaymentMethodLabel(ret.paymentMethod).toLowerCase()}
-                      {(ret.items ?? []).map((item) => (
-                        <div key={item.id} style={{ marginLeft: 12 }}>
-                          {formatQuantity(item.quantity)} {item.productName} ·{" "}
-                          {POS_RETURN_REASON_LABELS[item.reason] ?? item.reason} ·{" "}
-                          {item.restock ? "volvió al anaquel" : "merma"}
-                        </div>
-                      ))}
-                    </div>
-                  ))}
-                  <p className="page-kicker" style={{ margin: 0 }}>
-                    El ticket no cambia: lo devuelto resta en Cortes el día en que se devolvió.
-                  </p>
-                </div>
-              ) : null}
-              {selected.recordedOffline ? (
-                <p className="page-kicker" style={{ color: "#b45309" }}>
-                  Cobrado sin internet en la caja de la sucursal
-                  {selected.syncedAt ? `, subió el ${formatDateTime(selected.syncedAt)}` : ""}.
-                </p>
-              ) : null}
-              {selected.priceMismatch ? (
-                <p className="page-kicker" style={{ color: "#c62828" }}>
-                  El precio cobrado no coincide con el del catálogo actual. Manda lo que se cobró: el cliente
-                  ya pagó ese importe.
-                </p>
-              ) : null}
-              {selected.syncConflict ? (
-                <p className="page-kicker" style={{ color: "#c62828" }}>
-                  El folio que traía la caja ({String(selected.syncConflict.proposed)}) ya estaba usado, así
-                  que este ticket quedó con otro.
-                </p>
-              ) : null}
-              {selected.notes ? <DetailField label="Notas" value={selected.notes} /> : null}
-            </div>
-          ) : null}
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setSelected(null)}>Cerrar</Button>
-        </DialogActions>
-      </Dialog>
+      <PosSaleDialog sale={selected} onClose={() => setSelected(null)} />
     </div>
   );
 }
