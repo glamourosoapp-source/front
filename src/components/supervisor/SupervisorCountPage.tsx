@@ -1,10 +1,26 @@
 "use client";
 
-import { KeyboardEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { type CSSProperties, KeyboardEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
-import { Button, Dialog, DialogActions, DialogContent, DialogTitle, TextField } from "@mui/material";
-import { AlertTriangle, ArrowLeft, Check, ClipboardCheck, EyeOff, Minus, Plus, RefreshCw, Search } from "lucide-react";
+import {
+  AlertTriangle,
+  ArrowLeft,
+  Ban,
+  Boxes,
+  Check,
+  CircleCheck,
+  ClipboardCheck,
+  Droplets,
+  EyeOff,
+  FlaskConical,
+  Minus,
+  Package,
+  Plus,
+  RefreshCw,
+  Search,
+  type LucideIcon,
+} from "lucide-react";
 import { toast } from "sonner";
 import { INVENTORY_COUNT_ITEM_STATUS, INVENTORY_COUNT_STATUS } from "@glamouroso/shared/constants";
 import { countedQuantity, type InventoryCount, type InventoryCountItem } from "@glamouroso/shared";
@@ -13,6 +29,7 @@ import { formatDateTime, unitLabel } from "@/components/pos-admin/pos-labels";
 import { formatQuantity } from "@/lib/format-money";
 import { usePermissions } from "@/lib/permissions";
 import {
+  accuracyPercent,
   COUNT_GROUPS,
   countGroupOf,
   finalCountedQty,
@@ -24,6 +41,26 @@ import {
   pendingRecount,
   type CountGroupKey,
 } from "./supervisor-counts";
+import { CountDialog } from "./CountDialog";
+
+const GROUP_ICONS: Record<CountGroupKey, LucideIcon> = {
+  liquids: Droplets,
+  packs: Package,
+  pieces: Boxes,
+  containers: FlaskConical,
+};
+
+/** Atajos del motivo de cancelación (se pueden editar después de tocarlos). */
+const CANCEL_REASONS = ["Estaba llegando surtido", "Mucha gente en la tienda", "Lo inicié por error"];
+
+function byName(a: InventoryCountItem, b: InventoryCountItem): number {
+  return a.name.localeCompare(b.name);
+}
+
+/** Diferencia en unidades redondeada a centésimos (0 si no hay). */
+function roundedVariance(item: InventoryCountItem): number {
+  return Math.round(Number(item.varianceQty ?? 0) * 100) / 100;
+}
 
 /** Lo que se lleva escrito en un renglón, antes de guardarlo. */
 interface Draft {
@@ -178,6 +215,7 @@ export function SupervisorCountPage() {
   const [cancelOpen, setCancelOpen] = useState(false);
   const [cancelReason, setCancelReason] = useState("");
   const [cancelling, setCancelling] = useState(false);
+  const [onlyDiff, setOnlyDiff] = useState(false);
 
   // Lo último, para los guardados que salen de eventos del documento.
   const itemsRef = useRef<InventoryCountItem[]>([]);
@@ -360,7 +398,13 @@ export function SupervisorCountPage() {
     }
   };
 
-  const branchName = count?.branch ? [count.branch.code, count.branch.name].filter(Boolean).join(" · ") : "Sucursal";
+  const branchName = count?.branch?.name ?? "Sucursal";
+  const branchTitle = (
+    <>
+      {count?.branch?.code ? <span className="supd-code">{count.branch.code}</span> : null}
+      {branchName}
+    </>
+  );
 
   const back = (
     <Link href="/supervisor/conteos" className="supc-back">
@@ -383,7 +427,7 @@ export function SupervisorCountPage() {
   }
 
   const term = search.trim().toLowerCase();
-  const grouped = (rows: InventoryCountItem[]) =>
+  const grouped = (rows: InventoryCountItem[], keep: (item: InventoryCountItem) => boolean, order = byName) =>
     COUNT_GROUPS.map((group) => ({
       ...group,
       all: rows.filter((item) => countGroupOf(item) === group.key),
@@ -392,36 +436,43 @@ export function SupervisorCountPage() {
         ...group,
         shown: group.all
           .filter((item) => !term || `${item.name} ${item.sku ?? ""}`.toLowerCase().includes(term))
-          .filter((item) =>
-            filter === "todo" ? !isCountItemDone(item) : filter === "recount" ? pendingRecount(item) : true
-          )
-          .sort((a, b) => a.name.localeCompare(b.name)),
+          .filter(keep)
+          .sort(order),
       }))
       .filter((group) => group.all.length);
 
   // ---------- Conteo cerrado o cancelado: solo la diferencia en unidades ----------
   if (!inProgress) {
     const cancelled = count.status === INVENTORY_COUNT_STATUS.CANCELLED;
-    const withDiff = items.filter((item) => Math.round(Number(item.varianceQty ?? 0) * 100) !== 0).length;
+    const withDiff = items.filter((item) => roundedVariance(item) !== 0).length;
+    const accuracy = accuracyPercent(count.accuracy);
+    // Primero lo que tuvo diferencia (de mayor a menor), luego por nombre.
+    const byDiff = (a: InventoryCountItem, b: InventoryCountItem) =>
+      Math.abs(roundedVariance(b)) - Math.abs(roundedVariance(a)) || byName(a, b);
+    const resultGroups = grouped(items, (item) => !onlyDiff || roundedVariance(item) !== 0, byDiff);
+
     return (
       <div className="sup-page supc-page">
         {back}
-        <div className="sup-page-head">
-          <div>
-            <h1>{branchName}</h1>
-            <p>
-              {cancelled
-                ? `Conteo cancelado ${formatDateTime(count.cancelledAt ?? count.closedAt)}`
-                : `Conteo cerrado ${formatDateTime(count.closedAt)}`}
-            </p>
+        <section className={`supc-hero supc-result-hero${cancelled ? " is-cancelled" : ""}`}>
+          <span className="supc-result-icon" aria-hidden>
+            {cancelled ? <Ban size={26} /> : <CircleCheck size={26} />}
+          </span>
+          <div className="supc-hero-title">
+            <h1>{cancelled ? "Conteo cancelado" : "Conteo cerrado"}</h1>
+            <p className="supc-hero-branch">{branchTitle}</p>
+            <p>{formatDateTime(cancelled ? count.cancelledAt ?? count.closedAt : count.closedAt)}</p>
           </div>
-        </div>
+        </section>
 
         {cancelled ? (
-          <p className="supc-notice">El conteo se canceló y el inventario no cambió.</p>
+          <p className="supc-notice is-muted">
+            <Ban size={16} />
+            Se descartó lo contado y el inventario no cambió.
+          </p>
         ) : (
           <>
-            <div className="supc-result-summary">
+            <div className={`supc-result-summary${accuracy !== null ? " is-three" : ""}`}>
               <div className="is-ok">
                 <b>{items.length - withDiff}</b>
                 <span>Sin diferencia</span>
@@ -430,6 +481,12 @@ export function SupervisorCountPage() {
                 <b>{withDiff}</b>
                 <span>Con diferencia</span>
               </div>
+              {accuracy !== null ? (
+                <div className={accuracy >= 95 ? "is-ok" : "is-diff"}>
+                  <b>{accuracy} %</b>
+                  <span>Exactitud</span>
+                </div>
+              ) : null}
             </div>
             <p className="supc-notice">
               <Check size={16} />
@@ -441,35 +498,55 @@ export function SupervisorCountPage() {
                 La caja tenía ventas sin subir: la oficina revisará la diferencia cuando se sincronice.
               </p>
             ) : null}
-            {grouped(items).map((group) => (
-              <section key={group.key} className="supc-group">
-                <header className="supc-group-head">
-                  <h2>{group.label}</h2>
-                </header>
-                <ul className="supc-result-list">
-                  {group.shown.map((item) => {
-                    const variance = Math.round(Number(item.varianceQty ?? 0) * 100) / 100;
-                    const reverted = item.status === INVENTORY_COUNT_ITEM_STATUS.REVERTED;
-                    return (
-                      <li key={item.id}>
-                        <div className="supc-row-name">
-                          <strong>{item.name}</strong>
-                          <small>{reverted ? "La oficina revirtió este ajuste" : packDescription(item)}</small>
-                        </div>
-                        <span
-                          className={`supc-variance ${reverted ? "is-muted" : variance > 0 ? "is-plus" : variance < 0 ? "is-minus" : "is-zero"}`}
-                        >
-                          {formatVariance(variance, item.unit)}
-                        </span>
-                      </li>
-                    );
-                  })}
-                </ul>
-              </section>
-            ))}
+
+            {withDiff ? (
+              <div className="supc-segmented" role="tablist" aria-label="Filtrar renglones">
+                <button type="button" role="tab" aria-selected={!onlyDiff} className={!onlyDiff ? "is-active" : ""} onClick={() => setOnlyDiff(false)}>
+                  Todos <b>{items.length}</b>
+                </button>
+                <button type="button" role="tab" aria-selected={onlyDiff} className={onlyDiff ? "is-active" : ""} onClick={() => setOnlyDiff(true)}>
+                  Con diferencia <b>{withDiff}</b>
+                </button>
+              </div>
+            ) : null}
+
+            {resultGroups.map((group) => {
+              const GroupIcon = GROUP_ICONS[group.key];
+              return group.shown.length ? (
+                <section key={group.key} className="supc-group">
+                  <header className="supc-group-head">
+                    <span className="supc-group-icon" aria-hidden>
+                      <GroupIcon size={18} />
+                    </span>
+                    <div>
+                      <h2>{group.label}</h2>
+                    </div>
+                  </header>
+                  <ul className="supc-result-list">
+                    {group.shown.map((item) => {
+                      const variance = roundedVariance(item);
+                      const reverted = item.status === INVENTORY_COUNT_ITEM_STATUS.REVERTED;
+                      return (
+                        <li key={item.id} className={variance && !reverted ? "has-diff" : undefined}>
+                          <div className="supc-row-name">
+                            <strong>{item.name}</strong>
+                            <small>{reverted ? "La oficina revirtió este ajuste" : packDescription(item)}</small>
+                          </div>
+                          <span
+                            className={`supc-variance ${reverted ? "is-muted" : variance > 0 ? "is-plus" : variance < 0 ? "is-minus" : "is-zero"}`}
+                          >
+                            {formatVariance(variance, item.unit)}
+                          </span>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                </section>
+              ) : null;
+            })}
           </>
         )}
-        <Link href="/supervisor/conteos" className="button secondary supc-done-link">
+        <Link href="/supervisor/conteos" className="supc-wide-btn">
           Volver a conteos
         </Link>
       </div>
@@ -478,52 +555,66 @@ export function SupervisorCountPage() {
 
   // ---------- Conteo en curso ----------
   const percent = items.length ? Math.round((done / items.length) * 100) : 0;
+  const recounted = items.filter((item) => item.recountQty !== null).length;
   const filters: Array<{ key: ListFilter; label: string; value: number }> = [
     { key: "all", label: "Todos", value: items.length },
     { key: "todo", label: "Por contar", value: items.length - done },
     { key: "recount", label: "Recontar", value: toRecount },
   ];
-  const groups = grouped(items);
+  const groups = grouped(items, (item) =>
+    filter === "todo" ? !isCountItemDone(item) : filter === "recount" ? pendingRecount(item) : true
+  );
 
   return (
     <div className="sup-page supc-page">
-      <div className="supc-top">
-        {back}
-        {canCount ? (
-          <Button size="small" color="error" onClick={() => setCancelOpen(true)}>
-            Cancelar conteo
-          </Button>
-        ) : null}
-      </div>
+      {back}
 
-      <div className="sup-page-head">
-        <div>
-          <h1>{branchName}</h1>
-          <p>Empezó {formatDateTime(count.startedAt)}</p>
+      <section className="supc-hero">
+        <div className="supc-hero-head">
+          <div className="supc-hero-title">
+            <h1 className="supc-hero-branch">{branchTitle}</h1>
+            <p>
+              Empezó {formatDateTime(count.startedAt)}
+              {count.startedByUser?.name ? ` · ${count.startedByUser.name}` : ""}
+            </p>
+          </div>
+          <button type="button" className="sup-icon-button" onClick={() => void load()} disabled={loading} aria-label="Actualizar">
+            <RefreshCw size={18} className={loading ? "sup-spin" : undefined} />
+          </button>
         </div>
-        <button type="button" className="sup-icon-button" onClick={() => void load()} disabled={loading} aria-label="Actualizar">
-          <RefreshCw size={18} className={loading ? "sup-spin" : undefined} />
-        </button>
-      </div>
 
-      <div className="supc-progress" aria-label={`${done} de ${items.length} contados`}>
-        <div className="supc-progress-text">
-          <strong>
-            {done}/{items.length} contados
-          </strong>
-          {toRecount ? <span className="is-recount">{toRecount} por recontar</span> : null}
+        <div className="supc-hero-progress" aria-label={`${done} de ${items.length} contados`}>
+          <span
+            className={`supc-ring${done === items.length && items.length ? " is-complete" : ""}`}
+            style={{ "--p": percent } as CSSProperties}
+          >
+            <b>{done}</b>
+            <small>de {items.length}</small>
+          </span>
+          <div className="supc-hero-stats">
+            <strong>
+              {done === items.length && items.length
+                ? "Todo contado"
+                : `Faltan ${items.length - done} ${items.length - done === 1 ? "renglón" : "renglones"}`}
+            </strong>
+            {toRecount ? (
+              <span className="is-recount">
+                <AlertTriangle size={14} />
+                {toRecount} por recontar
+              </span>
+            ) : (
+              <span>{percent} % del conteo</span>
+            )}
+          </div>
         </div>
-        <div className="supc-progress-bar">
-          <span style={{ width: `${percent}%` }} />
-        </div>
-      </div>
 
-      <p className="supc-notice is-blind">
-        <EyeOff size={16} />
-        Conteo ciego: cuenta lo que hay en el anaquel y la bodega.
-      </p>
+        <p className="supc-hero-blind">
+          <EyeOff size={16} />
+          Conteo ciego: cuenta lo que hay en el anaquel y la bodega.
+        </p>
+      </section>
 
-      <div className="supc-tabs" role="tablist" aria-label="Filtrar renglones">
+      <div className="supc-segmented" role="tablist" aria-label="Filtrar renglones">
         {filters.map(({ key, label, value }) => (
           <button
             key={key}
@@ -556,15 +647,24 @@ export function SupervisorCountPage() {
         </p>
       ) : null}
 
-      {groups.map((group) =>
-        group.shown.length ? (
+      {groups.map((group) => {
+        if (!group.shown.length) return null;
+        const GroupIcon = GROUP_ICONS[group.key];
+        const groupDone = group.all.filter(isCountItemDone).length;
+        return (
           <section key={group.key} className="supc-group">
             <header className="supc-group-head">
-              <h2>{group.label}</h2>
-              <span>
-                {group.all.filter(isCountItemDone).length}/{group.all.length}
+              <span className="supc-group-icon" aria-hidden>
+                <GroupIcon size={18} />
               </span>
-              <small>{group.hint}</small>
+              <div>
+                <h2>{group.label}</h2>
+                <small>{group.hint}</small>
+              </div>
+              <span className={`supc-group-count${groupDone === group.all.length ? " is-done" : ""}`}>
+                {groupDone === group.all.length ? <Check size={13} /> : null}
+                {groupDone}/{group.all.length}
+              </span>
             </header>
             <div className="supc-list">
               {group.shown.map((item) => (
@@ -599,77 +699,135 @@ export function SupervisorCountPage() {
               ))}
             </div>
           </section>
-        ) : null
-      )}
+        );
+      })}
 
       {canCount ? (
-        <div className={`msf-savebar${readyToClose ? " msf-savebar--active" : ""}`}>
-          <span>
-            {done} de {items.length} contados
-            {toRecount ? ` · ${toRecount} por recontar` : ""}
-          </span>
-          <div style={{ display: "flex", gap: 8 }}>
-            <Button
-              variant="contained"
-              startIcon={<ClipboardCheck size={16} />}
-              disabled={!readyToClose || closing}
-              onClick={() => void startClose()}
-            >
-              Cerrar conteo
-            </Button>
+        <button type="button" className="supc-cancel-link" onClick={() => setCancelOpen(true)}>
+          <Ban size={16} />
+          Cancelar conteo
+        </button>
+      ) : null}
+
+      {canCount ? (
+        <div className={`msf-savebar supc-closebar${readyToClose ? " is-ready" : ""}`}>
+          <div className="supc-closebar-info">
+            <span>
+              {readyToClose ? (
+                <>
+                  <CircleCheck size={16} />
+                  Todo contado: ya puedes cerrar
+                </>
+              ) : (
+                <>
+                  <b>{done}</b> de {items.length} contados
+                  {toRecount ? <em> · {toRecount} por recontar</em> : null}
+                </>
+              )}
+            </span>
+            <span className="supc-progress-bar" aria-hidden>
+              <span style={{ width: `${percent}%` }} />
+            </span>
           </div>
+          <button
+            type="button"
+            className="supc-close-btn"
+            disabled={!readyToClose || closing}
+            onClick={() => void startClose()}
+          >
+            <ClipboardCheck size={18} />
+            Cerrar conteo
+          </button>
         </div>
       ) : null}
 
-      <Dialog open={confirmClose} onClose={() => (closing ? null : setConfirmClose(false))} fullWidth maxWidth="xs">
-        <DialogTitle>Cerrar conteo</DialogTitle>
-        <DialogContent dividers>
-          <p style={{ marginTop: 0 }}>
-            Contaste los {items.length} renglones de <strong>{branchName}</strong>.
-          </p>
-          <p style={{ marginBottom: 0 }}>
-            Se ajusta el inventario de la sucursal con lo que contaste. No se puede deshacer desde aquí.
-          </p>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setConfirmClose(false)} disabled={closing}>
-            Seguir contando
-          </Button>
-          <Button variant="contained" onClick={() => void close()} disabled={closing}>
-            {closing ? "Cerrando…" : "Cerrar y ajustar"}
-          </Button>
-        </DialogActions>
-      </Dialog>
+      <CountDialog
+        open={confirmClose}
+        onClose={() => setConfirmClose(false)}
+        busy={closing}
+        tone="success"
+        icon={ClipboardCheck}
+        title="Cerrar conteo"
+        subtitle={branchTitle}
+        actions={
+          <>
+            <button type="button" className="supd-btn" onClick={() => setConfirmClose(false)} disabled={closing}>
+              Seguir contando
+            </button>
+            <button type="button" className="supd-btn is-primary" onClick={() => void close()} disabled={closing}>
+              <Check size={18} />
+              {closing ? "Cerrando…" : "Cerrar y ajustar"}
+            </button>
+          </>
+        }
+      >
+        <div className="supd-stats">
+          <div>
+            <b>{items.length}</b>
+            <span>Contados</span>
+          </div>
+          <div>
+            <b>{recounted}</b>
+            <span>Recontados</span>
+          </div>
+        </div>
+        <p>
+          El inventario de la sucursal se ajusta con lo que contaste y verás la diferencia de cada renglón.
+        </p>
+        <p className="supd-note is-warning">
+          <AlertTriangle size={16} />
+          No se puede deshacer desde aquí; la oficina revisa cada ajuste.
+        </p>
+      </CountDialog>
 
-      <Dialog open={cancelOpen} onClose={() => (cancelling ? null : setCancelOpen(false))} fullWidth maxWidth="xs">
-        <DialogTitle>Cancelar conteo</DialogTitle>
-        <DialogContent dividers>
-          <p style={{ marginTop: 0 }}>Se descarta lo contado y el inventario no cambia. ¿Por qué se cancela?</p>
-          <TextField
-            autoFocus
-            fullWidth
-            multiline
-            minRows={2}
+      <CountDialog
+        open={cancelOpen}
+        onClose={() => setCancelOpen(false)}
+        busy={cancelling}
+        tone="danger"
+        icon={Ban}
+        title="Cancelar conteo"
+        subtitle={branchTitle}
+        actions={
+          <>
+            <button type="button" className="supd-btn" onClick={() => setCancelOpen(false)} disabled={cancelling}>
+              Seguir contando
+            </button>
+            <button
+              type="button"
+              className="supd-btn is-primary"
+              onClick={() => void cancel()}
+              disabled={cancelling || cancelReason.trim().length < 3}
+            >
+              {cancelling ? "Cancelando…" : "Cancelar conteo"}
+            </button>
+          </>
+        }
+      >
+        <p>Se descarta lo contado ({done} de {items.length}) y el inventario no cambia.</p>
+        <div className="supd-field">
+          <label htmlFor="count-cancel-reason">¿Por qué se cancela?</label>
+          <div className="supd-chips">
+            {CANCEL_REASONS.map((reason) => (
+              <button
+                key={reason}
+                type="button"
+                className={cancelReason === reason ? "is-active" : undefined}
+                onClick={() => setCancelReason(reason)}
+              >
+                {reason}
+              </button>
+            ))}
+          </div>
+          <textarea
+            id="count-cancel-reason"
             value={cancelReason}
             onChange={(event) => setCancelReason(event.target.value.slice(0, 300))}
-            placeholder="Ej. la tienda estaba recibiendo surtido"
-            inputProps={{ style: { fontSize: 16 } }}
+            placeholder="Escribe el motivo"
+            rows={2}
           />
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setCancelOpen(false)} disabled={cancelling}>
-            Seguir contando
-          </Button>
-          <Button
-            color="error"
-            variant="contained"
-            onClick={() => void cancel()}
-            disabled={cancelling || cancelReason.trim().length < 3}
-          >
-            {cancelling ? "Cancelando…" : "Cancelar conteo"}
-          </Button>
-        </DialogActions>
-      </Dialog>
+        </div>
+      </CountDialog>
     </div>
   );
 }
@@ -707,19 +865,41 @@ function CountRow({
   const preview = draftQty(item, draft);
   const final = finalCountedQty(item);
 
+  // Ya contado: un renglón compacto con lo que se contó y Corregir.
+  if (!capturing && counted) {
+    return (
+      <article className={`supc-row is-${group} is-compact is-done`} data-count-row={item.id}>
+        <span className="supc-row-check" aria-hidden>
+          <Check size={16} />
+        </span>
+        <div className="supc-row-name">
+          <strong>{item.name}</strong>
+          <small>
+            {item.recountQty !== null ? "Recontaste" : "Contaste"} <b>{formatCountQty(final, item.unit)}</b>
+            {" · "}
+            {packDescription(item)}
+          </small>
+        </div>
+        {saving ? (
+          <span className="supc-chip is-saving">Guardando…</span>
+        ) : canCount ? (
+          <button type="button" className="supc-btn is-ghost" onClick={onEdit}>
+            Corregir
+          </button>
+        ) : null}
+      </article>
+    );
+  }
+
   return (
-    <article
-      className={`supc-row is-${group}${recount ? " is-recount" : ""}${isCountItemDone(item) && !editing ? " is-done" : ""}`}
-      data-count-row={item.id}
-    >
+    <article className={`supc-row is-${group}${recount ? " is-recount" : ""}${editing ? " is-editing" : ""}`} data-count-row={item.id}>
       <div className="supc-row-head">
         <div className="supc-row-name">
           <strong>{item.name}</strong>
           <small>{[packDescription(item), item.sku].filter(Boolean).join(" · ")}</small>
         </div>
-        <span className={`supc-chip ${chip.className}`}>
-          {chip.className === "is-done" ? <Check size={13} /> : null}
-          {chip.label}
+        <span className={`supc-chip ${editing && !saving ? "is-editing" : chip.className}`}>
+          {editing && !saving ? "Corrigiendo" : chip.label}
         </span>
       </div>
 
@@ -745,10 +925,10 @@ function CountRow({
             ))}
           </div>
           <div className="supc-row-actions">
-            {fields.length > 1 || group === "liquids" ? (
-              <span className="supc-preview">{preview !== null ? `= ${formatCountQty(preview, item.unit)}` : ""}</span>
+            {(fields.length > 1 || group === "liquids") && preview !== null ? (
+              <span className="supc-preview">= {formatCountQty(preview, item.unit)}</span>
             ) : (
-              <span className="supc-preview" />
+              <span className="supc-preview is-empty" />
             )}
             {editing ? (
               <button type="button" className="supc-btn is-ghost" onClick={onCancelEdit}>
@@ -759,21 +939,11 @@ function CountRow({
               No hay
             </button>
             <button type="button" className="supc-btn is-primary" onClick={onSave} disabled={saving || preview === null}>
+              <Check size={16} />
               Guardar
             </button>
           </div>
         </>
-      ) : counted ? (
-        <div className="supc-row-saved">
-          <span>
-            {item.recountQty !== null ? "Recontaste" : "Contaste"} <b>{formatCountQty(final, item.unit)}</b>
-          </span>
-          {canCount ? (
-            <button type="button" className="supc-btn is-ghost" onClick={onEdit} disabled={saving}>
-              Corregir
-            </button>
-          ) : null}
-        </div>
       ) : null}
     </article>
   );

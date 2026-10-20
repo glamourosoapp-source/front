@@ -2,11 +2,12 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Button, Dialog, DialogActions, DialogContent, DialogTitle } from "@mui/material";
-import { ClipboardCheck } from "lucide-react";
+import { ClipboardCheck, EyeOff, MapPin, Shuffle, Warehouse } from "lucide-react";
 import { toast } from "sonner";
+import { INVENTORY_COUNT_DEFAULTS } from "@glamouroso/shared/constants";
 import type { InventoryCount } from "@glamouroso/shared";
 import { httpClient, getApiErrorMessage } from "@/services/http-client";
+import { CountDialog } from "./CountDialog";
 
 export interface CountBranch {
   id: string;
@@ -35,26 +36,68 @@ export function StartCountDialog({ branch, onClose }: { branch: CountBranch | nu
     }
   };
 
+  const steps = [
+    {
+      icon: Shuffle,
+      title: `${INVENTORY_COUNT_DEFAULTS.ITEMS} productos al azar`,
+      text: "La lista se arma en cuanto lo inicias; nadie la conoce antes.",
+    },
+    {
+      icon: Warehouse,
+      title: "Anaquel y bodega",
+      text: "Cuenta todo lo que hay en la tienda de cada producto.",
+    },
+    {
+      icon: EyeOff,
+      title: "Conteo ciego",
+      text: "No verás lo que dice el sistema: anota solo lo que cuentas.",
+    },
+  ];
+
   return (
-    <Dialog open={Boolean(branch)} onClose={() => (starting ? null : onClose())} fullWidth maxWidth="xs">
-      <DialogTitle>Iniciar conteo</DialogTitle>
-      <DialogContent dividers>
-        <p style={{ marginTop: 0 }}>
-          Conteo de inventario en <strong>{branch ? [branch.code, branch.name].filter(Boolean).join(" · ") : ""}</strong>.
-        </p>
-        <p style={{ marginBottom: 0 }}>
-          La lista se arma al azar en este momento; cuéntala en la tienda. Cuenta lo que hay en el anaquel y la bodega,
-          sin ver lo que dice el sistema.
-        </p>
-      </DialogContent>
-      <DialogActions>
-        <Button onClick={onClose} disabled={starting}>
-          Ahora no
-        </Button>
-        <Button variant="contained" startIcon={<ClipboardCheck size={16} />} onClick={() => void start()} disabled={starting}>
-          {starting ? "Armando la lista…" : "Iniciar conteo"}
-        </Button>
-      </DialogActions>
-    </Dialog>
+    <CountDialog
+      open={Boolean(branch)}
+      onClose={onClose}
+      busy={starting}
+      icon={ClipboardCheck}
+      title="Iniciar conteo"
+      subtitle={
+        branch ? (
+          <>
+            {branch.code ? <span className="supd-code">{branch.code}</span> : null}
+            {branch.name}
+          </>
+        ) : null
+      }
+      actions={
+        <>
+          <button type="button" className="supd-btn" onClick={onClose} disabled={starting}>
+            Ahora no
+          </button>
+          <button type="button" className="supd-btn is-primary" onClick={() => void start()} disabled={starting}>
+            <ClipboardCheck size={18} />
+            {starting ? "Armando la lista…" : "Iniciar conteo"}
+          </button>
+        </>
+      }
+    >
+      <ol className="supd-steps">
+        {steps.map(({ icon: Icon, title, text }) => (
+          <li key={title}>
+            <span aria-hidden>
+              <Icon size={18} />
+            </span>
+            <div>
+              <strong>{title}</strong>
+              <small>{text}</small>
+            </div>
+          </li>
+        ))}
+      </ol>
+      <p className="supd-note">
+        <MapPin size={16} />
+        Inícialo ya estando en la tienda.
+      </p>
+    </CountDialog>
   );
 }

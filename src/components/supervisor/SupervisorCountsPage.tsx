@@ -64,22 +64,33 @@ function CountCard({ row, canStart, onStart }: { row: Row; canStart: boolean; on
 
       <div className="supc-card-lines">
         {current && progress ? (
-          <p>
-            <strong>
-              En curso · {progress.counted}/{progress.total || "—"}
-            </strong>{" "}
-            <span>· empezó {relativeDays(current.startedAt)}</span>
-          </p>
+          <div className="supc-card-progress">
+            <p>
+              <strong>
+                En curso · {progress.counted}/{progress.total || "—"}
+              </strong>{" "}
+              <span className="supc-muted">· empezó {relativeDays(current.startedAt)}</span>
+            </p>
+            <span className="supc-progress-bar" aria-hidden>
+              <span style={{ width: `${progress.total ? Math.round((progress.counted / progress.total) * 100) : 0}%` }} />
+            </span>
+          </div>
         ) : null}
         {last ? (
-          <p>
-            Último conteo {relativeDays(last.closedAt ?? last.startedAt)}
-            {differences !== null
-              ? differences
-                ? ` · diferencias en ${differences} ${differences === 1 ? "renglón" : "renglones"}`
-                : " · sin diferencias"
-              : ""}
-            {accuracy !== null ? <span className="supc-muted"> · exactitud {accuracy} %</span> : null}
+          <p className="supc-card-last">
+            <span>
+              Último conteo {relativeDays(last.closedAt ?? last.startedAt)}
+              {differences !== null
+                ? differences
+                  ? ` · ${differences} con diferencia`
+                  : " · sin diferencias"
+                : ""}
+            </span>
+            {accuracy !== null ? (
+              <span className={`supc-accuracy${accuracy >= 95 ? " is-ok" : accuracy >= 80 ? " is-mid" : " is-low"}`}>
+                {accuracy} % exacto
+              </span>
+            ) : null}
           </p>
         ) : (
           <p className="supc-muted">Nunca contada</p>
