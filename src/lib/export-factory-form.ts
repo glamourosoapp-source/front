@@ -16,6 +16,9 @@ import { formatMoney, formatQuantity } from "@/lib/format-money";
  * 1–3 llevan 4 bloques iguales; la hoja 4 lleva 3, el primero ancho con la
  * columna `Impor` grande. Los renglones sin cantidad se imprimen con `Cant` e
  * `Impor` vacíos: la hoja también sirve para llenarla a mano.
+ *
+ * Todo el texto va en negrita (se lee mejor impreso) y la hoja de bidones, la
+ * última del pedido, va en horizontal.
  */
 
 const PAGE_W = 215.9;
@@ -102,7 +105,6 @@ interface FooterRow {
   qty?: string;
   amount?: string;
   shaded?: boolean;
-  bold?: boolean;
 }
 
 /** Una hoja lista para dibujar: sus bloques, su layout y el pie que le toca. */
@@ -173,7 +175,7 @@ function footerRows(form: FactoryForm, page: number, total: number, footers: boo
       { label: "", amount: formatMoney(transparent.amount) },
       { label: "BIDON COLOR", qty: formatQty(color.qty) },
       { label: "", amount: formatMoney(color.amount) },
-      { label: "Total=", amount: formatMoney(total), bold: true },
+      { label: "Total=", amount: formatMoney(total) },
     ];
   }
   if (page === 4) {
@@ -184,19 +186,18 @@ function footerRows(form: FactoryForm, page: number, total: number, footers: boo
     return [
       {
         label: "Publicidad",
-        bold: true,
         qty: publicity?.qty ? formatQty(publicity.qty) : undefined,
         amount: publicity?.amount ? formatMoney(publicity.amount) : undefined,
       },
-      { label: "Flete", bold: true, amount: shipping?.amount ? formatMoney(shipping.amount) : undefined },
+      { label: "Flete", amount: shipping?.amount ? formatMoney(shipping.amount) : undefined },
       { label: "CAJAS AZULES", shaded: true, qty: blue ? formatQty(blue.qty) : undefined },
       { label: "", shaded: true, amount: blue ? formatMoney(blue.amount) : undefined },
-      { label: "TOTAL=", amount: formatMoney(total), shaded: true, bold: true },
-      { label: "TOTAL PEDIDO=", amount: formatMoney(form.grandTotal), shaded: true, bold: true },
+      { label: "TOTAL=", amount: formatMoney(total), shaded: true },
+      { label: "TOTAL PEDIDO=", amount: formatMoney(form.grandTotal), shaded: true },
     ];
   }
   if (page === 2 || page === 3) {
-    return [{ label: "Total=", amount: formatMoney(total), shaded: true, bold: true }];
+    return [{ label: "Total=", amount: formatMoney(total), shaded: true }];
   }
   return [];
 }
@@ -306,7 +307,7 @@ function fitText(
   return { text: fitted, size };
 }
 
-function drawHeader(doc: jsPDF, form: FactoryForm, title: string): void {
+function drawHeader(doc: jsPDF, form: FactoryForm, title: string, pageW = PAGE_W): void {
   const baseline = MARGIN + 5.5;
   doc.setTextColor(0);
   doc.setFont("helvetica", "bold");
@@ -322,16 +323,13 @@ function drawHeader(doc: jsPDF, form: FactoryForm, title: string): void {
   }
   doc.text("FECHA:", x, baseline);
   x += doc.getTextWidth("FECHA:") + 1.5;
-  doc.setFont("helvetica", "normal");
   const date = formatFormDate(form.date);
   doc.text(date, x, baseline);
   x += doc.getTextWidth(date) + 8;
-  doc.setFont("helvetica", "bold");
   doc.text("NOMBRE", x, baseline);
   x += doc.getTextWidth("NOMBRE") + 1.5;
-  doc.setFont("helvetica", "normal");
   const name = form.code ? `${form.name} (${form.code})` : form.name;
-  const fitted = fitText(doc, name, PAGE_W - MARGIN - x, 8, 6);
+  const fitted = fitText(doc, name, pageW - MARGIN - x, 8, 6);
   doc.text(fitted.text, x, baseline);
 }
 
@@ -391,7 +389,7 @@ function drawQtyAndAmount(
 function drawProductRow(doc: jsPDF, row: FactoryFormRow, x: number, y: number, rowH: number, cols: ColumnWidths): void {
   drawCells(doc, x, y, rowH, cols);
   const middle = y + rowH / 2;
-  doc.setFont("helvetica", "normal");
+  doc.setFont("helvetica", "bold");
   const label = fitText(doc, row.label, cols.product - 2 * CELL_PAD, FONT_PRODUCT_MAX, FONT_PRODUCT_MIN);
   if (label.text) doc.text(label.text, x + CELL_PAD, middle, { baseline: "middle" });
   const amount = row.amount != null && Number.isFinite(row.amount) ? formatMoney(row.amount) : "";
@@ -415,7 +413,7 @@ function drawFooterRow(doc: jsPDF, row: FooterRow, x: number, y: number, rowH: n
     doc.rect(x, y, blockWidth(cols), rowH, "F");
   }
   const middle = y + rowH / 2;
-  doc.setFont("helvetica", row.bold ? "bold" : "normal");
+  doc.setFont("helvetica", "bold");
   const label = fitText(doc, row.label, cols.product - 2 * CELL_PAD, FONT_SECTION, FONT_PRODUCT_MIN);
   if (label.text) doc.text(label.text, x + CELL_PAD, middle, { baseline: "middle" });
   // Sin celdas, el importe puede usar Cant + Impor: así el total se lee sin lupa.
@@ -470,12 +468,12 @@ function drawPage(
     }
   });
 
-  doc.setFont("helvetica", "normal");
+  doc.setFont("helvetica", "bold");
   doc.setFontSize(5);
   doc.text(`Hoja ${pageIndex + 1}/${pageCount}`, PAGE_W - MARGIN, PAGE_H - 2, { align: "right" });
 }
 
-/** Dibuja el formato completo en `doc` (carta vertical, en mm). */
+/** Dibuja el formato completo en `doc` (carta vertical, en mm; la hoja de bidones en horizontal). */
 export function drawFactoryForm(doc: jsPDF, form: FactoryForm, options: FactoryFormDrawOptions = {}): void {
   const resolved = { ...DEFAULT_OPTIONS, ...options };
   const pages = layoutPages(form, resolved.footers);
@@ -509,16 +507,19 @@ function drawBidonSheet(
   pageCount: number
 ): void {
   if (!rows.length) return;
-  doc.addPage("letter", "portrait");
-  drawHeader(doc, form, "BIDONES");
-  doc.setFont("helvetica", "normal");
+  // Va en horizontal: carta girada, así que ancho y alto se intercambian.
+  const pageW = PAGE_H;
+  const pageH = PAGE_W;
+  doc.addPage("letter", "landscape");
+  drawHeader(doc, form, "BIDONES", pageW);
+  doc.setFont("helvetica", "bold");
   doc.setFontSize(5);
-  doc.text(`Hoja ${pageCount}/${pageCount}`, PAGE_W - MARGIN, PAGE_H - 2, { align: "right" });
+  doc.text(`Hoja ${pageCount}/${pageCount}`, pageW - MARGIN, pageH - 2, { align: "right" });
   const columns = 3;
   const perColumn = Math.ceil(rows.length / columns);
   const gap = 4;
-  const colW = (USABLE_W - gap * (columns - 1)) / columns;
-  const rowH = Math.min(MAX_ROW_H, (PAGE_H - BLOCK_TOP - 30) / (perColumn + 1));
+  const colW = (pageW - 2 * MARGIN - gap * (columns - 1)) / columns;
+  const rowH = Math.min(MAX_ROW_H, (pageH - BLOCK_TOP - 30) / (perColumn + 1));
   const cols = { product: colW - 14, qty: 14 };
   for (let c = 0; c < columns; c += 1) {
     const x = MARGIN + c * (colW + gap);
@@ -538,12 +539,11 @@ function drawBidonSheet(
       }
       doc.rect(x, y, cols.product, rowH);
       doc.rect(x + cols.product, y, cols.qty, rowH);
-      doc.setFont("helvetica", row.bidon === "color" ? "bold" : "normal");
+      doc.setFont("helvetica", "bold");
       const label = fitText(doc, row.label + (row.bidon === "color" ? " (color)" : ""), cols.product - 2 * CELL_PAD, FONT_PRODUCT_MAX + 1, FONT_PRODUCT_MIN);
       doc.text(label.text, x + CELL_PAD, y + rowH / 2, { baseline: "middle" });
       const qty = formatQty(row.qty && row.qty > 0 ? row.qty : null);
       if (qty) {
-        doc.setFont("helvetica", "bold");
         doc.setFontSize(FONT_PRODUCT_MAX + 1);
         doc.text(qty, x + cols.product + cols.qty / 2, y + rowH / 2, { align: "center", baseline: "middle" });
       }
@@ -551,7 +551,7 @@ function drawBidonSheet(
     }
   }
   const { transparent, color } = form.bidones;
-  const y = PAGE_H - MARGIN - 18;
+  const y = pageH - MARGIN - 18;
   doc.setFont("helvetica", "bold");
   doc.setFontSize(9);
   doc.text(`BID TRANSPARENTE: ${formatQty(transparent.qty) || "0"}`, MARGIN, y);
