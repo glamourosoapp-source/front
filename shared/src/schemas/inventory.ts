@@ -95,6 +95,23 @@ export const queryBranchInventorySchema = paginationSchema.extend({
   belowMin: z.union([z.enum(["true", "false"]), z.literal(""), z.null()]).optional(),
 });
 
+/**
+ * Inventario de varias sucursales a la vez (pantalla Inventario del panel).
+ * `branchIds` separados por coma; vacío = todas las sucursales activas.
+ */
+export const queryInventoryOverviewSchema = z.object({
+  branchIds: z
+    .string()
+    .refine(
+      (value) => value === "" || value.split(",").every((id) => z.string().uuid().safeParse(id.trim()).success),
+      "Usa ids de sucursal separados por coma"
+    )
+    .optional(),
+  search: z.union([z.string(), z.null()]).optional().transform((v) => v ?? ""),
+  /** "true" = solo lo que está bajo su stock en alguna de las sucursales elegidas. */
+  belowMin: z.union([z.enum(["true", "false"]), z.literal(""), z.null()]).optional(),
+});
+
 export const queryInventoryMovementsSchema = paginationSchema.extend({
   productId: z.union([z.string().uuid(), z.literal(""), z.null()]).optional(),
   lineId: z.union([z.string().uuid(), z.literal(""), z.null()]).optional(),

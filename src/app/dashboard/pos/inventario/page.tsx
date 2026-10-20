@@ -1,27 +1,34 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { MenuItem, TextField } from "@mui/material";
-import { ShieldAlert } from "lucide-react";
+import { Button } from "@mui/material";
+import { FileSpreadsheet, ShieldAlert } from "lucide-react";
 import { toast } from "sonner";
 import { BRANCH_TYPES } from "@glamouroso/shared/constants";
 import { httpClient, getApiErrorMessage } from "@/services/http-client";
 import { usePermissions } from "@/lib/permissions";
+import { exportInventoryToXlsx, type InventoryExportRow } from "@/lib/export-inventory-xlsx";
+import { BranchPicker, branchSelectionLabel } from "@/components/pos-admin/BranchPicker";
+import { BranchesInventoryMatrix, type InventoryOverview } from "@/components/pos-admin/BranchesInventoryMatrix";
 import { BranchInventoryTab } from "@/components/pos-admin/tabs/BranchInventoryTab";
 import type { Branch, ListResponse } from "@/types";
 
 /**
- * Inventario por sucursal desde el menú: un selector de sucursal y la MISMA
- * pestaña "Inventario y mínimos" del detalle de la sucursal. Antes era una
- * pantalla aparte con otra tabla que no dejaba editar el mínimo en la fila;
- * ahora las dos entradas llevan a lo mismo. Se queda en el menú porque un
- * perfil con inventario pero sin Sucursales no puede abrir el detalle.
+ * Inventario desde el menú, para **una, varias o todas** las sucursales:
+ * - Una sola: la MISMA pestaña "Inventario y stock" del detalle de la
+ *   sucursal (stock editable en la fila, kardex y ajustes).
+ * - Varias o todas: una tabla con una columna por sucursal para comparar.
+ * En ambos casos el Excel baja el inventario completo de lo elegido. Se queda
+ * en el menú porque un perfil con inventario pero sin Sucursales no puede
+ * abrir el detalle.
  */
 export default function PosInventarioPage() {
   const { can } = usePermissions();
   const canView = can("posInventory", "view");
   const [branches, setBranches] = useState<Branch[]>([]);
-  const [branchId, setBranchId] = useState("");
+  /** Vacío = todas las sucursales activas. */
+  const [branchIds, setBranchIds] = useState<string[]>([]);
+  const [exporting, setExporting] = useState(false);
 
   useEffect(() => {
     if (!canView) return;
@@ -32,7 +39,8 @@ export default function PosInventarioPage() {
         // no tiene nada que mostrar.
         const withInventory = res.items.filter((branch) => branch.type !== BRANCH_TYPES.FRANCHISE);
         setBranches(withInventory);
-        setBranchId((current) => current || withInventory[0]?.id || "");
+        // Si solo hay una sucursal, "todas" es esa: se abre editable.
+        if (withInventory.length === 1) setBranchIds([withInventory[0]!.id]);
       })
       .catch((error) => toast.error(getApiErrorMessage(error, "Error al cargar las sucursales")));
   }, [canView]);
@@ -53,33 +61,73 @@ export default function PosInventarioPage() {
     );
   }
 
+  const single = branchIds.length === 1 ? branchIds[0]! : null;
+  const label = branchSelectionLabel(branches, branchIds);
+
+  /** Baja todo el inventario de lo elegido, sin los filtros de búsqueda de la pantalla. */
+  async function downloadExcel() {
+    setExporting(true);
+    try {
+      const data = await httpClient.get<InventoryOverview>("/pos/inventory", {
+        ...(branchIds.length ? { branchIds: branchIds.join(",") } : {}),
+      });
+      const rows: InventoryExportRow[] = [
+        ...data.lines.map((line) => ({
+          kind: "line" as const,
+          name: line.name,
+          sku: null,
+          categoryName: line.categoryName,
+          byBranch: line.byBranch,
+        })),
+        ...data.products.map((product) => ({
+          kind: "product" as const,
+          name: product.name,
+          sku: product.sku,
+          categoryName: product.categoryName,
+          byBranch: product.byBranch,
+        })),
+      ];
+      await exportInventoryToXlsx({ branches: data.branches, rows, label });
+      toast.success("Excel de inventario descargado");
+    } catch (error) {
+      toast.error(getApiErrorMessage(error, "No se pudo generar el Excel"));
+    } finally {
+      setExporting(false);
+    }
+  }
+
   return (
     <div className="page-stack">
-      <div className="toolbar" style={{ alignItems: "flex-end" }}>
+      <div className="toolbar" style={{ alignItems: "flex-end", flexWrap: "wrap" }}>
         <div>
           <h1 className="page-title">Inventario por sucursal</h1>
           <p className="page-kicker" style={{ margin: 0 }}>
-            Lo mismo que la pestaña Inventario y stock de cada sucursal: existencia, stock (lo que la sucursal debe
-            tener siempre) editable en la fila, kardex y ajustes.
+            {single
+              ? "Existencia, stock (lo que la sucursal debe tener siempre) editable en la fila, kardex y ajustes."
+              : "Existencia de cada sucursal lado a lado. Da clic en una sucursal para editar su stock y sus ajustes."}
           </p>
         </div>
-        <TextField
-          select
-          size="small"
-          label="Sucursal"
-          value={branchId}
-          onChange={(event) => setBranchId(event.target.value)}
-          InputLabelProps={{ shrink: true }}
-          sx={{ minWidth: 260 }}
-        >
-          {branches.map((branch) => (
-            <MenuItem key={branch.id} value={branch.id}>
-              {branch.code} · {branch.name}
-            </MenuItem>
-          ))}
-        </TextField>
+        <div className="inv-actions">
+          <BranchPicker branches={branches} value={branchIds} onChange={setBranchIds} />
+          <Button
+            variant="contained"
+            startIcon={<FileSpreadsheet size={16} />}
+            onClick={() => void downloadExcel()}
+            disabled={exporting || !branches.length}
+            sx={{ height: 40, whiteSpace: "nowrap" }}
+          >
+            {exporting ? "Generando…" : "Descargar Excel"}
+          </Button>
+        </div>
       </div>
-      {branchId ? <BranchInventoryTab key={branchId} branchId={branchId} /> : <p className="page-kicker">Cargando...</p>}
+
+      {single ? (
+        <BranchInventoryTab key={single} branchId={single} />
+      ) : branches.length ? (
+        <BranchesInventoryMatrix branchIds={branchIds} onPickBranch={(id) => setBranchIds([id])} />
+      ) : (
+        <p className="page-kicker">Cargando...</p>
+      )}
     </div>
   );
 }
