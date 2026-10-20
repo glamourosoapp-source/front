@@ -1,16 +1,39 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Button } from "@mui/material";
+import { Button, MenuItem, TextField } from "@mui/material";
+import { Plus } from "lucide-react";
 import { CustomerFormDialog } from "@/components/customers/CustomerFormDialog";
 import { DataTable } from "@/components/ui/DataTable";
 import { ListPagination } from "@/components/ui/ListPagination";
-import { httpClient } from "@/services/http-client";
+import { FilterBar, FilterMeta, FilterSearch } from "@/components/pos-admin/FilterBar";
+import { CustomerAvatar } from "@/components/pos-admin/CustomerAvatar";
+import { customerDisplayName } from "@/components/pos-admin/customer-labels";
+import { formatDate, relativeDays } from "@/components/pos-admin/pos-labels";
+import { httpClient, getApiErrorMessage } from "@/services/http-client";
+import { useDebounce } from "@/hooks/useDebounce";
+import { formatMoney } from "@/lib/format-money";
+import { formatMxPhone } from "@/utils/format-phone";
 import { usePermissions } from "@/lib/permissions";
 import { Customer, ListResponse, Team } from "@/types";
 import { toast } from "sonner";
 
+/** Órdenes del CRM que entiende `GET /customers` (`sort`). */
+const SORT_OPTIONS = [
+  { value: "", label: "Actividad reciente" },
+  { value: "last_order", label: "Último pedido" },
+  { value: "total_spent", label: "Más comprado" },
+  { value: "total_orders", label: "Más pedidos" },
+  { value: "newest", label: "Alta más reciente" },
+  { value: "name", label: "Nombre (A–Z)" },
+];
+
+/**
+ * Directorio del CRM, con el mismo formato que Clientes de sucursal: avatar,
+ * nombre parejo y lo que compra en pedidos. Editar va en la fila; eliminar,
+ * en el detalle.
+ */
 export default function CustomersPage() {
   const router = useRouter();
   const { can, isAdmin } = usePermissions();
@@ -19,66 +42,25 @@ export default function CustomersPage() {
   const [search, setSearch] = useState("");
   const [zone, setZone] = useState("");
   const [teamId, setTeamId] = useState("");
+  const [sort, setSort] = useState("");
   const [page, setPage] = useState(1);
   const [limit, setLimit] = useState(25);
   const [total, setTotal] = useState(0);
   const [totalPages, setTotalPages] = useState(1);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<Customer | null>(null);
+  // La primera carga espera a leer ?search= (buscador global del header).
+  const [ready, setReady] = useState(false);
 
-  // Solo la carga más reciente escribe estado (filtros/página en cambio rápido).
-  const loadSeq = useRef(0);
-  const pendingUrlSearch = useRef(false);
-  const load = useCallback(
-    async (targetPage: number) => {
-      const seq = ++loadSeq.current;
-      setLoading(true);
-      try {
-        const r = await httpClient.get<ListResponse<Customer>>("/customers", {
-          search,
-          zone,
-          teamId,
-          page: targetPage,
-          limit,
-        });
-        if (seq !== loadSeq.current) return;
-        setCustomers(r.items);
-        setTotal(r.total);
-        setPage(r.page);
-        setTotalPages(r.totalPages || 1);
-      } catch {
-        if (seq !== loadSeq.current) return;
-        toast.error("Error al cargar clientes");
-      } finally {
-        if (seq === loadSeq.current) setLoading(false);
-      }
-    },
-    [search, zone, teamId, limit]
-  );
+  const debouncedSearch = useDebounce(search, 300);
+  const debouncedZone = useDebounce(zone, 300);
 
-  useEffect(() => {
-    load(page);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [page, limit]);
-
-  // Deep-link ?search= (buscador global del header). La lista solo busca al
-  // "Filtrar", así que la primera carga con el término se dispara a mano.
   useEffect(() => {
     const fromUrl = new URLSearchParams(window.location.search).get("search");
-    if (fromUrl) {
-      pendingUrlSearch.current = true;
-      setSearch(fromUrl);
-    }
+    if (fromUrl) setSearch(fromUrl);
+    setReady(true);
   }, []);
-
-  useEffect(() => {
-    if (pendingUrlSearch.current && search) {
-      pendingUrlSearch.current = false;
-      load(1);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [search]);
 
   // El filtro por equipo solo aplica para admins (los perfiles team-scoped ya vienen filtrados).
   useEffect(() => {
@@ -89,32 +71,34 @@ export default function CustomersPage() {
       .catch(() => undefined);
   }, [isAdmin]);
 
-  function applyFilters() {
-    if (page === 1) {
-      load(1);
-      return;
+  const load = useCallback(async () => {
+    setLoading(true);
+    try {
+      const res = await httpClient.get<ListResponse<Customer>>("/customers", {
+        search: debouncedSearch,
+        zone: debouncedZone,
+        teamId,
+        ...(sort ? { sort } : {}),
+        page,
+        limit,
+      });
+      setCustomers(res.items);
+      setTotal(res.total);
+      setTotalPages(res.totalPages || 1);
+    } catch (error) {
+      toast.error(getApiErrorMessage(error, "Error al cargar clientes"));
+    } finally {
+      setLoading(false);
     }
-    setPage(1);
-  }
+  }, [debouncedSearch, debouncedZone, teamId, sort, page, limit]);
+
+  useEffect(() => {
+    if (ready) void load();
+  }, [ready, load]);
 
   function openCreate() {
     setEditing(null);
     setOpen(true);
-  }
-
-  function openEdit(customer: Customer) {
-    setEditing(customer);
-    setOpen(true);
-  }
-
-  async function remove(customer: Customer) {
-    try {
-      await httpClient.delete(`/customers/${customer.id}`);
-      toast.success(`Cliente ${customer.name} eliminado con éxito`);
-      await load(page);
-    } catch {
-      toast.error("Error al eliminar el cliente");
-    }
   }
 
   return (
@@ -125,87 +109,191 @@ export default function CustomersPage() {
           <p className="page-kicker">Directorio de clientes, historial de pedidos y compras acumuladas.</p>
         </div>
         {can("customers", "create") ? (
-          <Button variant="contained" onClick={openCreate}>Nuevo cliente</Button>
+          <Button variant="contained" startIcon={<Plus size={16} />} onClick={openCreate}>
+            Nuevo cliente
+          </Button>
         ) : null}
       </div>
-      <section className="panel p-4">
-        <div className="mb-4 flex flex-wrap items-end justify-between gap-3">
-          <div>
-            <h2>Base de clientes</h2>
-            <p className="page-kicker">Consulta rapida para ventas y soporte.</p>
-          </div>
-          <span className="pill">{total.toLocaleString("es-MX")} clientes</span>
-        </div>
-        <div
-          className={`mb-4 grid gap-3 ${
-            isAdmin
-              ? "md:grid-cols-[minmax(220px,1fr)_180px_180px_auto]"
-              : "md:grid-cols-[minmax(220px,1fr)_180px_auto]"
-          }`}
-        >
-          <input
-            className="input"
-            placeholder="Buscar nombre o WhatsApp"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") applyFilters();
-            }}
-          />
-          <input className="input" placeholder="Zona" value={zone} onChange={(e) => setZone(e.target.value)} />
-          {isAdmin ? (
-            <select className="input" value={teamId} onChange={(e) => setTeamId(e.target.value)}>
-              <option value="">Todos los equipos</option>
-              {teams.map((team) => (
-                <option key={team.id} value={team.id}>
-                  {team.name}
-                </option>
-              ))}
-            </select>
-          ) : null}
-          <Button variant="outlined" onClick={applyFilters} disabled={loading}>{loading ? "Cargando..." : "Filtrar"}</Button>
-        </div>
-        <DataTable
-          rows={customers}
-          getKey={(row) => row.id}
-          getDeleteLabel={(row) => row.name}
-          onRowClick={(row) => router.push(`/dashboard/customers/${row.id}`)}
-          onEdit={can("customers", "update") ? openEdit : undefined}
-          onDelete={can("customers", "delete") ? remove : undefined}
-          columns={[
-            { key: "name", label: "Nombre" },
-            { key: "phone", label: "WhatsApp" },
-            { key: "colony", label: "Colonia" },
-            { key: "postalCode", label: "CP" },
-            { key: "zone", label: "Zona" },
-            { key: "team", label: "Equipo", render: (r) => r.team?.name ?? "—" },
-            {
-              key: "pricingTier",
-              label: "Precio",
-              render: (r) => (r.pricingTier === "wholesale" ? "Mayoreo" : "Menudeo"),
-            },
-            { key: "totalOrders", label: "Pedidos" },
-            { key: "totalSpent", label: "Compra", render: (r) => `$${Number(r.totalSpent || 0).toFixed(2)}` },
-          ]}
-        />
-        <ListPagination
-          page={page}
-          totalPages={totalPages}
-          total={total}
-          limit={limit}
-          onPageChange={setPage}
-          onLimitChange={(nextLimit) => {
-            setLimit(nextLimit);
+
+      <FilterBar>
+        <FilterSearch
+          value={search}
+          placeholder="Buscar nombre, WhatsApp, correo o RFC"
+          onChange={(value) => {
+            setSearch(value);
             setPage(1);
           }}
         />
-      </section>
+        <TextField
+          size="small"
+          label="Zona"
+          placeholder="Todas"
+          value={zone}
+          onChange={(e) => {
+            setZone(e.target.value);
+            setPage(1);
+          }}
+          InputLabelProps={{ shrink: true }}
+          sx={{ width: 150 }}
+        />
+        {isAdmin ? (
+          <TextField
+            select
+            size="small"
+            label="Equipo"
+            value={teamId}
+            onChange={(e) => {
+              setTeamId(e.target.value);
+              setPage(1);
+            }}
+            InputLabelProps={{ shrink: true }}
+            SelectProps={{ displayEmpty: true }}
+            sx={{ minWidth: 190 }}
+          >
+            <MenuItem value="">Todos los equipos</MenuItem>
+            {teams.map((team) => (
+              <MenuItem key={team.id} value={team.id}>
+                {team.name}
+              </MenuItem>
+            ))}
+          </TextField>
+        ) : null}
+        <TextField
+          select
+          size="small"
+          label="Ordenar por"
+          value={sort}
+          onChange={(e) => {
+            setSort(e.target.value);
+            setPage(1);
+          }}
+          InputLabelProps={{ shrink: true }}
+          SelectProps={{ displayEmpty: true }}
+          sx={{ minWidth: 180 }}
+        >
+          {SORT_OPTIONS.map((option) => (
+            <MenuItem key={option.value} value={option.value}>
+              {option.label}
+            </MenuItem>
+          ))}
+        </TextField>
+        <FilterMeta>
+          {loading ? "Cargando…" : <><strong>{total.toLocaleString("es-MX")}</strong> {total === 1 ? "cliente" : "clientes"}</>}
+        </FilterMeta>
+      </FilterBar>
+
+      <DataTable
+        rows={customers}
+        getKey={(row: Customer) => row.id}
+        onRowClick={(row: Customer) => router.push(`/dashboard/customers/${row.id}`)}
+        onEdit={
+          can("customers", "update")
+            ? (row: Customer) => {
+                setEditing(row);
+                setOpen(true);
+              }
+            : undefined
+        }
+        columns={[
+          {
+            key: "name",
+            label: "Cliente",
+            render: (row: Customer) => (
+              <div className="customer-cell">
+                <CustomerAvatar id={row.id} name={row.name} />
+                <div style={{ minWidth: 0 }}>
+                  <div className="customer-cell-name">
+                    {customerDisplayName(row.name)}
+                    {row.pricingTier === "wholesale" ? <span className="customer-tier-pill">Mayoreo</span> : null}
+                  </div>
+                  <div className="customer-cell-sub">{formatMxPhone(row.phone)}</div>
+                </div>
+              </div>
+            ),
+          },
+          {
+            key: "zone",
+            label: "Zona",
+            render: (row: Customer) =>
+              row.zone || row.colony ? (
+                <>
+                  <div>{row.zone || row.colony}</div>
+                  {row.zone && row.colony ? <div className="customer-cell-sub">{row.colony}</div> : null}
+                </>
+              ) : (
+                <span className="customer-cell-sub">Sin zona</span>
+              ),
+          },
+          {
+            key: "team",
+            label: "Equipo",
+            // Los de caja no tienen equipo: se ve la sucursal donde los registraron.
+            render: (row: Customer) =>
+              row.team ? (
+                <span style={{ whiteSpace: "nowrap" }}>{row.team.name}</span>
+              ) : row.originBranch ? (
+                <span className="customer-branch" style={{ whiteSpace: "nowrap" }} title="Registrado en la caja">
+                  <span className="branch-code-badge">{row.originBranch.code}</span>
+                  {row.originBranch.name}
+                </span>
+              ) : (
+                <span className="customer-cell-sub">Sin equipo</span>
+              ),
+          },
+          {
+            key: "totalOrders",
+            label: "Pedidos",
+            align: "right",
+            render: (row: Customer) =>
+              Number(row.totalOrders ?? 0) > 0 ? (
+                <strong>{row.totalOrders}</strong>
+              ) : (
+                <span className="customer-cell-sub">—</span>
+              ),
+          },
+          {
+            key: "totalSpent",
+            label: "Comprado",
+            align: "right",
+            render: (row: Customer) =>
+              Number(row.totalSpent ?? 0) > 0 ? (
+                <strong className="customer-money">{formatMoney(row.totalSpent)}</strong>
+              ) : (
+                <span className="customer-cell-sub">—</span>
+              ),
+          },
+          {
+            key: "lastOrderAt",
+            label: "Último pedido",
+            render: (row: Customer) =>
+              row.lastOrderAt ? (
+                <>
+                  <div style={{ fontWeight: 600, whiteSpace: "nowrap" }}>{relativeDays(row.lastOrderAt)}</div>
+                  <div className="customer-cell-sub">{formatDate(row.lastOrderAt)}</div>
+                </>
+              ) : (
+                <span className="customer-cell-sub">—</span>
+              ),
+          },
+        ]}
+      />
+      <ListPagination
+        page={page}
+        totalPages={totalPages}
+        total={total}
+        limit={limit}
+        onPageChange={setPage}
+        onLimitChange={(nextLimit) => {
+          setLimit(nextLimit);
+          setPage(1);
+        }}
+      />
 
       <CustomerFormDialog
         open={open}
         customer={editing}
         onClose={() => setOpen(false)}
-        onSaved={() => void load(page)}
+        onSaved={() => void load()}
       />
     </div>
   );

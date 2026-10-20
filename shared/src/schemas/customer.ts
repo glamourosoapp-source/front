@@ -62,7 +62,16 @@ export const updateCustomerSchema = z.object({
 });
 
 /** Órdenes de la vista Clientes de sucursal. */
-export const CUSTOMER_LIST_SORTS = ["last_purchase", "spent", "purchases", "newest", "name"] as const;
+export const CUSTOMER_LIST_SORTS = [
+  "last_purchase",
+  "spent",
+  "purchases",
+  "newest",
+  "name",
+  "last_order",
+  "total_spent",
+  "total_orders",
+] as const;
 export type CustomerListSort = (typeof CUSTOMER_LIST_SORTS)[number];
 
 export const queryCustomerSchema = paginationSchema.extend({

@@ -95,6 +95,7 @@ export interface Customer {
   billingEmail?: string | null;
   totalOrders?: number;
   totalSpent?: string | number;
+  lastOrderAt?: string | null;
   /**
    * Compras en sucursal, contadas aparte de los pedidos del CRM: una venta de
    * mostrador no altera `totalOrders`/`totalSpent`/`lastOrderAt`, así que no
