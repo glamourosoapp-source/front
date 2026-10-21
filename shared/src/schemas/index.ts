@@ -25,3 +25,4 @@ export * from "./pos-sync";
 export * from "./pos-report";
 export * from "./restock";
 export * from "./franchise";
+export * from "./price-list";

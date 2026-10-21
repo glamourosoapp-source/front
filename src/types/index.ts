@@ -37,4 +37,9 @@ export type {
   BranchSalesPeriod,
   BranchOverview,
   BranchCustomerRow,
+  PriceList,
+  PriceListDetail,
+  PriceListProductRow,
+  PriceListImportPreview,
+  PriceListImportPreviewRow,
 } from "@glamouroso/shared";

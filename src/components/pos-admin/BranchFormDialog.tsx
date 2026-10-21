@@ -18,7 +18,7 @@ import {
 import { BRANCH_TYPES, type BranchType } from "@glamouroso/shared/constants";
 import { httpClient, getApiErrorMessage } from "@/services/http-client";
 import { config } from "@/config";
-import { Branch } from "@/types";
+import { Branch, PriceList } from "@/types";
 import { usePermissions } from "@/lib/permissions";
 import { completeOpeningHours, OpeningHoursEditor, openingHoursError } from "./OpeningHoursEditor";
 import type { StockSheetResult } from "@/lib/stock-sheet";
@@ -65,6 +65,10 @@ export function BranchFormDialog({
   const [stockResult, setStockResult] = useState<StockSheetResult | null>(null);
   const [openingHours, setOpeningHours] = useState(() => completeOpeningHours(branch?.openingHours));
   const { can } = usePermissions();
+  // Lista de precios de la ciudad: solo quien ve el catálogo la elige (y solo
+  // entonces se manda, para no borrarla al guardar sin ver el campo).
+  const canPickPriceList = can("products", "view") && can("posBranches", "update");
+  const [priceLists, setPriceLists] = useState<PriceList[] | null>(null);
   // El Excel de stock solo al dar de alta una sucursal con caja: una franquicia no lleva inventario.
   const canAttachStock = !isEdit && type === BRANCH_TYPES.BRANCH && can("posInventory", "update");
 
@@ -75,6 +79,14 @@ export function BranchFormDialog({
     setStockChoice(null);
     setOpeningHours(completeOpeningHours(branch?.openingHours));
   }, [open, branch, defaultType]);
+
+  useEffect(() => {
+    if (!open || !canPickPriceList) return;
+    httpClient
+      .get<PriceList[]>("/pos/price-lists")
+      .then(setPriceLists)
+      .catch(() => setPriceLists(null));
+  }, [open, canPickPriceList]);
 
   async function save(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -101,6 +113,9 @@ export function BranchFormDialog({
         return;
       }
       payload.openingHours = openingHours;
+      if (canPickPriceList && priceLists) {
+        payload.priceListId = String(form.get("priceListId") || "") || null;
+      }
     }
 
     const stock = canAttachStock ? stockChoice : null;
@@ -202,6 +217,25 @@ export function BranchFormDialog({
           <TextField name="city" label="Ciudad" defaultValue={branch?.city || ""} fullWidth />
           <TextField name="postalCode" label="Código postal" defaultValue={branch?.postalCode || ""} fullWidth />
           <TextField name="phone" label="Teléfono" defaultValue={branch?.phone || ""} fullWidth />
+          {type === BRANCH_TYPES.BRANCH && canPickPriceList && priceLists ? (
+            <TextField
+              select
+              name="priceListId"
+              label="Lista de precios"
+              defaultValue={branch?.priceListId ?? ""}
+              fullWidth
+              SelectProps={{ displayEmpty: true }}
+              InputLabelProps={{ shrink: true }}
+              helperText="Con lista, la caja cobra los precios de esa ciudad; lo que la lista no trae va al precio general."
+            >
+              <MenuItem value="">Precio general del catálogo</MenuItem>
+              {priceLists.map((list) => (
+                <MenuItem key={list.id} value={list.id}>
+                  {list.name}
+                </MenuItem>
+              ))}
+            </TextField>
+          ) : null}
           {type === BRANCH_TYPES.BRANCH ? (
             <OpeningHoursEditor value={openingHours} onChange={setOpeningHours} disabled={saving} />
           ) : null}

@@ -392,6 +392,9 @@ export interface Branch {
   syncState?: BranchSyncState | null;
   /** Horario semanal de apertura y cierre de tienda. */
   openingHours?: BranchOpeningHours | null;
+  /** Lista de precios de la ciudad; null = precio general del catálogo. */
+  priceListId?: string | null;
+  priceList?: { id: string; name: string } | null;
   notes?: string | null;
   usersCount?: number;
   createdAt?: string;
@@ -1182,4 +1185,67 @@ export interface InventoryCountStats {
     varianceAmount: number;
     counts: number;
   }>;
+}
+
+/** Lista de precios de una ciudad (Tepic, Tapachula…). */
+export interface PriceList {
+  id: string;
+  organizationId?: string;
+  name: string;
+  notes?: string | null;
+  /** Renglones con precio propio. */
+  itemsCount?: number;
+  branches?: Array<{ id: string; code: string; name: string }>;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+/** Producto del catálogo con su precio general y, si lo trae, el de la lista. */
+export interface PriceListProductRow {
+  productId: string;
+  name: string;
+  sku: string | null;
+  categoryName: string | null;
+  basePrice: number;
+  baseWholesalePrice: number | null;
+  /** null = la lista no trae este producto: cobra el precio general. */
+  listPrice: number | null;
+  listWholesalePrice: number | null;
+  updatedAt: string | null;
+}
+
+export interface PriceListDetail extends PriceList {
+  products: PriceListProductRow[];
+}
+
+/** Vista previa del Excel de eleventa contra el catálogo. No escribe nada. */
+export interface PriceListImportPreviewRow {
+  /** Posición en el Excel (renglón de eleventa). */
+  row: number | null;
+  posId: string | null;
+  name: string;
+  price: number;
+  wholesalePrice: number | null;
+  /** Producto empatado por nombre; null = hay que ligarlo a mano. */
+  product: { id: string; name: string; sku: string | null; basePrice: number; baseWholesalePrice: number | null } | null;
+  /** Lo que la lista tiene hoy para ese producto. */
+  currentPrice: number | null;
+  currentWholesalePrice: number | null;
+  /** new = no estaba en la lista, changed = cambia, same = igual. */
+  status: "new" | "changed" | "same" | "unmatched";
+  /**
+   * Cómo se empató: por nombre, o propuesto por el código de eleventa cuando el
+   * nombre no coincide (llega sin marcar para que se confirme).
+   */
+  matchedBy: "name" | "code" | null;
+  /** El Back propone marcarlo: empate por nombre sin dudas y con algo que guardar. */
+  suggestInclude: boolean;
+  warnings: string[];
+}
+
+export interface PriceListImportPreview {
+  rows: PriceListImportPreviewRow[];
+  summary: { total: number; matched: number; unmatched: number; changed: number; same: number; newItems: number; warnings: number };
+  /** Productos del catálogo que el Excel no trae: cobrarán el precio general. */
+  notInSheet: Array<{ id: string; name: string; sku: string | null; basePrice: number }>;
 }

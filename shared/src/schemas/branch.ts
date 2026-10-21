@@ -128,6 +128,8 @@ const branchPayload = {
   restockCutoffDow: z.union([z.null(), z.coerce.number().int().min(0).max(6)]).optional(),
   ticketSettings: ticketSettingsSchema.optional(),
   openingHours: openingHoursSchema.optional(),
+  /** Lista de precios de la ciudad; null = precio general del catálogo. */
+  priceListId: z.union([z.null(), z.string().uuid()]).optional(),
   notes: optionalString,
 };
 
@@ -145,6 +147,7 @@ export const updateBranchSchema = z.object({
   restockCutoffDow: branchPayload.restockCutoffDow,
   ticketSettings: branchPayload.ticketSettings,
   openingHours: branchPayload.openingHours,
+  priceListId: branchPayload.priceListId,
   notes: optionalString,
   isActive: z.boolean().optional(),
 });

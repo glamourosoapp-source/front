@@ -16,6 +16,7 @@ import {
   Receipt,
   Store,
   StickyNote,
+  Tags,
   Truck,
   UserCog,
   Users,
@@ -280,6 +281,14 @@ export function BranchOverviewTab({ branch, stats }: BranchOverviewTabProps) {
           <InfoRow icon={Store} label="Nombre" value={branch.name} />
           <InfoRow icon={Phone} label="Teléfono" value={branch.phone || null} empty="Sin teléfono registrado" />
           <InfoRow icon={MapPin} label="Domicilio" value={address || null} empty="Sin domicilio registrado" />
+          {!isFranchise ? (
+            <InfoRow
+              icon={Tags}
+              label="Lista de precios"
+              value={branch.priceList?.name ?? null}
+              empty="Precio general del catálogo"
+            />
+          ) : null}
           {!isFranchise ? (
             <InfoRow
               icon={Printer}

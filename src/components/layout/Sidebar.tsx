@@ -34,6 +34,7 @@ import {
   Handshake,
   ReceiptText,
   FileSpreadsheet,
+  Tags,
 } from "lucide-react";
 import type { PermissionModule } from "@glamouroso/shared";
 import { useAuthStore } from "@/stores/auth.store";
@@ -129,6 +130,7 @@ const sections: NavSection[] = [
     links: [
       { href: "/dashboard/pos/formato", label: "Formato de pedido", icon: FileSpreadsheet, module: "posRestock" },
       { href: "/dashboard/pos/lineas", label: "Líneas de líquidos", icon: Droplets, module: "posInventory" },
+      { href: "/dashboard/pos/precios", label: "Precios por ciudad", icon: Tags, module: "products" },
       { href: "/dashboard/pos/ticket", label: "Ticket de venta", icon: ReceiptText, module: "settings" },
     ],
   },
