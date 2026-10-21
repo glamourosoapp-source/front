@@ -22,7 +22,6 @@ import {
   restockItemAmount,
 } from "./pos-labels";
 import { useFactoryFormDownload } from "./useFactoryFormDownload";
-import { usePosLinks } from "./pos-links";
 
 const RETURN_RED = "#b91c1c";
 
@@ -42,7 +41,6 @@ function returnedLabel(line: ReturnedLine): string {
  * del pedido.
  */
 export function RestockOrderDetail({ order }: { order: RestockOrder }) {
-  const { hideAmounts } = usePosLinks();
   const isFranchise = order.origin === RESTOCK_ORIGIN.FRANCHISE;
   // Con fábrica apagada nadie prepara ni despacha en el sistema: lo que se
   // captura es lo que llegó a la sucursal.
@@ -146,7 +144,7 @@ export function RestockOrderDetail({ order }: { order: RestockOrder }) {
               </tr>
             ))}
           </tbody>
-          {!isFranchise && !hideAmounts && order.total != null ? (
+          {!isFranchise && order.total != null ? (
             <tfoot>
               <tr>
                 <td colSpan={2} style={{ textAlign: "right", fontWeight: 700 }}>
@@ -179,11 +177,7 @@ export function RestockOrderDetail({ order }: { order: RestockOrder }) {
           {returns
             .map((ret) => `${ret.folio} (${formatDateTime(ret.createdAt)}${ret.user?.name ? `, ${ret.user.name}` : ""})`)
             .join(" · ")}
-          {hideAmounts ? null : (
-            <>
-              {" · "}valor a precio de tienda <strong>{formatMoney(returnsTotal)}</strong> (informativo, no cambia el total)
-            </>
-          )}
+          {" · "}valor a precio de tienda <strong>{formatMoney(returnsTotal)}</strong> (informativo, no cambia el total)
           {returns.some((ret) => ret.notes) ? (
             <div>
               {returns

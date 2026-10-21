@@ -91,7 +91,8 @@ export function RestockOrderSheetPage() {
   const editing = searchParams.get("modo") === "editar";
   const { can } = usePermissions();
   const canView = can("posRestock", "view");
-  const canSeeCosts = can("productCosts", "view");
+  // El supervisor de caja ve el pedido con montos, igual que el administrador.
+  const canSeeCosts = can("productCosts", "view") || can("posSupervisor", "view");
   const links = usePosLinks();
 
   const [order, setOrder] = useState<RestockOrder | null>(null);
@@ -316,7 +317,7 @@ export function RestockOrderSheetPage() {
           ) : null}
         </div>
         <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
-          {shownTotal != null && !isFranchise && !links.hideAmounts && !form?.amountsHidden ? (
+          {shownTotal != null && !isFranchise && !form?.amountsHidden ? (
             <div style={{ textAlign: "right", marginRight: 8 }}>
               <div className="page-kicker" style={{ margin: 0 }}>
                 {changes.length ? "Total estimado con los cambios" : "Total del pedido"}

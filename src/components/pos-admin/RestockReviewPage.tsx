@@ -118,7 +118,8 @@ export function RestockReviewPage() {
   const canCreate = can("posRestock", "create");
   const canUpdate = can("posRestock", "update");
   const canDispatch = canUpdate && can("posInventory", "update");
-  const canSeeCosts = can("productCosts", "view");
+  // El supervisor de caja ve el pedido con montos, igual que el administrador.
+  const canSeeCosts = can("productCosts", "view") || can("posSupervisor", "view");
 
   const view: View = searchParams.get("vista") === "formato" ? "formato" : "resumen";
   const [form, setForm] = useState<FactoryForm | null>(null);

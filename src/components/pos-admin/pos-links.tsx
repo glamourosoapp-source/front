@@ -20,8 +20,6 @@ export interface PosLinks {
   arrival: (order: Pick<RestockOrder, "id" | "branchId">) => string;
   /** Bandeja de surtido (al cerrar una hoja sin historial). */
   inbox: string;
-  /** Sin montos (totales del pedido, valor de devoluciones): el supervisor de caja solo ve cantidades. */
-  hideAmounts: boolean;
 }
 
 export const DASHBOARD_POS_LINKS: PosLinks = {
@@ -30,7 +28,6 @@ export const DASHBOARD_POS_LINKS: PosLinks = {
   branchOrders: (branchId) => `/dashboard/pos/sucursales/${branchId}?tab=pedidos`,
   arrival: (order) => `/dashboard/pos/sucursales/${order.branchId}/entrada?order=${order.id}`,
   inbox: "/dashboard/pos/surtido",
-  hideAmounts: false,
 };
 
 /** Rutas de la app del supervisor de caja. No recibe surtido: la llegada sigue en el panel. */
@@ -40,7 +37,6 @@ export const SUPERVISOR_POS_LINKS: PosLinks = {
   branchOrders: () => "/supervisor/pedidos",
   arrival: DASHBOARD_POS_LINKS.arrival,
   inbox: "/supervisor/pedidos",
-  hideAmounts: true,
 };
 
 const PosLinksContext = createContext<PosLinks>(DASHBOARD_POS_LINKS);
