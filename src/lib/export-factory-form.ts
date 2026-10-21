@@ -307,16 +307,24 @@ function fitText(
   return { text: fitted, size };
 }
 
-function drawHeader(doc: jsPDF, form: FactoryForm, title: string, pageW = PAGE_W): void {
-  const baseline = MARGIN + 5.5;
+/** `left`/`top`: esquina del encabezado; la hoja de bidones lo mete más adentro (ver `BIDON_MARGIN`). */
+function drawHeader(
+  doc: jsPDF,
+  form: FactoryForm,
+  title: string,
+  pageW = PAGE_W,
+  left = MARGIN,
+  top = MARGIN
+): void {
+  const baseline = top + 5.5;
   doc.setTextColor(0);
   doc.setFont("helvetica", "bold");
   doc.setFontSize(15);
-  doc.text("GlamourOso", MARGIN, baseline);
+  doc.text("GlamourOso", left, baseline);
   const brandWidth = doc.getTextWidth("GlamourOso");
 
   doc.setFontSize(8);
-  let x = MARGIN + brandWidth + 8;
+  let x = left + brandWidth + 8;
   if (title) {
     doc.text(title, x, baseline);
     x += doc.getTextWidth(title) + 8;
@@ -329,7 +337,7 @@ function drawHeader(doc: jsPDF, form: FactoryForm, title: string, pageW = PAGE_W
   doc.text("NOMBRE", x, baseline);
   x += doc.getTextWidth("NOMBRE") + 1.5;
   const name = form.code ? `${form.name} (${form.code})` : form.name;
-  const fitted = fitText(doc, name, pageW - MARGIN - x, 8, 6);
+  const fitted = fitText(doc, name, pageW - left - x, 8, 6);
   doc.text(fitted.text, x, baseline);
 }
 
@@ -496,9 +504,22 @@ function bidonSheetRows(form: FactoryForm) {
 }
 
 /**
+ * Margen de la hoja de bidones, igual en los cuatro lados. Es la única hoja
+ * horizontal: al imprimir el PDF en carta vertical, la impresora la gira y su
+ * orilla izquierda cae en el borde de entrada o salida del papel, donde no
+ * imprime. Con los 6 mm de las demás hojas se comía "Gla" de GlamourOso y el
+ * principio de la primera columna.
+ */
+const BIDON_MARGIN = 12;
+/** Espacio entre la tabla y los totales, y entre renglón y renglón de totales. */
+const BIDON_TOTALS_GAP = 7;
+const BIDON_TOTALS_LINE = 6;
+
+/**
  * Resumen de bidones de 20 L: cada renglón que viaja en bidón, en el orden del
  * formato, con su cantidad, y el total de bidones transparentes y de color.
- * Es la hoja que usa quien llena los bidones.
+ * Es la hoja que usa quien llena los bidones. Encabezado, tabla y totales van
+ * como un solo bloque centrado en la hoja.
  */
 function drawBidonSheet(
   doc: jsPDF,
@@ -511,19 +532,23 @@ function drawBidonSheet(
   const pageW = PAGE_H;
   const pageH = PAGE_W;
   doc.addPage("letter", "landscape");
-  drawHeader(doc, form, "BIDONES", pageW);
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(5);
-  doc.text(`Hoja ${pageCount}/${pageCount}`, pageW - MARGIN, pageH - 2, { align: "right" });
+  const margin = BIDON_MARGIN;
   const columns = 3;
   const perColumn = Math.ceil(rows.length / columns);
   const gap = 4;
-  const colW = (pageW - 2 * MARGIN - gap * (columns - 1)) / columns;
-  const rowH = Math.min(MAX_ROW_H, (pageH - BLOCK_TOP - 30) / (perColumn + 1));
+  const colW = (pageW - 2 * margin - gap * (columns - 1)) / columns;
+  const totalsH = BIDON_TOTALS_GAP + 2 * BIDON_TOTALS_LINE;
+  const rowH = Math.min(MAX_ROW_H, (pageH - 2 * margin - HEADER_H - HEADER_ROW_H - totalsH) / perColumn);
+  const contentH = HEADER_H + HEADER_ROW_H + perColumn * rowH + totalsH;
+  const top = margin + Math.max(0, (pageH - 2 * margin - contentH) / 2);
+  drawHeader(doc, form, "BIDONES", pageW, margin, top);
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(5);
+  doc.text(`Hoja ${pageCount}/${pageCount}`, pageW - margin, pageH - margin, { align: "right" });
   const cols = { product: colW - 14, qty: 14 };
   for (let c = 0; c < columns; c += 1) {
-    const x = MARGIN + c * (colW + gap);
-    let y = BLOCK_TOP;
+    const x = margin + c * (colW + gap);
+    let y = top + HEADER_H;
     doc.setLineWidth(THIN);
     doc.setFont("helvetica", "bold");
     doc.setFontSize(FONT_BLOCK_HEADER);
@@ -551,12 +576,12 @@ function drawBidonSheet(
     }
   }
   const { transparent, color } = form.bidones;
-  const y = pageH - MARGIN - 18;
+  const y = top + HEADER_H + HEADER_ROW_H + perColumn * rowH + BIDON_TOTALS_GAP;
   doc.setFont("helvetica", "bold");
   doc.setFontSize(9);
-  doc.text(`BID TRANSPARENTE: ${formatQty(transparent.qty) || "0"}`, MARGIN, y);
-  doc.text(`BIDON COLOR: ${formatQty(color.qty) || "0"}`, MARGIN, y + 6);
-  doc.text(`BIDONES: ${formatQty(transparent.qty + color.qty) || "0"}`, MARGIN, y + 12);
+  doc.text(`BID TRANSPARENTE: ${formatQty(transparent.qty) || "0"}`, margin, y);
+  doc.text(`BIDON COLOR: ${formatQty(color.qty) || "0"}`, margin, y + BIDON_TOTALS_LINE);
+  doc.text(`BIDONES: ${formatQty(transparent.qty + color.qty) || "0"}`, margin, y + 2 * BIDON_TOTALS_LINE);
 }
 
 /** Opciones con las que se imprime el formato del stock de la sucursal. */
