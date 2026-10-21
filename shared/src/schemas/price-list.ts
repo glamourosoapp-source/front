@@ -50,3 +50,16 @@ export const priceListItemParamsSchema = z.object({
   id: z.string().uuid(),
   productId: z.string().uuid(),
 });
+
+/** Cambiar la lista de varias sucursales de una vez (null = precio general). */
+export const assignPriceListBranchesSchema = z.object({
+  assignments: z
+    .array(
+      z.object({
+        branchId: z.string().uuid(),
+        priceListId: z.union([z.string().uuid(), z.null()]),
+      })
+    )
+    .min(1)
+    .max(500),
+});

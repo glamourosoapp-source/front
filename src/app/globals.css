@@ -4656,3 +4656,306 @@ textarea.input {
     min-width: 150px;
   }
 }
+
+/* ── Precios por ciudad ─────────────────────────────────────────────── */
+.price-card-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 16px;
+}
+
+.price-card {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
+  padding: 18px;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  box-shadow: var(--shadow-sm);
+}
+
+.price-card.is-general {
+  background: linear-gradient(180deg, var(--soft-blue) 0%, var(--card) 70%);
+}
+
+.price-card.is-new {
+  align-items: center;
+  justify-content: center;
+  min-height: 170px;
+  border-style: dashed;
+  background: transparent;
+  box-shadow: none;
+  color: var(--muted);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+  transition: border-color 0.2s ease, color 0.2s ease;
+}
+
+.price-card.is-new:hover {
+  border-color: var(--glam-blue);
+  color: var(--glam-blue);
+}
+
+.price-card-head {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+}
+
+.price-card-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  width: 34px;
+  height: 34px;
+  border-radius: 9px;
+  background: var(--soft-blue);
+  color: var(--glam-blue);
+}
+
+.price-card.is-general .price-card-icon {
+  background: var(--card);
+}
+
+.price-card-title {
+  margin: 0;
+  font-size: 17px;
+  line-height: 1.25;
+  color: var(--glam-navy);
+}
+
+.price-card-sub {
+  margin: 2px 0 0;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.price-card-bar {
+  height: 4px;
+  border-radius: 999px;
+  background: var(--border);
+  overflow: hidden;
+}
+
+.price-card-bar span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--glam-blue);
+}
+
+.price-card-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.price-card-branches {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.price-card-branch {
+  padding: 2px 8px;
+  border-radius: 6px;
+  background: var(--soft-blue);
+  color: var(--glam-navy);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+}
+
+.price-card-branch.is-more {
+  background: var(--bg);
+  color: var(--muted);
+}
+
+.price-card-empty {
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.price-card-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: auto;
+  padding-top: 4px;
+}
+
+.price-compare-table .price-col {
+  width: 170px;
+  text-align: right;
+  vertical-align: middle;
+}
+
+.price-cell {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 2px;
+}
+
+.price-main {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: var(--text);
+}
+
+.price-sub {
+  font-size: 12px;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.price-cell.is-general .price-main {
+  font-weight: 400;
+  color: var(--muted);
+}
+
+.price-delta {
+  font-size: 11px;
+  font-weight: 700;
+  padding: 1px 5px;
+  border-radius: 5px;
+}
+
+.price-delta.is-up {
+  background: #fff4e5;
+  color: #b45309;
+}
+
+.price-delta.is-down {
+  background: #e8f7ee;
+  color: #15803d;
+}
+
+.price-cell-button {
+  position: relative;
+  display: flex;
+  justify-content: flex-end;
+  width: 100%;
+  padding: 6px 22px 6px 6px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: transparent;
+  font: inherit;
+  cursor: pointer;
+  text-align: right;
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+
+.price-cell-button:hover,
+.price-cell-button:focus-visible {
+  border-color: rgba(6, 166, 224, 0.35);
+  background: var(--soft-blue);
+  outline: none;
+}
+
+.price-cell-pencil {
+  position: absolute;
+  top: 50%;
+  right: 6px;
+  transform: translateY(-50%);
+  color: var(--glam-blue);
+  opacity: 0;
+  transition: opacity 0.15s ease;
+}
+
+.price-cell-button:hover .price-cell-pencil,
+.price-cell-button:focus-visible .price-cell-pencil {
+  opacity: 1;
+}
+
+.price-compare-table td.is-editing {
+  width: 220px;
+  background: var(--soft-blue);
+}
+
+.price-edit {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.price-edit-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 2px;
+}
+
+.price-branch-list {
+  display: flex;
+  flex-direction: column;
+  max-height: 52vh;
+  overflow-y: auto;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+}
+
+.price-branch-row {
+  display: grid;
+  grid-template-columns: auto auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  padding: 4px 12px 4px 4px;
+  border-bottom: 1px solid var(--border);
+  cursor: pointer;
+}
+
+.price-branch-row:last-child {
+  border-bottom: 0;
+}
+
+.price-branch-row.is-checked {
+  background: var(--soft-blue);
+}
+
+.price-branch-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 14px;
+}
+
+.price-branch-current {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+@media (max-width: 640px) {
+  .price-branch-row {
+    grid-template-columns: auto auto minmax(0, 1fr);
+  }
+
+  .price-branch-current {
+    grid-column: 3;
+  }
+}
+
+.table-container-premium.price-compare-wrap {
+  overflow-x: auto;
+}
+
+.price-compare-table {
+  min-width: 640px;
+}

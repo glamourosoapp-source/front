@@ -42,4 +42,6 @@ export type {
   PriceListProductRow,
   PriceListImportPreview,
   PriceListImportPreviewRow,
+  PriceListComparison,
+  PriceListBranch,
 } from "@glamouroso/shared";

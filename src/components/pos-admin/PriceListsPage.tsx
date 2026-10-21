@@ -3,19 +3,30 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   Button,
-  Chip,
   Dialog,
   DialogActions,
   DialogContent,
   DialogTitle,
   IconButton,
+  Menu,
   MenuItem,
-  Tab,
-  Tabs,
   TextField,
   Tooltip,
 } from "@mui/material";
-import { FileSpreadsheet, Pencil, Plus, RotateCcw, Save, ShieldAlert, Tags, Trash2 } from "lucide-react";
+import {
+  BookOpen,
+  Check,
+  FileSpreadsheet,
+  MoreVertical,
+  Pencil,
+  Plus,
+  RotateCcw,
+  ShieldAlert,
+  Store,
+  Tags,
+  Trash2,
+  X,
+} from "lucide-react";
 import { toast } from "sonner";
 import { httpClient, getApiErrorMessage } from "@/services/http-client";
 import { usePermissions } from "@/lib/permissions";
@@ -23,9 +34,12 @@ import { formatMoney } from "@/lib/format-money";
 import { ListPagination } from "@/components/ui/ListPagination";
 import { FilterBar, FilterMeta, FilterSearch } from "@/components/pos-admin/FilterBar";
 import { PriceListImportDialog } from "@/components/pos-admin/PriceListImportDialog";
-import type { PriceList, PriceListDetail, PriceListProductRow } from "@/types";
+import { PriceListBranchesDialog } from "@/components/pos-admin/PriceListBranchesDialog";
+import type { PriceList, PriceListComparison, PriceListProductRow } from "@/types";
 
-type RowFilter = "" | "list" | "general";
+type RowFilter = "" | "different" | "missing";
+type ComparisonRow = PriceListComparison["products"][number];
+type BranchRef = PriceListComparison["branches"][number];
 
 const normalize = (value: string) =>
   value
@@ -41,9 +55,36 @@ function parsePrice(value: string): number | null {
   return Number.isFinite(parsed) && parsed >= 0 ? parsed : Number.NaN;
 }
 
-const priceText = (value: number | null) => (value === null ? "" : String(value));
+/** "+10 %" contra el precio general; nada si es igual. */
+function deltaLabel(base: number, price: number): string | null {
+  if (!(base > 0) || Math.abs(price - base) < 0.005) return null;
+  const pct = Math.round(((price - base) / base) * 100);
+  return pct === 0 ? (price > base ? "+<1 %" : "−<1 %") : `${pct > 0 ? "+" : "−"}${Math.abs(pct)} %`;
+}
 
-interface Draft {
+/** Chips de sucursales: las primeras y "+N" para no romper la tarjeta. */
+function BranchChips({ branches, empty }: { branches: BranchRef[]; empty: string }) {
+  if (!branches.length) return <span className="price-card-empty">{empty}</span>;
+  const shown = branches.slice(0, 6);
+  return (
+    <div className="price-card-branches">
+      {shown.map((b) => (
+        <Tooltip key={b.id} title={b.name}>
+          <span className="price-card-branch">{b.code}</span>
+        </Tooltip>
+      ))}
+      {branches.length > shown.length ? (
+        <Tooltip title={branches.slice(6).map((b) => b.code).join(", ")}>
+          <span className="price-card-branch is-more">+{branches.length - shown.length}</span>
+        </Tooltip>
+      ) : null}
+    </div>
+  );
+}
+
+interface Editing {
+  productId: string;
+  listId: string;
   price: string;
   wholesalePrice: string;
 }
@@ -51,75 +92,64 @@ interface Draft {
 /**
  * Precios por ciudad (Configuración del POS).
  *
- * Tepic y Tapachula venden los mismos productos que Guadalajara a otro precio.
- * Cada ciudad es una lista; la sucursal elige la suya en Editar datos. La tabla
- * muestra todo el catálogo: el precio general y, si la lista lo trae, el de la
- * ciudad. Lo que la lista no trae se cobra al precio general.
+ * Las listas lado a lado: el precio general del catálogo y una columna por
+ * ciudad. Cada tarjeta dice qué sucursales cobran con esa lista y desde ahí se
+ * asignan o se cambian. El precio general se edita en Catálogo; aquí solo se
+ * editan los de cada ciudad (clic en la celda). Lo que una ciudad no trae se
+ * cobra al precio general.
  */
 export function PriceListsPage() {
   const { can } = usePermissions();
   const canView = can("products", "view");
   const canManage = can("products", "update");
+  const canAssign = can("posBranches", "update");
 
-  const [lists, setLists] = useState<PriceList[]>([]);
-  const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [detail, setDetail] = useState<PriceListDetail | null>(null);
+  const [data, setData] = useState<PriceListComparison | null>(null);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState<RowFilter>("");
   const [page, setPage] = useState(1);
   const [limit, setLimit] = useState(50);
-  const [drafts, setDrafts] = useState<Record<string, Draft>>({});
-  const [savingId, setSavingId] = useState<string | null>(null);
-  const [nameDialog, setNameDialog] = useState<{ mode: "create" | "rename"; name: string } | null>(null);
-  const [confirmDelete, setConfirmDelete] = useState(false);
-  const [importOpen, setImportOpen] = useState(false);
+  const [editing, setEditing] = useState<Editing | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [nameDialog, setNameDialog] = useState<{ mode: "create" | "rename"; list?: PriceList; name: string } | null>(null);
+  const [confirmDelete, setConfirmDelete] = useState<PriceList | null>(null);
+  const [importList, setImportList] = useState<PriceList | null>(null);
+  const [assignTarget, setAssignTarget] = useState<{ list: PriceList | null } | null>(null);
+  const [menu, setMenu] = useState<{ anchor: HTMLElement; list: PriceList } | null>(null);
 
-  const loadLists = useCallback(async () => {
+  const load = useCallback(async () => {
     try {
-      const res = await httpClient.get<PriceList[]>("/pos/price-lists");
-      setLists(res);
-      setSelectedId((current) => (current && res.some((l) => l.id === current) ? current : res[0]?.id ?? null));
-      if (!res.length) setDetail(null);
+      setData(await httpClient.get<PriceListComparison>("/pos/price-lists/compare"));
     } catch (error) {
-      toast.error(getApiErrorMessage(error, "No se pudieron cargar las listas de precios"));
+      toast.error(getApiErrorMessage(error, "No se pudieron cargar los precios"));
     } finally {
       setLoading(false);
     }
   }, []);
 
-  const loadDetail = useCallback(async (id: string) => {
-    try {
-      setDetail(await httpClient.get<PriceListDetail>(`/pos/price-lists/${id}`));
-      setDrafts({});
-    } catch (error) {
-      toast.error(getApiErrorMessage(error, "No se pudo cargar la lista"));
-    }
-  }, []);
-
   useEffect(() => {
-    if (canView) void loadLists();
-  }, [canView, loadLists]);
+    if (canView) void load();
+  }, [canView, load]);
 
-  useEffect(() => {
-    if (selectedId) void loadDetail(selectedId);
-  }, [selectedId, loadDetail]);
+  const lists = data?.lists ?? [];
+  const branchesOf = (listId: string | null) => (data?.branches ?? []).filter((b) => b.priceListId === listId);
 
   const rows = useMemo(() => {
-    if (!detail) return [];
+    if (!data) return [];
     const needle = normalize(search.trim());
-    return detail.products.filter((row) => {
-      if (filter === "list" && row.listPrice === null) return false;
-      if (filter === "general" && row.listPrice !== null) return false;
+    return data.products.filter((row) => {
+      if (filter === "different" && !lists.some((l) => row.prices[l.id] && Math.abs(row.prices[l.id]!.price - row.basePrice) >= 0.005)) {
+        return false;
+      }
+      if (filter === "missing" && lists.every((l) => row.prices[l.id])) return false;
       if (!needle) return true;
       return normalize(row.name).includes(needle) || normalize(row.sku ?? "").includes(needle);
     });
-  }, [detail, search, filter]);
+  }, [data, lists, search, filter]);
 
   const totalPages = Math.max(1, Math.ceil(rows.length / limit));
   const pageRows = rows.slice((page - 1) * limit, page * limit);
-  const selected = lists.find((list) => list.id === selectedId) ?? null;
-  const withList = detail?.products.filter((row) => row.listPrice !== null).length ?? 0;
 
   if (!canView) {
     return (
@@ -137,61 +167,70 @@ export function PriceListsPage() {
     );
   }
 
-  function draftFor(row: PriceListProductRow): Draft {
-    return (
-      drafts[row.productId] ?? {
-        price: priceText(row.listPrice),
-        wholesalePrice: priceText(row.listWholesalePrice),
-      }
-    );
+  /** Lo que el diálogo de importar necesita: el catálogo visto desde una lista. */
+  function catalogFor(list: PriceList): PriceListProductRow[] {
+    return (data?.products ?? []).map((row) => ({
+      productId: row.productId,
+      name: row.name,
+      sku: row.sku,
+      categoryName: row.categoryName,
+      basePrice: row.basePrice,
+      baseWholesalePrice: row.baseWholesalePrice,
+      listPrice: row.prices[list.id]?.price ?? null,
+      listWholesalePrice: row.prices[list.id]?.wholesalePrice ?? null,
+      updatedAt: null,
+    }));
   }
 
-  function isDirty(row: PriceListProductRow) {
-    const draft = drafts[row.productId];
-    if (!draft) return false;
-    return draft.price !== priceText(row.listPrice) || draft.wholesalePrice !== priceText(row.listWholesalePrice);
+  function startEdit(row: ComparisonRow, list: PriceList) {
+    const current = row.prices[list.id];
+    setEditing({
+      productId: row.productId,
+      listId: list.id,
+      price: String(current?.price ?? row.basePrice),
+      wholesalePrice: String(current?.wholesalePrice ?? row.baseWholesalePrice ?? ""),
+    });
   }
 
-  async function saveRow(row: PriceListProductRow) {
-    if (!selectedId) return;
-    const draft = draftFor(row);
-    const price = parsePrice(draft.price);
-    const wholesalePrice = parsePrice(draft.wholesalePrice);
+  async function saveEdit(row: ComparisonRow) {
+    if (!editing) return;
+    const list = lists.find((l) => l.id === editing.listId);
+    const price = parsePrice(editing.price);
+    const wholesalePrice = parsePrice(editing.wholesalePrice);
     if (price === null || Number.isNaN(price) || price <= 0) {
-      toast.error("Escribe el precio de venta (o usa Quitar para cobrar el precio general)");
+      toast.error("Escribe el precio de venta");
       return;
     }
     if (Number.isNaN(wholesalePrice)) {
       toast.error("El mayoreo no es un número válido");
       return;
     }
-    setSavingId(row.productId);
+    setSaving(true);
     try {
-      await httpClient.put(`/pos/price-lists/${selectedId}/items`, {
+      await httpClient.put(`/pos/price-lists/${editing.listId}/items`, {
         items: [{ productId: row.productId, price, wholesalePrice }],
       });
-      toast.success(`${row.name}: ${formatMoney(price)} en ${selected?.name}`);
-      await loadDetail(selectedId);
-      await loadLists();
+      toast.success(`${row.name}: ${formatMoney(price)} en ${list?.name}`);
+      setEditing(null);
+      await load();
     } catch (error) {
       toast.error(getApiErrorMessage(error, "No se pudo guardar el precio"));
     } finally {
-      setSavingId(null);
+      setSaving(false);
     }
   }
 
-  async function removeRow(row: PriceListProductRow) {
-    if (!selectedId) return;
-    setSavingId(row.productId);
+  async function useGeneral(row: ComparisonRow, list: PriceList) {
+    setSaving(true);
     try {
-      await httpClient.delete(`/pos/price-lists/${selectedId}/items/${row.productId}`);
-      toast.success(`${row.name} vuelve al precio general (${formatMoney(row.basePrice)})`);
-      await loadDetail(selectedId);
-      await loadLists();
+      await httpClient.delete(`/pos/price-lists/${list.id}/items/${row.productId}`);
+      toast.success(`${row.name} en ${list.name} vuelve al precio general (${formatMoney(row.basePrice)})`);
+      setEditing(null);
+      await load();
     } catch (error) {
       toast.error(getApiErrorMessage(error, "No se pudo quitar el precio"));
     } finally {
-      setSavingId(null);
+      setSaving(false);
     }
   }
 
@@ -204,33 +243,33 @@ export function PriceListsPage() {
     }
     try {
       if (nameDialog.mode === "create") {
-        const created = await httpClient.post<PriceList>("/pos/price-lists", { name });
+        await httpClient.post("/pos/price-lists", { name });
         toast.success(`Lista ${name} creada`);
-        setSelectedId(created.id);
-      } else if (selectedId) {
-        await httpClient.patch(`/pos/price-lists/${selectedId}`, { name });
+      } else if (nameDialog.list) {
+        await httpClient.patch(`/pos/price-lists/${nameDialog.list.id}`, { name });
         toast.success("Lista renombrada");
       }
       setNameDialog(null);
-      await loadLists();
+      await load();
     } catch (error) {
       toast.error(getApiErrorMessage(error, "No se pudo guardar la lista"));
     }
   }
 
-  async function removeList() {
-    if (!selectedId) return;
+  async function removeList(list: PriceList) {
     try {
-      await httpClient.delete(`/pos/price-lists/${selectedId}`);
-      toast.success("Lista borrada");
-      setConfirmDelete(false);
-      setSelectedId(null);
-      await loadLists();
+      await httpClient.delete(`/pos/price-lists/${list.id}`);
+      toast.success(`Lista ${list.name} borrada`);
+      setConfirmDelete(null);
+      await load();
     } catch (error) {
       toast.error(getApiErrorMessage(error, "No se pudo borrar la lista"));
-      setConfirmDelete(false);
+      setConfirmDelete(null);
     }
   }
+
+  const totalProducts = data?.products.length ?? 0;
+  const generalBranches = branchesOf(null);
 
   return (
     <div className="page-stack">
@@ -238,8 +277,8 @@ export function PriceListsPage() {
         <div>
           <h1 className="page-title">Precios por ciudad</h1>
           <p className="page-kicker">
-            Cada ciudad tiene su lista. La sucursal la elige en Editar datos; lo que la lista no
-            trae se cobra al precio general del catálogo.
+            Cada sucursal cobra con una lista. La de su ciudad si tiene; si no, el precio general del
+            catálogo. Lo que una ciudad no trae también va al precio general.
           </p>
         </div>
         {canManage ? (
@@ -251,72 +290,89 @@ export function PriceListsPage() {
 
       {loading ? <p className="page-kicker">Cargando...</p> : null}
 
-      {!loading && !lists.length ? (
-        <div className="panel p-5">
-          <h2 style={{ marginTop: 0 }}>Aún no hay listas</h2>
-          <p className="page-kicker">
-            Todas las sucursales cobran el precio general. Crea una lista por ciudad (por ejemplo
-            Tepic) e importa su Excel de eleventa.
-          </p>
+      {data ? (
+        <div className="price-card-grid">
+          <section className="price-card is-general">
+            <header className="price-card-head">
+              <span className="price-card-icon">
+                <BookOpen size={18} />
+              </span>
+              <div>
+                <h2 className="price-card-title">Precio general</h2>
+                <p className="price-card-sub">Catálogo · {totalProducts} productos</p>
+              </div>
+            </header>
+            <div className="price-card-label">
+              <Store size={13} /> {generalBranches.length} {generalBranches.length === 1 ? "sucursal" : "sucursales"}
+            </div>
+            <BranchChips branches={generalBranches} empty="Ninguna: todas cobran con una ciudad" />
+            <footer className="price-card-actions">
+              {canAssign ? (
+                <Button size="small" variant="outlined" onClick={() => setAssignTarget({ list: null })}>
+                  Sucursales
+                </Button>
+              ) : null}
+              <Button size="small" href="/dashboard/products">
+                Editar en Catálogo
+              </Button>
+            </footer>
+          </section>
+
+          {lists.map((list) => {
+            const branches = branchesOf(list.id);
+            const count = list.itemsCount ?? 0;
+            return (
+              <section key={list.id} className="price-card">
+                <header className="price-card-head">
+                  <span className="price-card-icon">
+                    <Tags size={18} />
+                  </span>
+                  <div style={{ minWidth: 0, flex: 1 }}>
+                    <h2 className="price-card-title">{list.name}</h2>
+                    <p className="price-card-sub">
+                      {count} de {totalProducts} con precio propio
+                    </p>
+                  </div>
+                  {canManage ? (
+                    <IconButton size="small" aria-label={`Más opciones de ${list.name}`} onClick={(e) => setMenu({ anchor: e.currentTarget, list })}>
+                      <MoreVertical size={16} />
+                    </IconButton>
+                  ) : null}
+                </header>
+                <div className="price-card-bar" aria-hidden>
+                  <span style={{ width: `${totalProducts ? Math.round((count / totalProducts) * 100) : 0}%` }} />
+                </div>
+                <div className="price-card-label">
+                  <Store size={13} /> {branches.length} {branches.length === 1 ? "sucursal" : "sucursales"}
+                </div>
+                <BranchChips branches={branches} empty="Ninguna sucursal cobra con esta lista" />
+                <footer className="price-card-actions">
+                  {canAssign ? (
+                    <Button size="small" variant="outlined" onClick={() => setAssignTarget({ list })}>
+                      Sucursales
+                    </Button>
+                  ) : null}
+                  {canManage ? (
+                    <Button size="small" startIcon={<FileSpreadsheet size={14} />} onClick={() => setImportList(list)}>
+                      Importar Excel
+                    </Button>
+                  ) : null}
+                </footer>
+              </section>
+            );
+          })}
+
+          {canManage ? (
+            <button type="button" className="price-card is-new" onClick={() => setNameDialog({ mode: "create", name: "" })}>
+              <Plus size={20} />
+              <span>Nueva lista de ciudad</span>
+            </button>
+          ) : null}
         </div>
       ) : null}
 
-      {lists.length ? (
-        <Tabs
-          value={selectedId ?? false}
-          onChange={(_e, value: string) => {
-            setSelectedId(value);
-            setPage(1);
-          }}
-          sx={{ borderBottom: 1, borderColor: "divider" }}
-        >
-          {lists.map((list) => (
-            <Tab key={list.id} value={list.id} label={list.name} />
-          ))}
-        </Tabs>
-      ) : null}
-
-      {selected && detail ? (
+      {data ? (
         <>
-          <section className="panel p-5">
-            <div className="toolbar" style={{ marginBottom: 0, flexWrap: "wrap", gap: 12 }}>
-              <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                  <Tags size={18} style={{ color: "var(--glam-blue)" }} />
-                  <h2 style={{ margin: 0 }}>{selected.name}</h2>
-                  <Chip size="small" label={`${withList} de ${detail.products.length} productos con precio propio`} />
-                </div>
-                <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
-                  <span className="page-kicker" style={{ margin: 0 }}>Sucursales:</span>
-                  {selected.branches?.length ? (
-                    selected.branches.map((branch) => (
-                      <Chip key={branch.id} size="small" variant="outlined" label={`${branch.code} · ${branch.name}`} />
-                    ))
-                  ) : (
-                    <span className="pill-warning">Ninguna: asígnala en Editar datos de la sucursal</span>
-                  )}
-                </div>
-              </div>
-              {canManage ? (
-                <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                  <Button variant="contained" startIcon={<FileSpreadsheet size={16} />} onClick={() => setImportOpen(true)}>
-                    Importar Excel de eleventa
-                  </Button>
-                  <Button
-                    variant="outlined"
-                    startIcon={<Pencil size={14} />}
-                    onClick={() => setNameDialog({ mode: "rename", name: selected.name })}
-                  >
-                    Renombrar
-                  </Button>
-                  <Button variant="outlined" color="error" startIcon={<Trash2 size={14} />} onClick={() => setConfirmDelete(true)}>
-                    Borrar
-                  </Button>
-                </div>
-              ) : null}
-            </div>
-          </section>
-
           <FilterBar>
             <FilterSearch
               value={search}
@@ -329,7 +385,7 @@ export function PriceListsPage() {
             <TextField
               select
               size="small"
-              label="Precio"
+              label="Mostrar"
               value={filter}
               onChange={(e) => {
                 setFilter(e.target.value as RowFilter);
@@ -337,100 +393,148 @@ export function PriceListsPage() {
               }}
               InputLabelProps={{ shrink: true }}
               SelectProps={{ displayEmpty: true }}
-              sx={{ minWidth: 240 }}
+              sx={{ minWidth: 260 }}
             >
               <MenuItem value="">Todo el catálogo</MenuItem>
-              <MenuItem value="list">Con precio de {selected.name}</MenuItem>
-              <MenuItem value="general">Cobran el precio general</MenuItem>
+              <MenuItem value="different">Con precio distinto al general</MenuItem>
+              <MenuItem value="missing">Sin precio en alguna ciudad</MenuItem>
             </TextField>
             <FilterMeta>
               <strong>{rows.length}</strong> productos
             </FilterMeta>
           </FilterBar>
 
-          <div className="table-container-premium">
-            <table className="table">
+          <div className="table-container-premium price-compare-wrap">
+            <table className="table price-compare-table">
               <thead>
                 <tr>
                   <th>Producto</th>
-                  <th style={{ textAlign: "right", width: 150 }}>General</th>
-                  <th style={{ width: 130 }}>{selected.name}</th>
-                  <th style={{ width: 130 }}>Mayoreo {selected.name}</th>
-                  <th style={{ width: 120 }}></th>
+                  <th className="price-col">General</th>
+                  {lists.map((list) => (
+                    <th key={list.id} className="price-col">
+                      {list.name}
+                    </th>
+                  ))}
                 </tr>
               </thead>
               <tbody>
-                {pageRows.map((row) => {
-                  const draft = draftFor(row);
-                  const dirty = isDirty(row);
-                  const busy = savingId === row.productId;
-                  return (
-                    <tr key={row.productId}>
-                      <td>
-                        <strong>{row.name}</strong>
-                        <div className="page-kicker" style={{ margin: 0 }}>
-                          {[row.sku ? `Código ${row.sku}` : null, row.categoryName].filter(Boolean).join(" · ")}
+                {pageRows.map((row) => (
+                  <tr key={row.productId}>
+                    <td>
+                      <strong>{row.name}</strong>
+                      <div className="page-kicker" style={{ margin: 0 }}>
+                        {[row.sku ? `Código ${row.sku}` : null, row.categoryName].filter(Boolean).join(" · ")}
+                      </div>
+                    </td>
+                    <td className="price-col">
+                      <div className="price-cell">
+                        <span className="price-main">{formatMoney(row.basePrice)}</span>
+                        <span className="price-sub">May. {row.baseWholesalePrice ? formatMoney(row.baseWholesalePrice) : "—"}</span>
+                      </div>
+                    </td>
+                    {lists.map((list) => {
+                      const own = row.prices[list.id];
+                      const isEditing = editing?.productId === row.productId && editing.listId === list.id;
+                      if (isEditing && editing) {
+                        return (
+                          <td key={list.id} className="price-col is-editing">
+                            <div className="price-edit">
+                              <TextField
+                                size="small"
+                                autoFocus
+                                label="Venta"
+                                value={editing.price}
+                                onChange={(e) => setEditing({ ...editing, price: e.target.value })}
+                                onKeyDown={(e) => {
+                                  if (e.key === "Enter") void saveEdit(row);
+                                  if (e.key === "Escape") setEditing(null);
+                                }}
+                                inputProps={{ inputMode: "decimal" }}
+                              />
+                              <TextField
+                                size="small"
+                                label="Mayoreo"
+                                value={editing.wholesalePrice}
+                                onChange={(e) => setEditing({ ...editing, wholesalePrice: e.target.value })}
+                                onKeyDown={(e) => {
+                                  if (e.key === "Enter") void saveEdit(row);
+                                  if (e.key === "Escape") setEditing(null);
+                                }}
+                                inputProps={{ inputMode: "decimal" }}
+                              />
+                              <div className="price-edit-actions">
+                                <Tooltip title="Guardar (Enter)">
+                                  <span>
+                                    <IconButton size="small" color="primary" disabled={saving} onClick={() => void saveEdit(row)}>
+                                      <Check size={16} />
+                                    </IconButton>
+                                  </span>
+                                </Tooltip>
+                                {own ? (
+                                  <Tooltip title="Usar el precio general">
+                                    <span>
+                                      <IconButton size="small" disabled={saving} onClick={() => void useGeneral(row, list)}>
+                                        <RotateCcw size={15} />
+                                      </IconButton>
+                                    </span>
+                                  </Tooltip>
+                                ) : null}
+                                <Tooltip title="Cancelar (Esc)">
+                                  <IconButton size="small" disabled={saving} onClick={() => setEditing(null)}>
+                                    <X size={16} />
+                                  </IconButton>
+                                </Tooltip>
+                              </div>
+                            </div>
+                          </td>
+                        );
+                      }
+                      const delta = own ? deltaLabel(row.basePrice, own.price) : null;
+                      const content = own ? (
+                        <div className="price-cell">
+                          <span className="price-main">
+                            {formatMoney(own.price)}
+                            {delta ? (
+                              <span className={`price-delta ${own.price > row.basePrice ? "is-up" : "is-down"}`}>{delta}</span>
+                            ) : null}
+                          </span>
+                          <span className="price-sub">
+                            May. {own.wholesalePrice ? formatMoney(own.wholesalePrice) : row.baseWholesalePrice ? formatMoney(row.baseWholesalePrice) : "—"}
+                          </span>
                         </div>
-                      </td>
-                      <td style={{ textAlign: "right" }}>
-                        {formatMoney(row.basePrice)}
-                        <div className="page-kicker" style={{ margin: 0 }}>
-                          May. {row.baseWholesalePrice ? formatMoney(row.baseWholesalePrice) : "—"}
+                      ) : (
+                        <div className="price-cell is-general">
+                          <span className="price-main">{formatMoney(row.basePrice)}</span>
+                          <span className="price-sub">Precio general</span>
                         </div>
-                      </td>
-                      <td>
-                        <TextField
-                          size="small"
-                          value={draft.price}
-                          placeholder={String(row.basePrice)}
-                          disabled={!canManage || busy}
-                          onChange={(e) =>
-                            setDrafts((prev) => ({ ...prev, [row.productId]: { ...draft, price: e.target.value } }))
-                          }
-                          onKeyDown={(e) => {
-                            if (e.key === "Enter" && dirty) void saveRow(row);
-                          }}
-                          inputProps={{ inputMode: "decimal", "aria-label": `Precio ${selected.name} de ${row.name}` }}
-                        />
-                      </td>
-                      <td>
-                        <TextField
-                          size="small"
-                          value={draft.wholesalePrice}
-                          placeholder={row.baseWholesalePrice ? String(row.baseWholesalePrice) : ""}
-                          disabled={!canManage || busy}
-                          onChange={(e) =>
-                            setDrafts((prev) => ({
-                              ...prev,
-                              [row.productId]: { ...draft, wholesalePrice: e.target.value },
-                            }))
-                          }
-                          onKeyDown={(e) => {
-                            if (e.key === "Enter" && dirty) void saveRow(row);
-                          }}
-                          inputProps={{ inputMode: "decimal", "aria-label": `Mayoreo ${selected.name} de ${row.name}` }}
-                        />
-                      </td>
-                      <td style={{ textAlign: "right", whiteSpace: "nowrap" }}>
-                        {canManage && dirty ? (
-                          <Button size="small" variant="contained" startIcon={<Save size={14} />} disabled={busy} onClick={() => void saveRow(row)}>
-                            Guardar
-                          </Button>
-                        ) : null}
-                        {canManage && !dirty && row.listPrice !== null ? (
-                          <Tooltip title="Quitar de la lista: cobra el precio general">
-                            <span>
-                              <IconButton size="small" disabled={busy} onClick={() => void removeRow(row)}>
-                                <RotateCcw size={16} />
-                              </IconButton>
-                            </span>
-                          </Tooltip>
-                        ) : null}
-                        {!dirty && row.listPrice === null ? <span className="pill-muted">General</span> : null}
-                      </td>
-                    </tr>
-                  );
-                })}
+                      );
+                      return (
+                        <td key={list.id} className="price-col">
+                          {canManage ? (
+                            <button
+                              type="button"
+                              className="price-cell-button"
+                              onClick={() => startEdit(row, list)}
+                              aria-label={`Editar precio de ${row.name} en ${list.name}`}
+                            >
+                              {content}
+                              <Pencil size={13} className="price-cell-pencil" />
+                            </button>
+                          ) : (
+                            content
+                          )}
+                        </td>
+                      );
+                    })}
+                  </tr>
+                ))}
+                {!pageRows.length ? (
+                  <tr>
+                    <td colSpan={2 + lists.length} className="page-kicker">
+                      Ningún producto coincide.
+                    </td>
+                  </tr>
+                ) : null}
               </tbody>
             </table>
           </div>
@@ -449,8 +553,28 @@ export function PriceListsPage() {
         </>
       ) : null}
 
+      <Menu anchorEl={menu?.anchor} open={Boolean(menu)} onClose={() => setMenu(null)}>
+        <MenuItem
+          onClick={() => {
+            if (menu) setNameDialog({ mode: "rename", list: menu.list, name: menu.list.name });
+            setMenu(null);
+          }}
+        >
+          <Pencil size={14} style={{ marginRight: 8 }} /> Renombrar
+        </MenuItem>
+        <MenuItem
+          onClick={() => {
+            if (menu) setConfirmDelete(menu.list);
+            setMenu(null);
+          }}
+          sx={{ color: "error.main" }}
+        >
+          <Trash2 size={14} style={{ marginRight: 8 }} /> Borrar lista
+        </MenuItem>
+      </Menu>
+
       <Dialog open={Boolean(nameDialog)} onClose={() => setNameDialog(null)} maxWidth="xs" fullWidth>
-        <DialogTitle>{nameDialog?.mode === "create" ? "Nueva lista de precios" : "Renombrar lista"}</DialogTitle>
+        <DialogTitle>{nameDialog?.mode === "create" ? "Nueva lista de ciudad" : "Renombrar lista"}</DialogTitle>
         <DialogContent>
           <TextField
             autoFocus
@@ -473,32 +597,45 @@ export function PriceListsPage() {
         </DialogActions>
       </Dialog>
 
-      <Dialog open={confirmDelete} onClose={() => setConfirmDelete(false)} maxWidth="xs" fullWidth>
-        <DialogTitle>¿Borrar la lista {selected?.name}?</DialogTitle>
+      <Dialog open={Boolean(confirmDelete)} onClose={() => setConfirmDelete(null)} maxWidth="xs" fullWidth>
+        <DialogTitle>¿Borrar la lista {confirmDelete?.name}?</DialogTitle>
         <DialogContent>
           <p className="page-kicker">
-            Se borran sus {selected?.itemsCount ?? 0} precios. Solo se puede si ninguna sucursal la
-            usa.
+            Se borran sus {confirmDelete?.itemsCount ?? 0} precios. Solo se puede si ninguna sucursal la
+            usa: muévelas antes desde Sucursales.
           </p>
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setConfirmDelete(false)}>Cancelar</Button>
-          <Button variant="contained" color="error" onClick={() => void removeList()}>
+          <Button onClick={() => setConfirmDelete(null)}>Cancelar</Button>
+          <Button variant="contained" color="error" onClick={() => confirmDelete && void removeList(confirmDelete)}>
             Borrar
           </Button>
         </DialogActions>
       </Dialog>
 
-      {selected && detail && importOpen ? (
+      {importList ? (
         <PriceListImportDialog
-          open={importOpen}
-          list={selected}
-          catalog={detail.products}
-          onClose={() => setImportOpen(false)}
+          open
+          list={importList}
+          catalog={catalogFor(importList)}
+          onClose={() => setImportList(null)}
           onSaved={async () => {
-            setImportOpen(false);
-            await loadDetail(selected.id);
-            await loadLists();
+            setImportList(null);
+            await load();
+          }}
+        />
+      ) : null}
+
+      {data && assignTarget ? (
+        <PriceListBranchesDialog
+          open
+          target={assignTarget.list}
+          lists={lists}
+          branches={data.branches}
+          onClose={() => setAssignTarget(null)}
+          onSaved={async () => {
+            setAssignTarget(null);
+            await load();
           }}
         />
       ) : null}

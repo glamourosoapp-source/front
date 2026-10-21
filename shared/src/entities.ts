@@ -1250,3 +1250,28 @@ export interface PriceListImportPreview {
   /** Productos del catálogo que el Excel no trae: cobrarán el precio general. */
   notInSheet: Array<{ id: string; name: string; sku: string | null; basePrice: number }>;
 }
+
+/** Sucursal con caja y la lista con la que cobra (null = precio general). */
+export interface PriceListBranch {
+  id: string;
+  code: string;
+  name: string;
+  isActive: boolean;
+  priceListId: string | null;
+}
+
+/** Las listas lado a lado: precio general y, por lista, el suyo si lo trae. */
+export interface PriceListComparison {
+  lists: PriceList[];
+  branches: PriceListBranch[];
+  products: Array<{
+    productId: string;
+    name: string;
+    sku: string | null;
+    categoryName: string | null;
+    basePrice: number;
+    baseWholesalePrice: number | null;
+    /** Por id de lista; la lista que no trae el producto no aparece. */
+    prices: Record<string, { price: number; wholesalePrice: number | null }>;
+  }>;
+}
