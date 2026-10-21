@@ -169,6 +169,15 @@ export function PriceListImportDialog({
       .map(([id]) => productById.get(id)?.name ?? id);
   }, [selectedItems, productById]);
 
+  // Marcar o desmarcar de una vez lo ligado en la pestaña (p. ej. todos los
+  // "mismo código, nombre distinto" ya revisados).
+  const linkedInView = inView.filter(({ index }) => state[index]?.productId);
+  const allInViewChecked = linkedInView.length > 0 && linkedInView.every(({ index }) => state[index]!.include);
+  function toggleView(include: boolean) {
+    const indexes = new Set(linkedInView.map(({ index }) => index));
+    setState((prev) => prev.map((s, i) => (indexes.has(i) ? { ...s, include } : s)));
+  }
+
   function patch(index: number, next: Partial<RowState>) {
     setState((prev) => prev.map((s, i) => (i === index ? { ...s, ...next } : s)));
   }
@@ -193,7 +202,14 @@ export function PriceListImportDialog({
         toast.error(`Revisa el precio de ${row?.name}`);
         return;
       }
-      items.push({ productId: s.productId!, price, wholesalePrice });
+      // El renglón de eleventa queda guardado: la siguiente importación lo empata solo.
+      items.push({
+        productId: s.productId!,
+        price,
+        wholesalePrice,
+        sourceName: row?.name ?? null,
+        sourceCode: row?.posId ?? null,
+      });
     }
     if (!items.length) {
       toast.error("No hay precios marcados para guardar");
@@ -302,7 +318,16 @@ export function PriceListImportDialog({
                 <table className="table">
                   <thead>
                     <tr>
-                      <th style={{ width: 44 }}></th>
+                      <th style={{ width: 44 }}>
+                        <Checkbox
+                          size="small"
+                          checked={allInViewChecked}
+                          indeterminate={!allInViewChecked && linkedInView.some(({ index }) => state[index]!.include)}
+                          disabled={!linkedInView.length}
+                          onChange={(e) => toggleView(e.target.checked)}
+                          inputProps={{ "aria-label": "Marcar todos los de esta pestaña" }}
+                        />
+                      </th>
                       <th>Renglón del Excel</th>
                       <th>Producto del catálogo</th>
                       <th style={{ textAlign: "right", width: 110 }}>General</th>

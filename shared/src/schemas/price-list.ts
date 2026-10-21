@@ -21,6 +21,9 @@ export const upsertPriceListItemsSchema = z.object({
         productId: z.string().uuid(),
         price: priceSchema.refine((value) => value > 0, "El precio debe ser mayor a cero"),
         wholesalePrice: z.union([priceSchema, z.null()]).optional(),
+        /** Renglón de eleventa del que vino: empata solo la siguiente importación. */
+        sourceName: z.union([z.string().max(200), z.null()]).optional(),
+        sourceCode: z.union([z.string().max(60), z.null()]).optional(),
       })
     )
     .min(1)

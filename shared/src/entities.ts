@@ -1234,10 +1234,11 @@ export interface PriceListImportPreviewRow {
   /** new = no estaba en la lista, changed = cambia, same = igual. */
   status: "new" | "changed" | "same" | "unmatched";
   /**
-   * Cómo se empató: por nombre, o propuesto por el código de eleventa cuando el
-   * nombre no coincide (llega sin marcar para que se confirme).
+   * Cómo se empató: con lo ligado en una importación anterior (saved), por
+   * nombre, o propuesto por el código de eleventa cuando el nombre no coincide
+   * (llega sin marcar para que se confirme).
    */
-  matchedBy: "name" | "code" | null;
+  matchedBy: "saved" | "name" | "code" | null;
   /** El Back propone marcarlo: empate por nombre sin dudas y con algo que guardar. */
   suggestInclude: boolean;
   warnings: string[];
