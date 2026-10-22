@@ -38,7 +38,14 @@ import {
   unitOf,
   type SheetValues,
 } from "./FactoryFormSheet";
-import { capturedRows, capturedTotals, formWithValues, initialValues, sheetCharges } from "./factory-form-values";
+import {
+  capturedRows,
+  capturedTotals,
+  chargeQuantityInputs,
+  formWithValues,
+  initialValues,
+  sheetCharges,
+} from "./factory-form-values";
 import {
   RESTOCK_ORIGIN_LABELS,
   RESTOCK_STATUS_COLORS,
@@ -158,12 +165,16 @@ export function RestockOrderSheetPage() {
   const pages = useMemo(() => (form ? sheetPages(form) : []), [form]);
   const captured = useMemo(() => capturedRows(rows, values), [rows, values]);
   const totals = useMemo(() => capturedTotals(captured), [captured]);
+  // Los cargos que trae el pedido: publicidad, envío y los bidones/cajas a mano o devueltos.
   const charges = useMemo(
-    () => sheetCharges(captured, form?.charges, {
-        publicity: form?.publicity?.amount ?? 0,
-        shipping: form?.shipping?.amount ?? 0,
-      }),
-    [captured, form?.charges, form?.publicity?.qty]
+    () =>
+      sheetCharges(
+        captured,
+        form?.charges,
+        { publicity: form?.publicity?.amount ?? 0, shipping: form?.shipping?.amount ?? 0 },
+        chargeQuantityInputs(form)
+      ),
+    [captured, form]
   );
   const estimatedTotal = round2(totals.amount + charges.total);
 

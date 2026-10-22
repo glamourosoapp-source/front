@@ -747,6 +747,14 @@ export interface RestockOrder {
   /** Lo que se cobra de publicidad y de envío (flete), en pesos. */
   publicityAmount?: number | string | null;
   shippingAmount?: number | string | null;
+  /** Bidones vacíos y cajas azules corregidos a mano; `null` = los calcula el formato. */
+  bidonTransparentQty?: number | string | null;
+  bidonColorQty?: number | string | null;
+  blueBoxQty?: number | string | null;
+  /** Vacíos que la sucursal regresó a fábrica al recibir (al cambio). */
+  returnedBidonTransparentQty?: number | string | null;
+  returnedBidonColorQty?: number | string | null;
+  returnedBlueBoxQty?: number | string | null;
   items?: RestockOrderItem[];
   /** Devoluciones a fábrica ligadas a este pedido: lo que el transportista se llevó de regreso. */
   returns?: FactoryReturn[];
@@ -756,8 +764,35 @@ export interface RestockOrder {
    * `null` en los pedidos de franquicia, que suman su precio de mayoreo congelado.
    */
   total?: number | null;
+  /** Desglose de `total`: el producto y cada cargo de fábrica. `null` en franquicias. */
+  charges?: RestockOrderCharges | null;
   createdAt?: string;
   updatedAt?: string;
+}
+
+/** Bidones vacíos y cajas azules que la sucursal regresó a fábrica (al cambio), con su descuento. */
+export interface FactoryFormReturned {
+  transparent: { qty: number; amount: number };
+  color: { qty: number; amount: number };
+  blueBoxes: { qty: number; amount: number };
+  /** Suma de los tres importes (positiva: se resta). */
+  amount: number;
+}
+
+/** Lo que se cobra en un pedido a fábrica: el producto y los cargos del pie del formato. */
+export interface RestockOrderCharges {
+  /** Renglones a precio de tienda (con OTROS). */
+  productAmount: number;
+  bidones: FactoryFormBidones;
+  blueBoxes: { qty: number; amount: number };
+  /** Vacíos regresados a fábrica al recibir: importes positivos que se restan. */
+  returned: FactoryFormReturned;
+  publicity: { amount: number };
+  shipping: { amount: number };
+  /** Bidones + cajas azules − devueltos + publicidad + envío. */
+  total: number;
+  /** Qué cantidades se capturaron a mano (las demás las calculó el formato). */
+  manual: { bidonTransparent: boolean; bidonColor: boolean; blueBox: boolean };
 }
 
 /** Partida de una devolución a fábrica: se capturó como una venta y descontó lo mismo. */
@@ -996,6 +1031,13 @@ export interface FactoryForm {
   shipping?: { amount: number };
   /** Precios de los cargos del pie (configurables por organización). */
   charges?: FactoryFormCharges;
+  /**
+   * Bidones vacíos y cajas azules que el pedido trae capturados a mano (ya
+   * puestos en `bidones` y `blueBoxes`); `null` = calculados con las partidas.
+   */
+  manualCharges?: { bidonTransparent: number | null; bidonColor: number | null; blueBox: number | null };
+  /** Vacíos que la sucursal regresó a fábrica al recibir: se restan del total de la última hoja. */
+  returned?: FactoryFormReturned;
   /** Suma de las hojas + OTROS + bidones + cajas azules + publicidad. */
   grandTotal: number;
   /**

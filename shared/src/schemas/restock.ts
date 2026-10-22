@@ -41,6 +41,19 @@ export const updateRestockOrderSchema = z.object({
   notes: optionalString,
 });
 
+/**
+ * Bidones vacíos (transparentes / de color) o cajas azules capturados a mano.
+ * `null` = que los calcule el formato con las partidas (lo de siempre).
+ */
+const chargeQtySchema = z.union([z.number().min(0).max(100_000), z.null()]).optional();
+
+/** Cargos del pie corregidos a mano, comunes a enviar y a recibir. */
+const chargeQtyFields = {
+  bidonTransparentQty: chargeQtySchema,
+  bidonColorQty: chargeQtySchema,
+  blueBoxQty: chargeQtySchema,
+};
+
 /** Una partida capturada en empaques: de una línea o de un producto, no de los dos. */
 const packItemSchema = z
   .object({
@@ -69,6 +82,7 @@ export const generateShortageOrderSchema = z.object({
   /** Publicidad y envío (flete) en pesos; 0 = no se cobra. */
   publicityAmount: z.coerce.number().min(0).max(1_000_000).optional(),
   shippingAmount: z.coerce.number().min(0).max(1_000_000).optional(),
+  ...chargeQtyFields,
 });
 
 /** Enviar a fábrica un pedido pendiente, opcionalmente con lo revisado en el panel. */
@@ -78,6 +92,7 @@ export const submitRestockOrderSchema = z.object({
   /** Publicidad y envío (flete) en pesos; 0 = no se cobra. */
   publicityAmount: z.coerce.number().min(0).max(1_000_000).optional(),
   shippingAmount: z.coerce.number().min(0).max(1_000_000).optional(),
+  ...chargeQtyFields,
   notes: optionalString,
 });
 
@@ -171,6 +186,11 @@ export const registerRestockEntrySchema = z
   /** Publicidad y envío (flete) en pesos; 0 = no se cobra. */
   publicityAmount: z.coerce.number().min(0).max(1_000_000).optional(),
   shippingAmount: z.coerce.number().min(0).max(1_000_000).optional(),
+  ...chargeQtyFields,
+    /** Vacíos que la sucursal le regresó a fábrica (al cambio): se descuentan del importe. */
+    returnedBidonTransparentQty: chargeQtySchema,
+    returnedBidonColorQty: chargeQtySchema,
+    returnedBlueBoxQty: chargeQtySchema,
   })
   .superRefine((value, ctx) => {
     if (!value.items.some((item) => item.qty > 0)) {

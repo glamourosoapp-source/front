@@ -26,6 +26,7 @@ export type {
   PosCatalogLine,
   CashCut,
   RestockOrder,
+  RestockOrderCharges,
   RestockOrderItem,
   BranchShortage,
   UnlinkedRestockItem,

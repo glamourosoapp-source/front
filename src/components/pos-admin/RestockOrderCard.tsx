@@ -22,6 +22,7 @@ import {
   restockItemAmount,
 } from "./pos-labels";
 import { useFactoryFormDownload } from "./useFactoryFormDownload";
+import { RestockChargesSummary } from "./RestockChargesEditor";
 
 const RETURN_RED = "#b91c1c";
 
@@ -187,6 +188,14 @@ export function RestockOrderDetail({ order }: { order: RestockOrder }) {
             </div>
           ) : null}
         </div>
+      ) : null}
+      {!isFranchise && order.charges ? (
+        <>
+          <h3 className="restock-summary-title" style={{ margin: "16px 0 6px" }}>
+            Cargos de fábrica
+          </h3>
+          <RestockChargesSummary charges={order.charges} />
+        </>
       ) : null}
       {order.dispatchNotes ? (
         <p className="page-kicker" style={{ marginBottom: 0, color: "#92400e" }}>

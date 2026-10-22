@@ -183,6 +183,11 @@ function footerRows(form: FactoryForm, page: number, total: number, footers: boo
     const publicity = form.publicity;
     const shipping = form.shipping;
     const blue = form.blueBoxes;
+    // Vacíos que la sucursal regresó (al cambio): solo si hubo, y restan.
+    const returned = form.returned;
+    const returnedQty = returned
+      ? returned.transparent.qty + returned.color.qty + returned.blueBoxes.qty
+      : 0;
     return [
       {
         label: "Publicidad",
@@ -190,6 +195,15 @@ function footerRows(form: FactoryForm, page: number, total: number, footers: boo
         amount: publicity?.amount ? formatMoney(publicity.amount) : undefined,
       },
       { label: "Flete", amount: shipping?.amount ? formatMoney(shipping.amount) : undefined },
+      ...(returnedQty > 0
+        ? [
+            {
+              label: "Devueltos",
+              qty: formatQty(returnedQty),
+              amount: returned?.amount ? `-${formatMoney(returned.amount)}` : undefined,
+            },
+          ]
+        : []),
       { label: "CAJAS AZULES", shaded: true, qty: blue ? formatQty(blue.qty) : undefined },
       { label: "", shaded: true, amount: blue ? formatMoney(blue.amount) : undefined },
       { label: "TOTAL=", amount: formatMoney(total), shaded: true },

@@ -34,12 +34,16 @@ import {
   type SheetValues,
 } from "./FactoryFormSheet";
 import {
+  AUTO_CHARGE_QUANTITIES,
   capturedRows,
   capturedTargets,
   capturedTotals,
+  chargeQuantityInputs,
+  chargeQuantityPayload,
   formWithValues,
   initialValues,
   sheetCharges,
+  type ChargeQuantityInputs,
 } from "./factory-form-values";
 import { RESTOCK_ORIGIN_LABELS, RESTOCK_STATUS_LABELS, formatDate, unitLabel } from "./pos-labels";
 import { RestockSummaryList } from "./RestockSummaryList";
@@ -92,6 +96,8 @@ export function BranchRestockEntryPage() {
   /** Publicidad y envío (flete) en pesos: vienen del pedido y se corrigen si llegó distinto. */
   const [publicity, setPublicity] = useState("");
   const [shipping, setShipping] = useState("");
+  /** Bidones vacíos y cajas azules: cobrados (a mano o calculados) y los que la sucursal regresó. */
+  const [chargeQuantities, setChargeQuantities] = useState<ChargeQuantityInputs>(AUTO_CHARGE_QUANTITIES);
   const [saving, setSaving] = useState(false);
   const [exporting, setExporting] = useState(false);
   /** Al recibir un pedido solo se ven sus renglones; apagado, las 4 hojas completas. */
@@ -113,6 +119,7 @@ export function BranchRestockEntryPage() {
         setPrefill(initial);
         setPublicity(String(data.publicity?.amount ?? 0));
         setShipping(String(data.shipping?.amount ?? 0));
+        setChargeQuantities(chargeQuantityInputs(data));
         setOnlyFilled(data.entry?.kind === "order");
       } catch (error) {
         toast.error(getApiErrorMessage(error, "No se pudo cargar la hoja de entrada"));
@@ -148,8 +155,8 @@ export function BranchRestockEntryPage() {
 
   /** Cargos del pie con lo capturado: bidones vacíos, cajas azules y publicidad (reglas del formato de tiendas). */
   const charges = useMemo(
-    () => sheetCharges(captured, form?.charges, { publicity, shipping }),
-    [captured, form?.charges, publicity, shipping]
+    () => sheetCharges(captured, form?.charges, { publicity, shipping }, chargeQuantities),
+    [captured, form?.charges, publicity, shipping, chargeQuantities]
   );
 
   const changedFromPrefill = useMemo(
@@ -208,6 +215,7 @@ export function BranchRestockEntryPage() {
         notes: notes.trim() || null,
         publicityAmount: charges.publicityAmount,
         shippingAmount: charges.shippingAmount,
+        ...chargeQuantityPayload(charges, chargeQuantities, true),
       });
       toast.success(
         `Recibido: ${captured.length} ${captured.length === 1 ? "renglón" : "renglones"} al inventario`
@@ -489,6 +497,9 @@ export function BranchRestockEntryPage() {
                 shipping={shipping}
                 onPublicityChange={setPublicity}
                 onShippingChange={setShipping}
+                quantities={chargeQuantities}
+                onQuantitiesChange={setChargeQuantities}
+                showReturns
                 publicityHint="Viene del pedido. Cámbiala si se cobró distinto."
                 productAmount={totals.amount}
                 disabled={saving}

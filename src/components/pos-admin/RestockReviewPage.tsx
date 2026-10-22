@@ -41,7 +41,17 @@ import { formatMoney, formatQuantity } from "@/lib/format-money";
 import { exportFactoryFormPdf } from "@/lib/export-factory-form";
 import type { ListResponse, RestockOrder } from "@/types";
 import { FactoryFormSheet, allRows, packDescription, sameValue, sheetPages, type SheetValues } from "./FactoryFormSheet";
-import { capturedRows, capturedTargets, capturedTotals, initialValues, sheetCharges } from "./factory-form-values";
+import {
+  AUTO_CHARGE_QUANTITIES,
+  capturedRows,
+  capturedTargets,
+  capturedTotals,
+  chargeQuantityInputs,
+  chargeQuantityPayload,
+  initialValues,
+  sheetCharges,
+  type ChargeQuantityInputs,
+} from "./factory-form-values";
 import { RestockSummaryList } from "./RestockSummaryList";
 import { RestockChargesEditor } from "./RestockChargesEditor";
 import { RestockSteps } from "./RestockSteps";
@@ -132,6 +142,8 @@ export function RestockReviewPage() {
   /** Publicidad y envío en pesos. La publicidad va por omisión al precio configurado ($1,300) si este mes no se ha cobrado. */
   const [publicity, setPublicity] = useState("");
   const [shipping, setShipping] = useState("");
+  /** Bidones vacíos y cajas azules: calculados con los renglones, o lo que se escriba a mano. */
+  const [chargeQuantities, setChargeQuantities] = useState<ChargeQuantityInputs>(AUTO_CHARGE_QUANTITIES);
   const [notes, setNotes] = useState("");
   const [loading, setLoading] = useState(true);
   const [confirmOpen, setConfirmOpen] = useState(false);
@@ -180,10 +192,12 @@ export function RestockReviewPage() {
         const saved = data.publicity?.amount ?? 0;
         setPublicity(String(saved > 0 ? saved : chargedThisMonth ? 0 : price));
         setShipping(String(data.shipping?.amount ?? 0));
+        setChargeQuantities(chargeQuantityInputs(data));
         setNotes(pendingDraft.notes ?? "");
       } else {
         setPublicity(String(chargedThisMonth ? 0 : price));
         setShipping("0");
+        setChargeQuantities(AUTO_CHARGE_QUANTITIES);
       }
     } catch (error) {
       toast.error(getApiErrorMessage(error, "No se pudo calcular el pedido"));
@@ -203,8 +217,8 @@ export function RestockReviewPage() {
   const totals = useMemo(() => capturedTotals(captured), [captured]);
   const counts = useMemo(() => packCounts(captured), [captured]);
   const charges = useMemo(
-    () => sheetCharges(captured, form?.charges, { publicity, shipping }),
-    [captured, form?.charges, publicity, shipping]
+    () => sheetCharges(captured, form?.charges, { publicity, shipping }, chargeQuantities),
+    [captured, form?.charges, publicity, shipping, chargeQuantities]
   );
   const grandTotal = totals.amount + charges.total;
   const changed = useMemo(
@@ -252,6 +266,7 @@ export function RestockReviewPage() {
             items,
             publicityAmount: charges.publicityAmount,
             shippingAmount: charges.shippingAmount,
+            ...chargeQuantityPayload(charges, chargeQuantities),
             notes: notes.trim() || null,
           })
         : await httpClient.post<RestockOrder>(`/pos/restock/branches/${branchId}/generate`, {
@@ -259,6 +274,7 @@ export function RestockReviewPage() {
             submit: true,
             publicityAmount: charges.publicityAmount,
             shippingAmount: charges.shippingAmount,
+            ...chargeQuantityPayload(charges, chargeQuantities),
             notes: notes.trim() || null,
           });
       setConfirmOpen(false);
@@ -483,6 +499,8 @@ export function RestockReviewPage() {
             shipping={shipping}
             onPublicityChange={setPublicity}
             onShippingChange={setShipping}
+            quantities={chargeQuantities}
+            onQuantitiesChange={setChargeQuantities}
             disabled={!canCreate || saving || locked}
             publicityHint={
               publicityThisMonth

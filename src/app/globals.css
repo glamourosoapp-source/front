@@ -1644,6 +1644,38 @@ textarea {
   background: var(--bg);
 }
 
+/* Cantidades de bidones vacíos y cajas azules: calculadas, pero se pueden cambiar. */
+.restock-charge-qtys {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.restock-charge-qty {
+  display: grid;
+  gap: 2px;
+}
+
+.restock-charge-auto {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--glam-blue);
+  font-size: 11px;
+  font-weight: 600;
+  text-align: left;
+  cursor: pointer;
+}
+
+.restock-charge-auto:hover {
+  text-decoration: underline;
+}
+
+/* Vacíos devueltos a fábrica: se descuentan. */
+.restock-charge-row.is-discount .restock-charge-amount {
+  color: #15803d;
+}
+
 .restock-charge-row.is-total .restock-charge-amount {
   font-size: 16px;
 }
