@@ -22,7 +22,7 @@ const FULL_ACCESS: PermissionMap = Object.fromEntries(
   ])
 ) as PermissionMap;
 
-/** Usuarios sin perfil asignado conservan el comportamiento histórico: todo excepto configuración, usuarios, costo de productos, impresión de notas y conteos de inventario (módulo nuevo, se asigna por perfil). */
+/** Usuarios sin perfil asignado conservan el comportamiento histórico: todo excepto configuración, usuarios, costo de productos, impresión de notas, conteos de inventario y mapa de oportunidad (módulos nuevos, se asignan por perfil; el mapa gasta en Google). */
 const LEGACY_FALLBACK: PermissionMap = Object.fromEntries(
   PERMISSION_MODULES.map((module) => [
     module.key,
@@ -30,7 +30,8 @@ const LEGACY_FALLBACK: PermissionMap = Object.fromEntries(
     module.key === "users" ||
     module.key === "productCosts" ||
     module.key === "orderPrint" ||
-    module.key === "posCounts"
+    module.key === "posCounts" ||
+    module.key === "expansion"
       ? {}
       : { view: true, create: true, update: true, delete: true, scope: ORDER_SCOPES.ALL },
   ])

@@ -26,3 +26,4 @@ export * from "./pos-report";
 export * from "./restock";
 export * from "./franchise";
 export * from "./price-list";
+export * from "./opportunity-map";

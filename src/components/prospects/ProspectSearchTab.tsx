@@ -114,6 +114,11 @@ export function ProspectSearchTab({
   const router = useRouter();
   const { can } = usePermissions();
   const [query, setQuery] = useState("");
+  // ?q= precarga la búsqueda (lo usa el Mapa de oportunidad: "lavanderías en <colonia>").
+  useEffect(() => {
+    const fromUrl = new URLSearchParams(window.location.search).get("q");
+    if (fromUrl) setQuery(fromUrl);
+  }, []);
   const [maxResults, setMaxResults] = useState(60);
   const [loading, setLoading] = useState(false);
   const [listLoading, setListLoading] = useState(true);

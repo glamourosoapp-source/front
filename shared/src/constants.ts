@@ -512,7 +512,36 @@ export const PERMISSION_MODULES = [
   { key: "posCounts", label: "POS: conteos de inventario" },
   { key: "factory", label: "Fábrica: pedidos por enviar" },
   { key: "franchise", label: "Franquicia: pedidos a fábrica" },
+  { key: "expansion", label: "Crecimiento: mapa de oportunidad" },
 ] as const;
+
+/**
+ * Mapa de oportunidad: dónde hay demanda a domicilio sin sucursal cerca.
+ * Spec: docs/product-specs/mapa-oportunidad.md.
+ */
+export const OPPORTUNITY_MAP = {
+  DAY_OPTIONS: [90, 180, 365],
+  DEFAULT_DAYS: 180,
+  RADIUS_OPTIONS: [2, 3, 5],
+  DEFAULT_RADIUS_KM: 3,
+  /** Lado de la celda del mapa de calor. */
+  CELL_KM: 1,
+  /** Zonas candidatas que se devuelven, de mejor a peor. */
+  MAX_ZONES: 15,
+  DEFAULT_SCAN_ZONES: 10,
+  /** Radio alrededor del centro de una zona en el que se cuentan negocios. */
+  SCAN_RADIUS_KM: 1.5,
+  /** Una búsqueda de negocios se reutiliza este tiempo antes de volver a pagarla. */
+  PLACES_CACHE_DAYS: 30,
+  /** Direcciones por tanda de geocodificación. */
+  GEOCODE_MAX_BATCH: 300,
+  /** Negocios que compran producto de limpieza por volumen: lo que se cuenta en Places. */
+  BUSINESS_CATEGORIES: [
+    { key: "laundry", label: "Lavanderías", query: "lavandería" },
+    { key: "restaurant", label: "Restaurantes", query: "restaurante" },
+    { key: "hotel", label: "Hoteles", query: "hotel" },
+  ],
+} as const;
 
 /**
  * Seguimiento de clientes (página del vendedor): un cliente pertenece al

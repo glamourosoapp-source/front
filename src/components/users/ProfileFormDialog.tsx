@@ -51,6 +51,8 @@ const MODULE_ACTIONS: Partial<Record<PermissionModule, readonly PermissionAction
   posSupervisor: ["view"],
   // view/create = contar y cerrar (supervisor); update = revertir ajustes y ver indicadores (admin).
   posCounts: ["view", "create", "update"],
+  // view = ver el mapa; update = ubicar direcciones y contar negocios (gasta en Google).
+  expansion: ["view", "update"],
 };
 
 const actionApplies = (module: PermissionModule, action: PermissionAction) =>

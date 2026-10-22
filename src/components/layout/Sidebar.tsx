@@ -35,6 +35,7 @@ import {
   ReceiptText,
   FileSpreadsheet,
   Tags,
+  MapPinned,
 } from "lucide-react";
 import type { PermissionModule } from "@glamouroso/shared";
 import { useAuthStore } from "@/stores/auth.store";
@@ -148,6 +149,13 @@ const sections: NavSection[] = [
     links: [
       { href: "/dashboard/franquicias", label: "Franquicias", icon: Handshake, module: "posBranches" },
       { href: "/dashboard/franquicias/pedidos", label: "Pedidos a fábrica", icon: Truck, module: "posRestock" },
+    ],
+  },
+  {
+    id: "crecimiento",
+    label: "Crecimiento",
+    links: [
+      { href: "/dashboard/crecimiento", label: "Mapa de oportunidad", icon: MapPinned, module: "expansion" },
     ],
   },
   {
