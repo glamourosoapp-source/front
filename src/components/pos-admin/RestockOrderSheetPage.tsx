@@ -176,7 +176,7 @@ export function RestockOrderSheetPage() {
       ),
     [captured, form]
   );
-  const estimatedTotal = round2(totals.amount + charges.total);
+  const estimatedTotal = round2(totals.amount + charges.total - charges.returned.amount);
 
   const itemsByKey = useMemo(() => {
     const map = new Map<string, RestockOrderItem>();

@@ -151,7 +151,7 @@ export function RestockOrderDetail({ order }: { order: RestockOrder }) {
                 <td colSpan={2} style={{ textAlign: "right", fontWeight: 700 }}>
                   Total del pedido
                   <div className="page-kicker" style={{ margin: 0, fontWeight: 400 }}>
-                    precio de tienda del formato, con bidones, cajas azules, publicidad y envío
+                    precio de tienda del formato, con bidones, cajas azules, publicidad y envío, menos devoluciones
                   </div>
                 </td>
                 <td style={{ textAlign: "right", fontWeight: 700 }}>{formatMoney(order.total)}</td>

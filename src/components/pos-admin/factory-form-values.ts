@@ -50,14 +50,16 @@ export interface SheetCharges {
     transparent: number;
     color: number;
     blue: number;
-    /** Descuento de los bidones (transparentes + de color) y de las cajas azules. */
-    bidonesAmount: number;
+    /** Descuento de cada tipo, al mismo precio que se cobra. */
+    transparentAmount: number;
+    colorAmount: number;
     blueAmount: number;
     amount: number;
   };
   publicityAmount: number;
   /** Envío (flete) en pesos. */
   shippingAmount: number;
+  /** Cargos sin devoluciones (bidones, cajas azules, publicidad y envío): Producto + Cargos − Devoluciones = Total. */
   total: number;
 }
 
@@ -181,15 +183,17 @@ export function sheetCharges(
   const returnedTransparent = count(quantities.returnedTransparent);
   const returnedColor = count(quantities.returnedColor);
   const returnedBlue = count(quantities.returnedBlue);
-  const returnedBidones = round2(returnedTransparent * priceTransparent + returnedColor * priceColor);
+  const transparentAmount = round2(returnedTransparent * priceTransparent);
+  const colorAmount = round2(returnedColor * priceColor);
   const returnedBlueAmount = round2(returnedBlue * priceBlue);
   const returned = {
     transparent: returnedTransparent,
     color: returnedColor,
     blue: returnedBlue,
-    bidonesAmount: returnedBidones,
+    transparentAmount,
+    colorAmount,
     blueAmount: returnedBlueAmount,
-    amount: round2(returnedBidones + returnedBlueAmount),
+    amount: round2(transparentAmount + colorAmount + returnedBlueAmount),
   };
   const publicityAmount = count(String(amounts.publicity));
   const shippingAmount = count(String(amounts.shipping));
@@ -203,7 +207,7 @@ export function sheetCharges(
     returned,
     publicityAmount,
     shippingAmount,
-    total: round2(bidones + blueAmount - returned.amount + publicityAmount + shippingAmount),
+    total: round2(bidones + blueAmount + publicityAmount + shippingAmount),
   };
 }
 

@@ -18,6 +18,10 @@
   --muted: #687084;
   --border: #e6ebf3;
   --soft-blue: #eef9fd;
+  /* Devoluciones a fábrica (se descuentan). */
+  --returns-ink: #15803d;
+  --returns-soft: #f0fdf4;
+  --returns-border: #bbf7d0;
   --shadow-sm: 0 1px 2px rgba(18, 24, 38, 0.04);
   --shadow-md: 0 16px 40px rgba(38, 45, 96, 0.08);
 }
@@ -1671,16 +1675,56 @@ textarea {
   text-decoration: underline;
 }
 
-/* Vacíos devueltos a fábrica: se descuentan. */
-.restock-charge-row.is-discount .restock-charge-amount {
-  color: #15803d;
+/* Cargos, devoluciones y total, uno debajo del otro. */
+.restock-charges-stack {
+  display: grid;
+  gap: 12px;
+}
+
+.restock-charges-title {
+  display: grid;
+  gap: 2px;
+  margin-top: 4px;
+}
+
+.restock-charges-title h3 {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+  color: var(--glam-navy);
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.restock-charges-title small {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.restock-charges-title.is-returns h3 {
+  color: var(--returns-ink);
+}
+
+/* Devoluciones a fábrica: los vacíos que regresó la sucursal se descuentan (verde). */
+.restock-charges-box.is-returns {
+  border-color: var(--returns-border);
+}
+
+.restock-charges-box.is-returns .restock-charge-head,
+.restock-charges-box.is-returns .restock-charge-row.is-total {
+  background: var(--returns-soft);
+}
+
+.restock-charges-box.is-returns .restock-charge-amount {
+  color: var(--returns-ink);
 }
 
 .restock-charge-row.is-total .restock-charge-amount {
   font-size: 16px;
 }
 
-/* Producto + Cargos = Total, al pie de la tabla. */
+/* Producto + Cargos − Devoluciones = Total. */
 .restock-charges-grand {
   display: flex;
   flex-wrap: wrap;
@@ -1688,7 +1732,9 @@ textarea {
   justify-content: flex-end;
   gap: 10px 14px;
   padding: 12px 16px;
-  border-top: 1px solid var(--border);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--card);
 }
 
 .restock-charges-grand > div {
@@ -1730,6 +1776,40 @@ textarea {
 .restock-charges-grand .is-total b {
   color: #fff;
   font-size: 20px;
+}
+
+.restock-charges-grand .is-returns b {
+  color: var(--returns-ink);
+}
+
+/* Versión de una línea para la barra flotante de recibir. */
+.restock-charges-grand.is-compact {
+  flex-wrap: nowrap;
+  gap: 10px;
+  padding: 0;
+  border: 0;
+  background: none;
+}
+
+.restock-charges-grand.is-compact small {
+  font-size: 10px;
+}
+
+.restock-charges-grand.is-compact b {
+  font-size: 14px;
+}
+
+.restock-charges-grand.is-compact > span {
+  font-size: 15px;
+}
+
+.restock-charges-grand.is-compact .is-total {
+  padding: 4px 10px;
+  border-radius: 8px;
+}
+
+.restock-charges-grand.is-compact .is-total b {
+  font-size: 16px;
 }
 
 @media (max-width: 640px) {
@@ -3346,6 +3426,48 @@ textarea.input {
   box-shadow: 0 -8px 24px rgba(38, 45, 96, 0.08);
   color: var(--muted);
   font-size: 14px;
+}
+
+/* Barra de recibir: lo capturado, Producto + Cargos − Devoluciones = Total y los botones. */
+.restock-receive-bar__info {
+  display: grid;
+  gap: 1px;
+  min-width: 0;
+}
+
+.restock-receive-bar__info b {
+  color: var(--glam-navy);
+  font-size: 15px;
+}
+
+.restock-receive-bar__info small {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.restock-receive-bar .restock-charges-grand.is-compact {
+  margin-left: auto;
+}
+
+@media (max-width: 900px) {
+  .restock-receive-bar .restock-charges-grand.is-compact {
+    flex: 1 1 100%;
+    flex-wrap: wrap;
+    justify-content: flex-start;
+    margin-left: 0;
+  }
+}
+
+/* En celular los dos botones no caben lado a lado: cada uno baja a su línea si hace falta. */
+@media (max-width: 640px) {
+  .restock-receive-bar > div:last-child {
+    flex-wrap: wrap;
+  }
+
+  .restock-receive-bar > div:last-child > .MuiButton-root {
+    flex: 1 1 150px;
+  }
 }
 
 .msf-savebar--active {

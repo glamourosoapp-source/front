@@ -48,7 +48,7 @@ import {
 import { RESTOCK_ORIGIN_LABELS, RESTOCK_STATUS_LABELS, formatDate, unitLabel } from "./pos-labels";
 import { RestockSummaryList } from "./RestockSummaryList";
 import { RestockSteps } from "./RestockSteps";
-import { RestockChargesEditor } from "./RestockChargesEditor";
+import { RestockChargesEditor, RestockTotalEquation } from "./RestockChargesEditor";
 
 /** `order:<id>` | `shortages` | `blank`: con qué se precarga la hoja. */
 type BasisKey = string;
@@ -408,14 +408,32 @@ export function BranchRestockEntryPage() {
       ) : null}
 
       {canRegister ? (
-        <div className={`msf-savebar${captured.length ? " msf-savebar--active" : ""}`}>
-          <span>
-            {captured.length
-              ? `${captured.length} ${captured.length === 1 ? "renglón" : "renglones"} · ${formatQuantity(totals.liters)} L · ${formatQuantity(totals.pieces)} pz${
-                  canSeeCosts ? ` · ${formatMoney(totals.amount + charges.total)} con cargos` : ""
-                }${changedFromPrefill ? ` · ${changedFromPrefill} cambiado${changedFromPrefill === 1 ? "" : "s"} contra lo precargado` : ""}`
-              : "Sin cantidades capturadas"}
-          </span>
+        <div className={`msf-savebar restock-receive-bar${captured.length ? " msf-savebar--active" : ""}`}>
+          <div className="restock-receive-bar__info">
+            {captured.length ? (
+              <>
+                <b>
+                  {captured.length} {captured.length === 1 ? "renglón" : "renglones"}
+                </b>
+                <small>
+                  {formatQuantity(totals.liters)} L · {formatQuantity(totals.pieces)} pz
+                  {changedFromPrefill
+                    ? ` · ${changedFromPrefill} cambiado${changedFromPrefill === 1 ? "" : "s"} contra lo precargado`
+                    : ""}
+                </small>
+              </>
+            ) : (
+              <b>Sin cantidades capturadas</b>
+            )}
+          </div>
+          {canSeeCosts && captured.length ? (
+            <RestockTotalEquation
+              compact
+              productAmount={totals.amount}
+              chargesTotal={charges.total}
+              returnsTotal={charges.returned.amount}
+            />
+          ) : null}
           <div style={{ display: "flex", gap: 8 }}>
             <Button
               color="inherit"

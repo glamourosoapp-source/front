@@ -789,7 +789,7 @@ export interface RestockOrderCharges {
   returned: FactoryFormReturned;
   publicity: { amount: number };
   shipping: { amount: number };
-  /** Bidones + cajas azules − devueltos + publicidad + envío. */
+  /** Bidones + cajas azules + publicidad + envío, sin devoluciones: Producto + Cargos − Devoluciones = Total. */
   total: number;
   /** Qué cantidades se capturaron a mano (las demás las calculó el formato). */
   manual: { bidonTransparent: boolean; bidonColor: boolean; blueBox: boolean };
