@@ -5113,3 +5113,29 @@ textarea.input {
 .price-compare-table {
   min-width: 640px;
 }
+
+/* Matriz del supervisor de caja en la ficha del usuario (SupervisorAccessMatrix). */
+.sup-matrix-scroll {
+  max-height: 340px;
+  overflow: auto;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+}
+
+.sup-matrix-table th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: var(--card);
+  font-size: 12px;
+  line-height: 1.1;
+}
+
+.sup-matrix-table td,
+.sup-matrix-table th {
+  padding: 2px 8px;
+}
+
+.sup-matrix-city {
+  color: var(--muted);
+}

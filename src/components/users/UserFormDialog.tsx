@@ -12,7 +12,10 @@ import {
   Switch,
   TextField,
 } from "@mui/material";
-import { ADMIN_ROLES, ROLES } from "@glamouroso/shared/constants";
+import { ADMIN_ROLES, BRANCH_TYPES, ROLES } from "@glamouroso/shared/constants";
+import { can } from "@glamouroso/shared";
+import type { SupervisorAccess } from "@glamouroso/shared";
+import { SupervisorAccessMatrix } from "./SupervisorAccessMatrix";
 import { httpClient, getApiErrorMessage } from "@/services/http-client";
 import { usePermissions } from "@/lib/permissions";
 import { Branch, Profile, Team, User } from "@/types";
@@ -51,14 +54,25 @@ export function UserFormDialog({
   const { isAdmin } = usePermissions();
   const [isActive, setIsActive] = useState(user?.isActive ?? true);
   const [accessType, setAccessType] = useState<AccessType>(() => accessTypeFromRole(user?.role));
+  const [profileId, setProfileId] = useState(user?.profileId || "");
+  const [supervisorAccess, setSupervisorAccess] = useState<SupervisorAccess | null>(user?.supervisorAccess ?? null);
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
     if (open) {
       setIsActive(user?.isActive ?? true);
       setAccessType(accessTypeFromRole(user?.role));
+      setProfileId(user?.profileId || "");
+      setSupervisorAccess(user?.supervisorAccess ?? null);
     }
   }, [open, user]);
+
+  // La matriz por sucursal solo aplica a la app del supervisor de caja: sale
+  // cuando el perfil elegido la tiene.
+  const selectedProfile = profiles.find((profile) => profile.id === profileId);
+  const showSupervisorAccess =
+    (!isAdmin || accessType === "profile") && can(selectedProfile?.permissions, "posSupervisor", "view");
+  const cashBranches = branches.filter((branch) => branch.type !== BRANCH_TYPES.FRANCHISE);
 
   async function save(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -67,8 +81,6 @@ export function UserFormDialog({
     const email = String(form.get("email") || "").trim();
     const phone = String(form.get("phone") || "").trim();
     const password = String(form.get("password") || "");
-    const profileIdRaw = String(form.get("profileId") || "");
-    const profileId = profileIdRaw ? profileIdRaw : null;
     const teamIdRaw = String(form.get("teamId") || "");
     const branchIdRaw = String(form.get("branchId") || "");
     const selectedAccess = (String(form.get("accessType") || accessType) as AccessType) || "profile";
@@ -77,10 +89,14 @@ export function UserFormDialog({
       name,
       email,
       phone: phone || null,
-      profileId: selectedAccess === "profile" ? profileId : null,
+      profileId: selectedAccess === "profile" && profileId ? profileId : null,
       teamId: teamIdRaw ? teamIdRaw : null,
       branchId: branchIdRaw ? branchIdRaw : null,
     };
+    // Sin la app del supervisor la matriz no sirve: se limpia. Si el perfil no
+    // vino en la lista (no se sabe qué permite), no se toca.
+    if (showSupervisorAccess) payload.supervisorAccess = supervisorAccess;
+    else if (selectedProfile || !profileId || selectedAccess === "admin") payload.supervisorAccess = null;
     if (isAdmin) {
       payload.role = selectedAccess === "admin" ? ROLES.ADMIN : ROLES.ASSISTANT;
     }
@@ -108,7 +124,7 @@ export function UserFormDialog({
   }
 
   return (
-    <Dialog open={open} onClose={onClose} fullWidth maxWidth="sm" key={user?.id ?? "new"}>
+    <Dialog open={open} onClose={onClose} fullWidth maxWidth={showSupervisorAccess ? "md" : "sm"} key={user?.id ?? "new"}>
       <form onSubmit={save}>
         <DialogTitle>{isEdit ? "Editar usuario" : "Nuevo usuario"}</DialogTitle>
         <DialogContent className="form-grid" dividers>
@@ -153,7 +169,8 @@ export function UserFormDialog({
               select
               name="profileId"
               label="Perfil"
-              defaultValue={user?.profileId || ""}
+              value={profileId}
+              onChange={(e) => setProfileId(e.target.value)}
               fullWidth
               helperText="Define qué puede ver y hacer este usuario."
             >
@@ -196,6 +213,14 @@ export function UserFormDialog({
                 </MenuItem>
               ))}
             </TextField>
+          ) : null}
+          {showSupervisorAccess && cashBranches.length ? (
+            <SupervisorAccessMatrix
+              value={supervisorAccess}
+              onChange={setSupervisorAccess}
+              branches={cashBranches}
+              profilePermissions={selectedProfile?.permissions}
+            />
           ) : null}
           {isEdit ? (
             <FormControlLabel

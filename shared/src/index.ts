@@ -20,4 +20,5 @@ export * from "./utils/google-maps-url";
 export * from "./utils/outreach-settings";
 export * from "./utils/phone";
 export * from "./utils/pos-ticket-settings";
+export * from "./supervisor-access";
 export * as schemas from "./schemas/index";

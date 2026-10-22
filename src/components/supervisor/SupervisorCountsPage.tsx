@@ -11,6 +11,7 @@ import { httpClient, getApiErrorMessage } from "@/services/http-client";
 import { relativeDays } from "@/components/pos-admin/pos-labels";
 import { usePermissions } from "@/lib/permissions";
 import type { Branch, ListResponse } from "@/types";
+import { useSupervisorScope } from "@/lib/supervisor-scope";
 import { StartCountDialog, type CountBranch } from "./StartCountDialog";
 import { accuracyPercent, countProgress, itemsWithDifference } from "./supervisor-counts";
 
@@ -123,6 +124,7 @@ function CountCard({ row, canStart, onStart }: { row: Row; canStart: boolean; on
  * Sucursales) abre directo el de esa sucursal.
  */
 export function SupervisorCountsPage() {
+  const { allows } = useSupervisorScope();
   const router = useRouter();
   const pathname = usePathname();
   const params = useSearchParams();
@@ -150,7 +152,10 @@ export function SupervisorCountsPage() {
         }),
         httpClient.get<ListResponse<InventoryCount>>("/pos/counts", { status: INVENTORY_COUNT_STATUS.CLOSED, limit: 200 }),
       ]);
-      const stores = branchList.items.filter((branch) => branch.type === BRANCH_TYPES.BRANCH);
+      // Con matriz, solo las sucursales donde tiene la casilla Conteos.
+      const stores = branchList.items.filter(
+        (branch) => branch.type === BRANCH_TYPES.BRANCH && allows("counts", branch.id)
+      );
       // Vienen del más reciente al más viejo: el primero de cada sucursal manda.
       const byBranch = (list: InventoryCount[]) => {
         const map: Record<string, InventoryCount> = {};
@@ -186,7 +191,7 @@ export function SupervisorCountsPage() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [allows]);
 
   useEffect(() => {
     void load();

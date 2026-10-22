@@ -202,11 +202,14 @@ export function BranchCutRows({
   branches,
   branchIds,
   period,
+  ticketsLink = true,
 }: {
   branches: Branch[];
   /** Sucursales elegidas en el filtro; vacío = todas. */
   branchIds: string[];
   period: BranchCutPeriod;
+  /** Enlace a los tickets de la sucursal en el panel (la app del supervisor no lo abre). */
+  ticketsLink?: boolean;
 }) {
   const { subscribe } = useRealtime();
   const today = todayInMexico();
@@ -520,11 +523,13 @@ export function BranchCutRows({
                         })}
                       </tbody>
                     </table>
-                    <div className="pos-cut-footer">
-                      <Link href={`/dashboard/pos/sucursales/${cut.branch.id}?tab=ventas`}>
-                        Ver los tickets de {cut.branch.name} <ExternalLink size={13} />
-                      </Link>
-                    </div>
+                    {ticketsLink ? (
+                      <div className="pos-cut-footer">
+                        <Link href={`/dashboard/pos/sucursales/${cut.branch.id}?tab=ventas`}>
+                          Ver los tickets de {cut.branch.name} <ExternalLink size={13} />
+                        </Link>
+                      </div>
+                    ) : null}
                   </div>
                 ) : null}
               </section>

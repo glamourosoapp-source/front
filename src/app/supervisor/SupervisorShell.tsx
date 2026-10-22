@@ -3,12 +3,13 @@
 import { ReactNode, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { ClipboardCheck, LogOut, ShieldAlert, Store, Truck } from "lucide-react";
+import { ClipboardCheck, LogOut, Receipt, ShieldAlert, Store, Truck } from "lucide-react";
 import { RealtimeProvider } from "@/components/realtime/RealtimeProvider";
 import { ForcePasswordChangeDialog } from "@/components/auth/ForcePasswordChangeDialog";
 import { PosLinksProvider, SUPERVISOR_POS_LINKS } from "@/components/pos-admin/pos-links";
 import { useAuthStore } from "@/stores/auth.store";
 import { usePermissions } from "@/lib/permissions";
+import { useSupervisorScope } from "@/lib/supervisor-scope";
 import "./supervisor.css";
 
 const NAV = [
@@ -16,6 +17,8 @@ const NAV = [
   { href: "/supervisor/pedidos", label: "Pedidos", icon: Truck },
   // Solo con el permiso de conteos (perfil Supervisor de caja desde la migración de conteos).
   { href: "/supervisor/conteos", label: "Conteos", icon: ClipboardCheck, module: "posCounts" },
+  // Solo si su matriz (ficha del usuario) le da Cortes en alguna sucursal.
+  { href: "/supervisor/cortes", label: "Cortes", icon: Receipt, cuts: true },
 ] as const;
 
 function isActive(pathname: string, href: string): boolean {
@@ -24,7 +27,8 @@ function isActive(pathname: string, href: string): boolean {
 
 /**
  * Marco de la app del supervisor: barra de arriba con el logo y, para
- * moverse, tres secciones (Sucursales, Pedidos y Conteos). En el celular la
+ * moverse, sus secciones (Sucursales, Pedidos, Conteos y, si tiene sucursales
+ * asignadas, Cortes). En el celular la
  * navegación baja a una barra fija abajo, al alcance del pulgar; dentro de un
  * pedido o de un conteo se esconde para dejarle la pantalla a la hoja y a su
  * barra de enviar o de cerrar.
@@ -37,6 +41,7 @@ export default function SupervisorShell({ children }: { children: ReactNode }) {
   const user = useAuthStore((s) => s.user);
   const logout = useAuthStore((s) => s.logout);
   const { can } = usePermissions();
+  const supervisorScope = useSupervisorScope();
   const [checked, setChecked] = useState(false);
   // Al salir a propósito no se manda al login del supervisor (ver "Salir").
   const leaving = useRef(false);
@@ -75,7 +80,10 @@ export default function SupervisorShell({ children }: { children: ReactNode }) {
 
   // Dentro de un pedido (revisar o ver la hoja) o de un conteo la barra de abajo estorba.
   const inOrder = pathname.startsWith("/supervisor/pedidos/") || pathname.startsWith("/supervisor/conteos/");
-  const nav = NAV.filter((item) => !("module" in item) || can(item.module, "view"));
+  const hasCuts = Boolean(supervisorScope.ids("cuts")?.length);
+  const nav = NAV.filter(
+    (item) => (!("module" in item) || can(item.module, "view")) && (!("cuts" in item) || hasCuts),
+  );
 
   return (
     <RealtimeProvider>

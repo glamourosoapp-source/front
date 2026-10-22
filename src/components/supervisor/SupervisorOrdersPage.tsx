@@ -11,6 +11,7 @@ import { isAwaitingRestockOrder } from "@/components/pos-admin/RestockOrderActio
 import { blockingRestockOrder } from "@/components/pos-admin/RestockAwaitingDialog";
 import { formatDateTime, relativeDays } from "@/components/pos-admin/pos-labels";
 import { usePosLinks } from "@/components/pos-admin/pos-links";
+import { useSupervisorScope } from "@/lib/supervisor-scope";
 import type { Branch, BranchShortage, ListResponse, RestockOrder } from "@/types";
 
 /**
@@ -88,6 +89,7 @@ function OrderCard({ row }: { row: Row }) {
  */
 export function SupervisorOrdersPage() {
   const { subscribe } = useRealtime();
+  const { allows } = useSupervisorScope();
   const [branches, setBranches] = useState<Branch[]>([]);
   const [orders, setOrders] = useState<RestockOrder[]>([]);
   const [missingByBranch, setMissingByBranch] = useState<Record<string, number | null>>({});
@@ -102,7 +104,10 @@ export function SupervisorOrdersPage() {
         httpClient.get<ListResponse<Branch>>("/pos/branches", { limit: 200, isActive: "true" }),
         httpClient.get<ListResponse<RestockOrder>>("/pos/restock/orders", { limit: 100 }),
       ]);
-      const stores = branchList.items.filter((branch) => branch.type === BRANCH_TYPES.BRANCH);
+      // Con matriz, solo las sucursales donde tiene la casilla Pedidos.
+      const stores = branchList.items.filter(
+        (branch) => branch.type === BRANCH_TYPES.BRANCH && allows("restock", branch.id)
+      );
       setBranches(stores);
       setOrders(orderList.items.filter((order) => order.origin !== RESTOCK_ORIGIN.FRANCHISE));
       setMissingByBranch((prev) => Object.fromEntries(stores.map((branch) => [branch.id, prev[branch.id] ?? null])));
@@ -123,7 +128,7 @@ export function SupervisorOrdersPage() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [allows]);
 
   useEffect(() => {
     void load();

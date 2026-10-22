@@ -24,6 +24,7 @@ import type { BranchSyncState } from "./pos-sync";
 import type { BranchOpeningHours, StoreDayEvaluation } from "./pos-store-hours";
 import type { TicketSettings } from "./utils/pos-ticket-settings";
 import type { PermissionMap } from "./permissions";
+import type { SupervisorAccess } from "./supervisor-access";
 
 export interface Profile {
   id: string;
@@ -58,6 +59,8 @@ export interface User {
   /** Sucursal del POS a la que está fijado el usuario (cajero o franquicia). */
   branchId?: string | null;
   branch?: Branch | null;
+  /** Matriz del supervisor de caja por sucursal (null = sin límite; ver supervisor-access.ts). */
+  supervisorAccess?: SupervisorAccess | null;
   /** true mientras el usuario siga usando la contraseña que le puso el admin. */
   mustChangePassword?: boolean;
   /** Última vez que el usuario eligió su propia contraseña. */

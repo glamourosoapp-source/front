@@ -2046,3 +2046,20 @@ p.supc-hero-branch {
     animation: none !important;
   }
 }
+
+/*
+ * Cortes (la vista "Por sucursal" del panel): en el celular las tres cifras
+ * de cada tarjeta comparten el ancho y el total, que es la más larga, se
+ * lleva más espacio para que "$36,240.00" no se salga de su recuadro.
+ */
+@media (max-width: 480px) {
+  .sup .pos-cut .pos-day-stat {
+    min-width: 0;
+    padding: 8px 9px;
+  }
+
+  .sup .pos-cut .pos-day-stat.is-total {
+    flex: 1.5;
+    min-width: 0;
+  }
+}
