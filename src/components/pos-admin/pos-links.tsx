@@ -20,6 +20,14 @@ export interface PosLinks {
   arrival: (order: Pick<RestockOrder, "id" | "branchId">) => string;
   /** Bandeja de surtido (al cerrar una hoja sin historial). */
   inbox: string;
+  /** Texto de los enlaces de regreso (por omisión, "Volver a los pedidos"). */
+  backLabel?: string;
+  /**
+   * La caja de una sucursal con "La caja hace su pedido a fábrica": ve, edita
+   * y envía SU pedido sin el permiso de surtido (lo autoriza la sucursal, no
+   * el perfil). Ve los montos, pero no edita los cargos de fábrica.
+   */
+  cashierRestock?: boolean;
 }
 
 export const DASHBOARD_POS_LINKS: PosLinks = {
@@ -37,6 +45,17 @@ export const SUPERVISOR_POS_LINKS: PosLinks = {
   branchOrders: () => "/supervisor/pedidos",
   arrival: DASHBOARD_POS_LINKS.arrival,
   inbox: "/supervisor/pedidos",
+};
+
+/** Rutas de la caja (`/pos/pedido`): solo su sucursal; volver es volver a cobrar. */
+export const CASHIER_POS_LINKS: PosLinks = {
+  review: (branchId, vista) => `/pos/pedido/${branchId}${vista === "formato" ? "?vista=formato" : ""}`,
+  orderSheet: (orderId) => `/pos/pedido/orden/${orderId}`,
+  branchOrders: () => "/pos",
+  arrival: DASHBOARD_POS_LINKS.arrival,
+  inbox: "/pos",
+  backLabel: "Volver a la caja",
+  cashierRestock: true,
 };
 
 const PosLinksContext = createContext<PosLinks>(DASHBOARD_POS_LINKS);

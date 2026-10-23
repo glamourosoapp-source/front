@@ -254,7 +254,9 @@ export function BranchOverviewTab({ branch, stats }: BranchOverviewTabProps) {
                   ? "Manual"
                   : capitalize(WEEKDAY_LABELS[branch.restockCutoffDow] ?? "")
               }
-              hint={branch.restockCutoffDow == null ? "Sin corte automático" : "Cada semana, automático"}
+              hint={`${branch.restockCutoffDow == null ? "Sin corte automático" : "Cada semana, automático"}${
+                branch.cashierRestock ? " · lo pide la caja" : ""
+              }`}
             />
           ) : null}
         </div>

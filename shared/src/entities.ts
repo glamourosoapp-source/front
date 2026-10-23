@@ -390,6 +390,8 @@ export interface Branch {
   isActive: boolean;
   /** Día de la semana (0 domingo … 6 sábado) en que se calculan los faltantes. */
   restockCutoffDow?: number | null;
+  /** La caja revisa, edita y envía su propio pedido a fábrica (menú "Más"). */
+  cashierRestock?: boolean;
   ticketSettings?: Record<string, unknown> | null;
   /** Lo que la caja de esta sucursal reportó en su último contacto. */
   syncState?: BranchSyncState | null;

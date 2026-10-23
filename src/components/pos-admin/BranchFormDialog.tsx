@@ -59,6 +59,8 @@ export function BranchFormDialog({
 }: BranchFormDialogProps) {
   const isEdit = Boolean(branch);
   const [isActive, setIsActive] = useState(branch?.isActive ?? true);
+  /** La caja de esta sucursal revisa, edita y envía su propio pedido a fábrica. */
+  const [cashierRestock, setCashierRestock] = useState(branch?.cashierRestock ?? false);
   const [saving, setSaving] = useState(false);
   const [type, setType] = useState<string>(branch?.type || defaultType);
   const [stockChoice, setStockChoice] = useState<StockSheetChoice | null>(null);
@@ -113,6 +115,7 @@ export function BranchFormDialog({
         return;
       }
       payload.openingHours = openingHours;
+      payload.cashierRestock = cashierRestock;
       if (canPickPriceList && priceLists) {
         payload.priceListId = String(form.get("priceListId") || "") || null;
       }
@@ -238,6 +241,23 @@ export function BranchFormDialog({
           ) : null}
           {type === BRANCH_TYPES.BRANCH ? (
             <OpeningHoursEditor value={openingHours} onChange={setOpeningHours} disabled={saving} />
+          ) : null}
+          {type === BRANCH_TYPES.BRANCH ? (
+            <FormControlLabel
+              sx={{ gridColumn: "1 / -1", alignItems: "flex-start" }}
+              control={
+                <Switch checked={cashierRestock} onChange={(e) => setCashierRestock(e.target.checked)} disabled={saving} />
+              }
+              label={
+                <span style={{ display: "grid", gap: 2, paddingTop: 8 }}>
+                  <span>La caja hace su pedido a fábrica</span>
+                  <Typography variant="body2" component="span" sx={{ color: "var(--muted)" }}>
+                    El cajero de esta sucursal revisa, edita y envía su pedido desde la caja (menú Más → Pedido a
+                    fábrica). Recibirlo y cancelarlo sigue en el panel.
+                  </Typography>
+                </span>
+              }
+            />
           ) : null}
 
           {/* El ticket (datos de facturación, letra y qué se imprime) se configura

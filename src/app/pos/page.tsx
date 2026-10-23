@@ -19,6 +19,7 @@ import {
   Receipt,
   Search,
   Settings,
+  ClipboardList,
   ShoppingCart,
   Store,
   Tag,
@@ -1415,6 +1416,18 @@ export default function PosPage() {
                   primary="Devolución a fábrica"
                   secondary="Lo roto o echado a perder que se lleva el transportista"
                 />
+              </MenuItem>
+            ) : null}
+            {/*
+              Pedido a fábrica: solo en las sucursales con "La caja hace su
+              pedido a fábrica" (Editar datos de la sucursal en el panel).
+            */}
+            {session?.branch.cashierRestock && !noBranch ? (
+              <MenuItem component={Link} href="/pos/pedido" onClick={() => setMoreAnchor(null)}>
+                <ListItemIcon>
+                  <ClipboardList size={16} />
+                </ListItemIcon>
+                <ListItemText primary="Pedido a fábrica" secondary="Revisa, edita y envía el pedido de esta sucursal" />
               </MenuItem>
             ) : null}
             <MenuItem component={Link} href="/pos/configuracion" onClick={() => setMoreAnchor(null)}>

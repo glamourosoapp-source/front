@@ -97,10 +97,11 @@ export function RestockOrderSheetPage() {
   const searchParams = useSearchParams();
   const editing = searchParams.get("modo") === "editar";
   const { can } = usePermissions();
-  const canView = can("posRestock", "view");
-  // El supervisor de caja ve el pedido con montos, igual que el administrador.
-  const canSeeCosts = can("productCosts", "view") || can("posSupervisor", "view");
   const links = usePosLinks();
+  // La caja de una sucursal que hace su pedido (`/pos/pedido`) ve los suyos, con montos.
+  const canView = can("posRestock", "view") || Boolean(links.cashierRestock);
+  // El supervisor de caja ve el pedido con montos, igual que el administrador.
+  const canSeeCosts = can("productCosts", "view") || can("posSupervisor", "view") || Boolean(links.cashierRestock);
 
   const [order, setOrder] = useState<RestockOrder | null>(null);
   const [form, setForm] = useState<FactoryForm | null>(null);
@@ -294,7 +295,7 @@ export function RestockOrderSheetPage() {
             className="mb-2 inline-flex items-center gap-1 text-sm text-[var(--muted)] hover:text-[var(--glam-navy)]"
           >
             <ArrowLeft size={16} />
-            Volver a los pedidos
+            {links.backLabel ?? "Volver a los pedidos"}
           </button>
           {order && !isFranchise && order.status !== RESTOCK_ORDER_STATUS.CANCELLED ? (
             <div style={{ margin: "4px 0 8px" }}>
