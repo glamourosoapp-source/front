@@ -124,12 +124,15 @@ export function RestockReviewPage() {
   const searchParams = useSearchParams();
   const { can } = usePermissions();
   const links = usePosLinks();
-  const canView = can("posRestock", "view");
-  const canCreate = can("posRestock", "create");
+  // La caja de una sucursal que hace su pedido (`/pos/pedido`): ve, edita y envía el suyo.
+  const cashier = Boolean(links.cashierRestock);
+  const canView = can("posRestock", "view") || cashier;
+  const canCreate = can("posRestock", "create") || cashier;
   const canUpdate = can("posRestock", "update");
   const canDispatch = canUpdate && can("posInventory", "update");
-  // El supervisor de caja ve el pedido con montos, igual que el administrador.
-  const canSeeCosts = can("productCosts", "view") || can("posSupervisor", "view");
+  // El supervisor de caja ve el pedido con montos, igual que el administrador;
+  // la caja también (son los precios de tienda que ya cobra).
+  const canSeeCosts = can("productCosts", "view") || can("posSupervisor", "view") || cashier;
 
   const view: View = searchParams.get("vista") === "formato" ? "formato" : "resumen";
   const [form, setForm] = useState<FactoryForm | null>(null);
@@ -328,7 +331,7 @@ export function RestockReviewPage() {
       <div className="page-stack">
         <Link href={backHref} className="mb-2 inline-flex items-center gap-1 text-sm text-[var(--muted)] hover:text-[var(--glam-navy)]">
           <ArrowLeft size={16} />
-          Volver a los pedidos
+          {links.backLabel ?? "Volver a los pedidos"}
         </Link>
         <section className="panel p-5 restock-result">
           <RestockSteps current="transit" />
@@ -356,7 +359,7 @@ export function RestockReviewPage() {
               Ver pedido
             </Button>
             <Button color="inherit" component={Link} href={backHref}>
-              Volver a los pedidos
+              {links.backLabel ?? "Volver a los pedidos"}
             </Button>
           </div>
         </section>
@@ -368,7 +371,7 @@ export function RestockReviewPage() {
     <div className="page-stack msf-page">
       <Link href={backHref} className="inline-flex items-center gap-1 text-sm text-[var(--muted)] hover:text-[var(--glam-navy)]">
         <ArrowLeft size={16} />
-        Volver a los pedidos
+        {links.backLabel ?? "Volver a los pedidos"}
       </Link>
 
       <section className="pos-day pos-cut is-overall restock-review-head">
@@ -501,9 +504,11 @@ export function RestockReviewPage() {
             onShippingChange={setShipping}
             quantities={chargeQuantities}
             onQuantitiesChange={setChargeQuantities}
-            disabled={!canCreate || saving || locked}
+            disabled={!canCreate || saving || locked || cashier}
             publicityHint={
-              publicityThisMonth
+              cashier
+                ? "Los cargos los pone la oficina: la publicidad va una vez al mes y el envío lo ajustan después."
+                : publicityThisMonth
                 ? "Este mes ya se le cobró publicidad a esta sucursal: va en $0. Cámbialo si toca cobrarla."
                 : `Este mes todavía no se cobra: va en ${formatMoney(form.charges?.publicity ?? 1300)}. Pon 0 si no se cobra.`
             }

@@ -126,6 +126,8 @@ const branchPayload = {
    * así que con el orden inverso una sucursal sin corte quedaba con domingo.
    */
   restockCutoffDow: z.union([z.null(), z.coerce.number().int().min(0).max(6)]).optional(),
+  /** La caja de la sucursal revisa, edita y envía su propio pedido a fábrica. */
+  cashierRestock: z.boolean().optional(),
   ticketSettings: ticketSettingsSchema.optional(),
   openingHours: openingHoursSchema.optional(),
   /** Lista de precios de la ciudad; null = precio general del catálogo. */
@@ -145,6 +147,7 @@ export const updateBranchSchema = z.object({
   postalCode: branchPayload.postalCode,
   phone: branchPayload.phone,
   restockCutoffDow: branchPayload.restockCutoffDow,
+  cashierRestock: branchPayload.cashierRestock,
   ticketSettings: branchPayload.ticketSettings,
   openingHours: branchPayload.openingHours,
   priceListId: branchPayload.priceListId,

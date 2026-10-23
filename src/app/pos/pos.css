@@ -1035,3 +1035,19 @@
 .pos-success.pos-success-refund {
   background: rgba(127, 29, 29, 0.92);
 }
+
+/* ---------- Pedido a fábrica desde la caja (/pos/pedido) ---------- */
+
+.pos-restock {
+  height: 100vh;
+  overflow: auto;
+  background: var(--bg);
+  color: var(--text);
+}
+
+.pos-restock-body {
+  width: 100%;
+  max-width: 1180px;
+  margin: 0 auto;
+  padding: 20px 24px 40px;
+}
