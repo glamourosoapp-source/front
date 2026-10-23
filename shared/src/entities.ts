@@ -466,6 +466,9 @@ export interface PosSaleItem {
   capProductId?: string | null;
   /** Por qué NO se descontó envase (p. ej. polietileno de 2 L sin regla). null = sin problema. */
   containerWarning?: string | null;
+  /** Acompañante que se descontó con la partida (el palo de una escoba) y cuántos. */
+  companionProductId?: string | null;
+  companionQuantity?: string | number | null;
   total: string | number;
 }
 
@@ -479,6 +482,23 @@ export interface PosContainerRule {
   containerProduct?: Product | null;
   capProductId: string | null;
   capProduct?: Product | null;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+/**
+ * Producto que sale además con cada pieza vendida de otro: la escoba lleva
+ * `quantity` PALOS. Editable por organización (Punto de venta → Líneas →
+ * Palos y accesorios).
+ */
+export interface PosProductCompanion {
+  id?: string;
+  organizationId?: string;
+  productId: string;
+  product?: Product | null;
+  companionProductId: string;
+  companionProduct?: Product | null;
+  quantity: number;
   createdAt?: string;
   updatedAt?: string;
 }

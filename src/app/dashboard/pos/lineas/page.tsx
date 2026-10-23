@@ -8,6 +8,7 @@ import { DataTable } from "@/components/ui/DataTable";
 import { ListPagination } from "@/components/ui/ListPagination";
 import { ProductLineFormDialog } from "@/components/pos-admin/ProductLineFormDialog";
 import { ContainerRulesTab } from "@/components/pos-admin/ContainerRulesTab";
+import { CompanionsTab } from "@/components/pos-admin/CompanionsTab";
 import { httpClient, getApiErrorMessage } from "@/services/http-client";
 import { useDebounce } from "@/hooks/useDebounce";
 import { formatMoney } from "@/lib/format-money";
@@ -115,9 +116,11 @@ export default function ProductLinesPage() {
       <Tabs value={tab} onChange={(_e, value: number) => setTab(value)} sx={{ borderBottom: 1, borderColor: "divider" }}>
         <Tab label="Líneas" />
         <Tab label="Envases y tapas" />
+        <Tab label="Palos y accesorios" />
       </Tabs>
 
       {tab === 1 ? <ContainerRulesTab canManage={canManage} /> : null}
+      {tab === 2 ? <CompanionsTab canManage={canManage} /> : null}
 
       {tab === 0 ? (
       <>
