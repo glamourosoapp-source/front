@@ -40,7 +40,7 @@ function productLabel(product: Product | null | undefined): string {
 }
 
 /** Buscador de un producto del catálogo (envase o tapa), con búsqueda al servidor. */
-function ProductPicker({
+export function ProductPicker({
   label,
   value,
   onChange,

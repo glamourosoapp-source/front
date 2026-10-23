@@ -15,6 +15,7 @@ export type {
   Branch,
   ProductLine,
   PosContainerRule,
+  PosProductCompanion,
   BranchInventoryRow,
   InventoryMovement,
   PosSale,

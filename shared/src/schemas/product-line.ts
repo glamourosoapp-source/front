@@ -37,6 +37,13 @@ export const upsertContainerRuleSchema = z.object({
   capProductId: z.union([z.string().uuid(), z.null()]),
 });
 
+/** Qué producto sale además con cada pieza de otro (la escoba y su palo). */
+export const upsertProductCompanionSchema = z.object({
+  productId: z.string().uuid(),
+  companionProductId: z.string().uuid(),
+  quantity: z.coerce.number().int().min(1).max(100).default(1),
+});
+
 export const queryProductLineSchema = paginationSchema.extend({
   /** "true" = solo las que pueden venderse por litro (con los dos SKU). */
   sellableByLiter: z.union([z.enum(["true", "false"]), z.literal(""), z.null()]).optional(),
