@@ -25,6 +25,7 @@ import type { Branch, ListResponse } from "@/types";
 export default function PosInventarioPage() {
   const { can } = usePermissions();
   const canView = can("posInventory", "view");
+  const canViewCost = can("productCosts", "view");
   const [branches, setBranches] = useState<Branch[]>([]);
   /** Vacío = todas las sucursales activas. */
   const [branchIds, setBranchIds] = useState<string[]>([]);
@@ -78,6 +79,7 @@ export default function PosInventarioPage() {
           sku: null,
           categoryName: line.categoryName,
           byBranch: line.byBranch,
+          unitCost: line.unitCost ?? null,
         })),
         ...data.products.map((product) => ({
           kind: "product" as const,
@@ -85,9 +87,10 @@ export default function PosInventarioPage() {
           sku: product.sku,
           categoryName: product.categoryName,
           byBranch: product.byBranch,
+          unitCost: product.unitCost ?? null,
         })),
       ];
-      await exportInventoryToXlsx({ branches: data.branches, rows, label });
+      await exportInventoryToXlsx({ branches: data.branches, rows, label, withCost: canViewCost });
       toast.success("Excel de inventario descargado");
     } catch (error) {
       toast.error(getApiErrorMessage(error, "No se pudo generar el Excel"));

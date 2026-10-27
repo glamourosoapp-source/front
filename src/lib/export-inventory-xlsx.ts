@@ -11,6 +11,10 @@ import type ExcelJSTypes from "exceljs";
  * - "Faltantes": misma forma, con lo que le falta a cada sucursal para su stock.
  * - "Detalle": un renglón por sucursal × producto con existencia, stock y
  *   faltante, para filtrar o hacer tablas dinámicas.
+ *
+ * Con permiso de ver costos lleva además el costo de compra por litro/pieza y
+ * su importe: el valor de la existencia (lo negativo no resta) y lo que cuesta
+ * el faltante.
  */
 
 export interface InventoryExportBranch {
@@ -30,10 +34,13 @@ export interface InventoryExportRow {
   sku: string | null;
   categoryName: string | null;
   byBranch: Record<string, InventoryExportCell>;
+  /** Costo de compra por litro/pieza; null = sin costo capturado. */
+  unitCost?: number | null;
 }
 
 const BRAND = { navy: "FF262D60", rowAlt: "FFF4F7FB", warn: "FFFFEDD5", warnText: "FF9A3412" };
 const QTY_FORMAT = "#,##0.##";
+const MONEY_FORMAT = '"$"#,##0.00';
 
 function unitOf(row: InventoryExportRow): string {
   return row.kind === "line" ? "L" : "pz";
@@ -61,7 +68,9 @@ function matrixSheet(
   branches: InventoryExportBranch[],
   rows: InventoryExportRow[],
   valueOf: (cell: InventoryExportCell) => number,
-  highlightShortage: boolean
+  highlightShortage: boolean,
+  /** Encabezado de la columna de importe (cantidad × costo); null = sin costos. */
+  amountTitle: string | null
 ): void {
   const sheet = workbook.addWorksheet(title, { views: [{ state: "frozen", xSplit: 2, ySplit: 1 }] });
   sheet.columns = [
@@ -70,6 +79,7 @@ function matrixSheet(
     { width: 22 },
     ...branches.map(() => ({ width: 12 })),
     { width: 12 },
+    ...(amountTitle ? [{ width: 12 }, { width: 14 }] : []),
   ];
   styleHeader(
     sheet.addRow([
@@ -78,16 +88,22 @@ function matrixSheet(
       "Categoría",
       ...branches.map((branch) => `${branch.code}\n${branch.name}`),
       "Total",
+      ...(amountTitle ? ["Costo", amountTitle] : []),
     ])
   );
+  let amountTotal = 0;
   rows.forEach((row, index) => {
     const values = branches.map((branch) => valueOf(cellOf(row, branch.id)));
+    const cost = row.unitCost ?? null;
+    const amount = cost == null ? null : values.reduce((sum, value) => sum + Math.max(0, value), 0) * cost;
+    amountTotal += amount ?? 0;
     const added = sheet.addRow([
       row.name,
       unitOf(row),
       row.categoryName ?? "Sin categoría",
       ...values,
       values.reduce((sum, value) => sum + value, 0),
+      ...(amountTitle ? [cost, amount] : []),
     ]);
     if (index % 2 === 1) added.fill = { type: "pattern", pattern: "solid", fgColor: { argb: BRAND.rowAlt } };
     branches.forEach((branch, column) => {
@@ -102,8 +118,21 @@ function matrixSheet(
     const total = added.getCell(4 + branches.length);
     total.numFmt = QTY_FORMAT;
     total.font = { bold: true };
+    if (amountTitle) {
+      added.getCell(5 + branches.length).numFmt = MONEY_FORMAT;
+      added.getCell(6 + branches.length).numFmt = MONEY_FORMAT;
+      added.getCell(6 + branches.length).font = { bold: true };
+    }
   });
-  sheet.autoFilter = { from: { row: 1, column: 1 }, to: { row: 1, column: 3 + branches.length + 1 } };
+  if (amountTitle) {
+    const footer = sheet.addRow([]);
+    footer.getCell(1).value = `${amountTitle} total`;
+    footer.getCell(6 + branches.length).value = amountTotal;
+    footer.getCell(6 + branches.length).numFmt = MONEY_FORMAT;
+    footer.font = { bold: true };
+  }
+  const lastColumn = 3 + branches.length + 1 + (amountTitle ? 2 : 0);
+  sheet.autoFilter = { from: { row: 1, column: 1 }, to: { row: 1, column: lastColumn } };
 }
 
 export async function exportInventoryToXlsx(params: {
@@ -111,14 +140,17 @@ export async function exportInventoryToXlsx(params: {
   rows: InventoryExportRow[];
   /** "Todas las sucursales", "Zapopan y Tonalá"… va en el nombre del archivo. */
   label: string;
+  /** Costo e importes solo con permiso de ver costos. */
+  withCost?: boolean;
 }): Promise<void> {
+  const withCost = Boolean(params.withCost);
   const ExcelJS = (await import("exceljs")).default;
   const workbook = new ExcelJS.Workbook();
   workbook.creator = "Glamouroso";
 
   // Existencias con el faltante marcado en naranja: el mismo aviso que la pantalla.
-  matrixSheet(workbook, "Existencias", params.branches, params.rows, (cell) => cell.stock, true);
-  matrixSheet(workbook, "Faltantes", params.branches, params.rows, shortageOf, false);
+  matrixSheet(workbook, "Existencias", params.branches, params.rows, (cell) => cell.stock, true, withCost ? "Valor" : null);
+  matrixSheet(workbook, "Faltantes", params.branches, params.rows, shortageOf, false, withCost ? "Importe" : null);
 
   const detalle = workbook.addWorksheet("Detalle", { views: [{ state: "frozen", ySplit: 1 }] });
   detalle.columns = [
@@ -132,6 +164,7 @@ export async function exportInventoryToXlsx(params: {
     { width: 12 },
     { width: 12 },
     { width: 12 },
+    ...(withCost ? [{ width: 12 }, { width: 14 }] : []),
   ];
   styleHeader(
     detalle.addRow([
@@ -145,6 +178,7 @@ export async function exportInventoryToXlsx(params: {
       "Existencia",
       "Stock",
       "Faltante",
+      ...(withCost ? ["Costo", "Valor"] : []),
     ])
   );
   for (const branch of params.branches) {
@@ -161,11 +195,15 @@ export async function exportInventoryToXlsx(params: {
         cell.stock,
         cell.minStock,
         shortageOf(cell),
+        ...(withCost
+          ? [row.unitCost ?? null, row.unitCost == null ? null : Math.max(0, cell.stock) * row.unitCost]
+          : []),
       ]);
       for (const column of [8, 9, 10]) added.getCell(column).numFmt = QTY_FORMAT;
+      if (withCost) for (const column of [11, 12]) added.getCell(column).numFmt = MONEY_FORMAT;
     }
   }
-  detalle.autoFilter = { from: { row: 1, column: 1 }, to: { row: 1, column: 10 } };
+  detalle.autoFilter = { from: { row: 1, column: 1 }, to: { row: 1, column: withCost ? 12 : 10 } };
 
   const buffer = await workbook.xlsx.writeBuffer();
   const blob = new Blob([buffer], {
