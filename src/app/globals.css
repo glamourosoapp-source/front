@@ -4684,6 +4684,23 @@ textarea.input {
   border-right: 1px solid var(--border);
 }
 
+/* Con costos, la raya que separa las sucursales pasa del Total al Valor. */
+.inv-matrix .inv-total.with-cost {
+  border-right: 0;
+}
+
+.inv-matrix .inv-cost {
+  color: var(--muted);
+  background: #f8fbff;
+}
+
+.inv-matrix .inv-value {
+  color: var(--glam-navy);
+  font-weight: 700;
+  background: #f8fbff;
+  border-right: 1px solid var(--border);
+}
+
 .inv-name {
   color: var(--glam-navy);
   font-weight: 600;

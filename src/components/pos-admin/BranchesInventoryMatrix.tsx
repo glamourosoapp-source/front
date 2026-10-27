@@ -5,7 +5,8 @@ import { Button, Tab, Tabs, Tooltip } from "@mui/material";
 import { AlertTriangle, Droplets, Package } from "lucide-react";
 import { httpClient, getApiErrorMessage } from "@/services/http-client";
 import { useDebounce } from "@/hooks/useDebounce";
-import { formatQuantity } from "@/lib/format-money";
+import { formatMoney, formatQuantity } from "@/lib/format-money";
+import { usePermissions } from "@/lib/permissions";
 import { useRealtime } from "@/components/realtime/RealtimeProvider";
 import { toast } from "sonner";
 import { FilterBar, FilterMeta, FilterSearch } from "./FilterBar";
@@ -29,6 +30,13 @@ interface OverviewRowBase {
   totalStock: number;
   totalMin: number;
   branchesBelowMin: number;
+  /**
+   * Costo de compra por litro/pieza y lo que vale la existencia de las
+   * sucursales elegidas a ese costo (lo negativo no resta). `null` = sin costo
+   * capturado; no vienen sin el permiso de ver costos.
+   */
+  unitCost?: number | null;
+  totalValue?: number | null;
 }
 
 export interface OverviewLine extends OverviewRowBase {
@@ -53,6 +61,8 @@ export interface InventoryOverview {
  * producto y una columna por sucursal, con el total de las elegidas. Lo que
  * está bajo su stock en una sucursal se pinta en esa celda. Es de consulta: el
  * stock y los ajustes se editan eligiendo UNA sucursal (clic en su columna).
+ * Con permiso de ver costos lleva además el costo de compra y el valor a
+ * costo de la existencia.
  */
 export function BranchesInventoryMatrix({
   branchIds,
@@ -63,6 +73,8 @@ export function BranchesInventoryMatrix({
   onPickBranch: (branchId: string) => void;
 }) {
   const { subscribe } = useRealtime();
+  const { can } = usePermissions();
+  const withCost = can("productCosts", "view");
   const [tab, setTab] = useState(0);
   const [data, setData] = useState<InventoryOverview>({ branches: [], lines: [], products: [] });
   const [search, setSearch] = useState("");
@@ -102,6 +114,7 @@ export function BranchesInventoryMatrix({
   const isLine = tab === 0;
   const rows: OverviewRowBase[] = isLine ? data.lines : data.products;
   const unit = isLine ? "L" : "pz";
+  const totalValue = useMemo(() => rows.reduce((sum, row) => sum + (row.totalValue ?? 0), 0), [rows]);
   const belowCount = useMemo(
     () => [...data.lines, ...data.products].filter((row) => row.branchesBelowMin > 0).length,
     [data]
@@ -123,6 +136,12 @@ export function BranchesInventoryMatrix({
         <FilterMeta>
           <strong>{rows.length.toLocaleString("es-MX")}</strong> {isLine ? "líneas" : "productos"} en{" "}
           <strong>{data.branches.length}</strong> {data.branches.length === 1 ? "sucursal" : "sucursales"}
+          {withCost ? (
+            <>
+              {" "}
+              · valor a costo <strong>{formatMoney(totalValue)}</strong>
+            </>
+          ) : null}
         </FilterMeta>
       </FilterBar>
 
@@ -142,7 +161,13 @@ export function BranchesInventoryMatrix({
           <thead>
             <tr>
               <th className="inv-sticky">{isLine ? "Línea" : "Producto"}</th>
-              <th className="inv-num inv-total">Total</th>
+              <th className={`inv-num inv-total${withCost ? " with-cost" : ""}`}>Total</th>
+              {withCost ? (
+                <>
+                  <th className="inv-num inv-cost">Costo / {unit}</th>
+                  <th className="inv-num inv-value">Valor</th>
+                </>
+              ) : null}
               {data.branches.map((branch) => (
                 <th key={branch.id} className="inv-num">
                   <Tooltip title={`Ver y editar solo ${branch.name}`}>
@@ -172,9 +197,15 @@ export function BranchesInventoryMatrix({
                       ) : null}
                     </div>
                   </td>
-                  <td className="inv-num inv-total">
+                  <td className={`inv-num inv-total${withCost ? " with-cost" : ""}`}>
                     {formatQuantity(row.totalStock)} {unit}
                   </td>
+                  {withCost ? (
+                    <>
+                      <td className="inv-num inv-cost">{row.unitCost != null ? formatMoney(row.unitCost) : "—"}</td>
+                      <td className="inv-num inv-value">{row.totalValue != null ? formatMoney(row.totalValue) : "—"}</td>
+                    </>
+                  ) : null}
                   {data.branches.map((branch) => {
                     const cell = row.byBranch[branch.id] ?? { stock: 0, minStock: 0 };
                     const shortage = Math.max(0, cell.minStock - cell.stock);
@@ -208,7 +239,7 @@ export function BranchesInventoryMatrix({
             })}
             {!loading && !rows.length ? (
               <tr>
-                <td colSpan={data.branches.length + 2} className="inv-empty">
+                <td colSpan={data.branches.length + (withCost ? 4 : 2)} className="inv-empty">
                   No hay registros con estos filtros.
                 </td>
               </tr>
