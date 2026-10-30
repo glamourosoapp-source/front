@@ -14,6 +14,12 @@ export const startInventoryCountSchema = z.object({
 export const recordInventoryCountItemSchema = z.object({
   countedQty: z.coerce.number().min(0).max(1_000_000),
   recount: z.boolean().optional(),
+  /**
+   * Hora en que se contó, para la app del supervisor que guarda sin señal y
+   * sube después. Sin ella cuenta la hora del servidor (la web). El Back la
+   * recorta entre el inicio del conteo y la hora de llegada.
+   */
+  countedAt: z.coerce.date().optional(),
 });
 
 export const closeInventoryCountSchema = z.object({
