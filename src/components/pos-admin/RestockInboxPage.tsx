@@ -209,7 +209,8 @@ export function RestockInboxPage() {
         const step: Step = inTransit?.status === RESTOCK_ORDER_STATUS.PENDING
           ? "pending"
           : inTransit
-          ? ageDays(inTransit.createdAt) > STUCK_DAYS
+          ? // Se mide desde que salió de fábrica (o se le mandó), no desde que nació el borrador.
+            ageDays(inTransit.sentAt ?? inTransit.submittedAt ?? inTransit.createdAt) > STUCK_DAYS
             ? "stuck"
             : "transit"
           : shortages === null
@@ -417,7 +418,13 @@ export function RestockInboxPage() {
                             {order.status === RESTOCK_ORDER_STATUS.SENT && order.sentAt
                               ? restockSentDetail(order)
                               : relativeDays(order.createdAt)}
-                            {row.step === "stuck" ? <strong style={{ color: "#c62828" }}> · revisa si ya llegó</strong> : null}
+                            {row.step === "stuck" ? (
+                              <strong style={{ color: "#c62828" }}>
+                                {isAwaitingFactoryArrival(order)
+                                  ? ` · lleva ${ageDays(order.sentAt)} días sin confirmar la llegada`
+                                  : " · revisa si ya llegó"}
+                              </strong>
+                            ) : null}
                             {row.awaiting.length > 1 ? <span className="pos-branch-muted"> · {row.awaiting.length} pedidos abiertos</span> : null}
                           </span>
                         ) : order?.status === RESTOCK_ORDER_STATUS.PENDING ? (

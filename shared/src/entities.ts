@@ -732,6 +732,8 @@ export interface RestockOrderItem {
   unit: RestockItemUnit;
   requestedQty: string | number;
   dispatchedQty?: string | number | null;
+  /** Lo que fábrica dijo que salió; no cambia al confirmar la llegada (ahí `dispatchedQty` pasa a ser lo que llegó). */
+  factorySentQty?: string | number | null;
   /** Litros por unidad despachada (20 para bidones); congela la conversión del surtido. */
   litersPerUnit?: string | number | null;
   /** Piezas por empaque despachado (24 para una caja de latas); congela la conversión del surtido. */
@@ -754,6 +756,8 @@ export interface RestockOrder {
   approvedBy?: string | null;
   sentBy?: string | null;
   sentAt?: string | null;
+  /** Cuándo se mandó a fábrica (pasó a `approved`); null en borradores y pedidos viejos. */
+  submittedAt?: string | null;
   receivedBy?: string | null;
   receivedAt?: string | null;
   /** Cuándo subió al inventario de la sucursal (null = enviado por fábrica sin confirmar, o franquicia). */
