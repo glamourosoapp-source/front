@@ -3,6 +3,7 @@
 import { Chip } from "@mui/material";
 import { useRouter } from "next/navigation";
 import { config } from "@/config";
+import { RESTOCK_ORDER_STATUS } from "@glamouroso/shared/constants";
 import { formatMoney } from "@/lib/format-money";
 import type { RestockOrder } from "@/types";
 import {
@@ -10,8 +11,10 @@ import {
   RESTOCK_STATUS_COLORS,
   RESTOCK_STATUS_LABELS,
   formatDateTime,
+  isAwaitingFactoryArrival,
   relativeDays,
   restockOrderSheetHref,
+  restockSentDetail,
 } from "./pos-labels";
 import { RestockOrderActions, isOpenRestockOrder } from "./RestockOrderActions";
 
@@ -28,9 +31,10 @@ interface RestockOrdersTableProps {
   loading?: boolean;
 }
 
-/** "Recibido 28 sep" / "Salió 12 sep" / "—". */
+/** "Recibido 28 sep" / "Enviado por fábrica 30 oct · Juan" / "Salió 12 sep" / "—". */
 function arrivalLabel(order: RestockOrder): string {
   if (order.receivedAt) return `Recibido ${formatDateTime(order.receivedAt)}`;
+  if (order.status === RESTOCK_ORDER_STATUS.SENT && order.sentAt) return `Enviado por fábrica ${restockSentDetail(order)}`;
   if (order.sentAt) return `${config.factoryModuleEnabled ? "Enviado" : "Salió"} ${formatDateTime(order.sentAt)}`;
   return "—";
 }
@@ -122,7 +126,13 @@ export function RestockOrdersTable({
                   {items.length}
                   {shortItems ? (
                     <div className="page-kicker" style={{ margin: 0, color: "#92400e", whiteSpace: "nowrap" }}>
-                      {shortItems === 1 ? "1 llegó incompleto" : `${shortItems} llegaron incompletos`}
+                      {isAwaitingFactoryArrival(order)
+                        ? shortItems === 1
+                          ? "1 va corto"
+                          : `${shortItems} van cortos`
+                        : shortItems === 1
+                          ? "1 llegó incompleto"
+                          : `${shortItems} llegaron incompletos`}
                     </div>
                   ) : null}
                 </td>

@@ -51,6 +51,8 @@ import {
   RESTOCK_STATUS_COLORS,
   RESTOCK_STATUS_LABELS,
   formatDateTime,
+  isAwaitingFactoryArrival,
+  restockSentDetail,
   unitLabel,
 } from "./pos-labels";
 import { usePosLinks } from "./pos-links";
@@ -158,6 +160,10 @@ export function RestockOrderSheetPage() {
   const alreadySent =
     order?.status === RESTOCK_ORDER_STATUS.SENT || order?.status === RESTOCK_ORDER_STATUS.RECEIVED;
   const isOpen = Boolean(order) && !alreadySent && !isCancelled;
+  // Fábrica lo envió desde su app y falta confirmar la llegada: su inventario todavía no sube.
+  const awaitingArrival = order ? isAwaitingFactoryArrival(order) : false;
+  // Ya subió al inventario: corregir mueve la diferencia por kardex.
+  const stockLoaded = alreadySent && !awaitingArrival;
   const canDispatch =
     can("posRestock", "update") && can("posInventory", "update") && !isFranchise && !isCancelled;
   const canEdit = editing && canDispatch;
@@ -230,7 +236,7 @@ export function RestockOrderSheetPage() {
         toast.success(`Pedido enviado a ${order.branch?.name ?? "la sucursal"}: subió al inventario`);
       } else {
         toast.success(
-          alreadySent ? "Envío corregido y el inventario de la sucursal ajustado" : "Envío actualizado"
+          stockLoaded ? "Envío corregido y el inventario de la sucursal ajustado" : "Envío actualizado"
         );
       }
       setConfirmOpen(false);
@@ -305,7 +311,11 @@ export function RestockOrderSheetPage() {
           <h1 className="page-title" style={{ display: "flex", alignItems: "center", gap: 10 }}>
             <Truck size={22} style={{ color: "var(--glam-blue)", flex: "0 0 auto" }} />
             <span>
-              {canEdit ? (config.factoryModuleEnabled ? "Corregir envío" : "Corregir lo recibido") : "Pedido a fábrica"}
+              {canEdit
+                ? config.factoryModuleEnabled || awaitingArrival
+                  ? "Corregir envío"
+                  : "Corregir lo recibido"
+                : "Pedido a fábrica"}
               {order?.branch ? ` · ${order.branch.code} · ${order.branch.name}` : ""}
             </span>
           </h1>
@@ -320,9 +330,11 @@ export function RestockOrderSheetPage() {
               <span className="page-kicker" style={{ margin: 0 }}>
                 Pedido {formatDateTime(order.createdAt)}
                 {/* Con fábrica apagada, al recibir se anota la misma hora como salida: no se repite. */}
-                {order.sentAt && (config.factoryModuleEnabled || !order.receivedAt)
-                  ? ` · ${config.factoryModuleEnabled ? "enviado" : "salió"} ${formatDateTime(order.sentAt)}`
-                  : ""}
+                {order.status === RESTOCK_ORDER_STATUS.SENT && order.sentAt
+                  ? ` · enviado por fábrica ${restockSentDetail(order)}`
+                  : order.sentAt && (config.factoryModuleEnabled || !order.receivedAt)
+                    ? ` · ${config.factoryModuleEnabled ? "enviado" : "salió"} ${formatDateTime(order.sentAt)}`
+                    : ""}
                 {order.receivedAt ? ` · recibido ${formatDateTime(order.receivedAt)}` : ""}
               </span>
             </div>
@@ -365,8 +377,10 @@ export function RestockOrderSheetPage() {
 
       {order ? (
         canEdit ? (
-          <Alert severity={alreadySent ? "warning" : "info"}>
-            {alreadySent
+          <Alert severity={stockLoaded ? "warning" : "info"}>
+            {awaitingArrival
+              ? "Fábrica ya lo envió y la llegada no se ha confirmado: corregir aquí solo cambia lo que viene en camino. El inventario sube al confirmar la llegada."
+              : stockLoaded
               ? `Este pedido ya se ${config.factoryModuleEnabled ? "envió" : "recibió"}: al guardar, lo que bajes sale del inventario de la sucursal y lo que subas o agregues entra.`
               : config.factoryModuleEnabled
                 ? "Todavía no se envía: corrige lo que de verdad sale de fábrica (lo que no hay, déjalo vacío). El inventario sube cuando lo marques como enviado."
@@ -376,7 +390,11 @@ export function RestockOrderSheetPage() {
           </Alert>
         ) : (
           <p className="page-kicker" style={{ margin: 0 }}>
-            {alreadySent
+            {awaitingArrival
+              ? canDispatch
+                ? "Lo que mandó fábrica (con su motivo si mandó menos). Cuando llegue, \"Confirmar llegada\" abre la hoja precargada con esto para capturar lo que de verdad llegó; ahí sube al inventario."
+                : "Lo que mandó fábrica (con su motivo si mandó menos). Cuando llegue, la oficina confirma la llegada en el panel."
+              : alreadySent
               ? config.factoryModuleEnabled
                 ? "Cómo salió de fábrica: lo que se envió a la sucursal."
                 : "Lo que llegó a la sucursal."
@@ -388,7 +406,7 @@ export function RestockOrderSheetPage() {
                     ? "Lo que se pidió. Cuando llegue, \"Recibir\" abre la hoja precargada para capturar lo que de verdad llegó."
                     : "Lo que se pidió. Cuando llegue, la oficina lo recibe en el panel."}
             {order.dispatchNotes
-              ? ` ${config.factoryModuleEnabled ? "Nota del envío" : "Nota de la llegada"}: ${order.dispatchNotes}`
+              ? ` ${config.factoryModuleEnabled || awaitingArrival ? "Nota de fábrica" : "Nota de la llegada"}: ${order.dispatchNotes}`
               : ""}
           </p>
         )
@@ -489,7 +507,9 @@ export function RestockOrderSheetPage() {
         <DialogTitle>{alreadySent ? "Corregir lo que se envió" : "Guardar lo que se envía"}</DialogTitle>
         <DialogContent dividers>
           <p className="page-kicker" style={{ marginTop: 0 }}>
-            {alreadySent
+            {awaitingArrival
+              ? "Fábrica ya lo envió y la llegada no se ha confirmado: el inventario no se mueve hasta confirmarla."
+              : stockLoaded
               ? `El pedido ya se envió: la diferencia entra o sale del inventario de ${order?.branch?.name ?? "la sucursal"}.`
               : "Todavía no se envía: el inventario no se mueve hasta marcarlo como enviado."}
           </p>
@@ -500,7 +520,7 @@ export function RestockOrderSheetPage() {
                   <th>Producto</th>
                   <th style={{ textAlign: "right" }}>Antes</th>
                   <th style={{ textAlign: "right" }}>Ahora</th>
-                  {alreadySent ? <th style={{ textAlign: "right" }}>Inventario</th> : null}
+                  {stockLoaded ? <th style={{ textAlign: "right" }}>Inventario</th> : null}
                   <th>Motivo</th>
                 </tr>
               </thead>
@@ -521,7 +541,7 @@ export function RestockOrderSheetPage() {
                       </td>
                       <td style={{ textAlign: "right" }}>{pack(before)}</td>
                       <td style={{ textAlign: "right", fontWeight: 700 }}>{pack(after)}</td>
-                      {alreadySent ? (
+                      {stockLoaded ? (
                         <td style={{ textAlign: "right", color: delta < 0 ? "#b91c1c" : "#15803d" }}>
                           {delta > 0 ? "+" : ""}
                           {formatQuantity(delta)} {unitOf(row)}

@@ -20,12 +20,14 @@ import {
   RESTOCK_STATUS_FILTER_OPTIONS,
   RESTOCK_STATUS_LABELS,
   businessDayOf,
+  isAwaitingFactoryArrival,
   packSummary,
   packTotals,
   posWeekStart,
   relativeDays,
   restockOrderSheetHref,
   restockReviewHref,
+  restockSentDetail,
 } from "./pos-labels";
 
 const RANGES: DateRangeOption[] = [
@@ -350,7 +352,14 @@ export function RestockInboxPage() {
               const transit = row.step === "transit" || row.step === "stuck";
               let action: React.ReactNode = null;
               if (order && transit) {
-                if (canDispatch && isOpenRestockOrder(order) && order.status !== RESTOCK_ORDER_STATUS.PENDING) {
+                if (canDispatch && isAwaitingFactoryArrival(order)) {
+                  // Fábrica lo envió desde su app: la oficina confirma qué llegó.
+                  action = (
+                    <Button size="small" variant="contained" color="success" startIcon={<PackageCheck size={14} />} component={Link} href={restockArrivalHref(order)}>
+                      Confirmar llegada
+                    </Button>
+                  );
+                } else if (canDispatch && isOpenRestockOrder(order) && order.status !== RESTOCK_ORDER_STATUS.PENDING) {
                   action = (
                     <Button size="small" variant="contained" color="success" startIcon={<PackagePlus size={14} />} component={Link} href={restockArrivalHref(order)}>
                       Recibir
@@ -404,7 +413,10 @@ export function RestockInboxPage() {
                         <Truck size={15} className="pos-branch-status-icon" />
                         {order && transit ? (
                           <span>
-                            <strong>{RESTOCK_STATUS_LABELS[order.status] ?? order.status}</strong> {relativeDays(order.createdAt)}
+                            <strong>{RESTOCK_STATUS_LABELS[order.status] ?? order.status}</strong>{" "}
+                            {order.status === RESTOCK_ORDER_STATUS.SENT && order.sentAt
+                              ? restockSentDetail(order)
+                              : relativeDays(order.createdAt)}
                             {row.step === "stuck" ? <strong style={{ color: "#c62828" }}> · revisa si ya llegó</strong> : null}
                             {row.awaiting.length > 1 ? <span className="pos-branch-muted"> · {row.awaiting.length} pedidos abiertos</span> : null}
                           </span>

@@ -756,6 +756,8 @@ export interface RestockOrder {
   sentAt?: string | null;
   receivedBy?: string | null;
   receivedAt?: string | null;
+  /** Cuándo subió al inventario de la sucursal (null = enviado por fábrica sin confirmar, o franquicia). */
+  stockLoadedAt?: string | null;
   /** Nota de quien pidió. */
   notes?: string | null;
   /** Nota de fábrica sobre el envío. Separada para no pisar la de quien pidió. */

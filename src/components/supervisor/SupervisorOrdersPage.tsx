@@ -9,7 +9,7 @@ import { httpClient, getApiErrorMessage } from "@/services/http-client";
 import { useRealtime } from "@/components/realtime/RealtimeProvider";
 import { isAwaitingRestockOrder } from "@/components/pos-admin/RestockOrderActions";
 import { blockingRestockOrder } from "@/components/pos-admin/RestockAwaitingDialog";
-import { formatDateTime, relativeDays } from "@/components/pos-admin/pos-labels";
+import { formatDateTime, relativeDays, restockSentDetail } from "@/components/pos-admin/pos-labels";
 import { usePosLinks } from "@/components/pos-admin/pos-links";
 import { useSupervisorScope } from "@/lib/supervisor-scope";
 import type { Branch, BranchShortage, ListResponse, RestockOrder } from "@/types";
@@ -18,7 +18,8 @@ import type { Branch, BranchShortage, ListResponse, RestockOrder } from "@/types
  * En qué va el pedido de cada sucursal:
  * - `draft`: hay un pedido creado que todavía no se envía (Por enviar);
  * - `pending`: tiene faltante y nada en camino (Por pedir);
- * - `transit`: ya se envió a fábrica y no ha llegado (En camino);
+ * - `transit`: ya se envió a fábrica y no ha llegado (En camino; si fábrica
+ *   ya lo mandó, la tarjeta dice "Enviado por fábrica" con cuándo y quién);
  * - `ok`: sin faltante ni pedido abierto (Al día).
  */
 type Step = "draft" | "pending" | "transit" | "ok" | "loading";
@@ -50,7 +51,9 @@ function OrderCard({ row }: { row: Row }) {
     step === "draft" && order
       ? `Creado ${formatDateTime(order.createdAt)} · sin enviar`
       : step === "transit" && order
-        ? `Enviado ${formatDateTime(order.sentAt ?? order.createdAt)} · ${relativeDays(order.sentAt ?? order.createdAt)}`
+        ? order.status === RESTOCK_ORDER_STATUS.SENT && order.sentAt
+          ? `Enviado por fábrica ${restockSentDetail(order)} · ${relativeDays(order.sentAt)}`
+          : `Enviado a fábrica ${formatDateTime(order.createdAt)} · ${relativeDays(order.createdAt)}`
         : step === "pending"
           ? `${missing} ${missing === 1 ? "producto" : "productos"} por pedir`
           : step === "ok"

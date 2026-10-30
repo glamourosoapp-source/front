@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, type ReactNode } from "react";
 import { Autocomplete, IconButton, TextField, Tooltip } from "@mui/material";
 import { Minus, Plus, X } from "lucide-react";
 import type { FactoryFormRow } from "@glamouroso/shared";
@@ -24,8 +24,12 @@ interface RestockSummaryListProps {
   values: SheetValues;
   /** Contra qué se marca lo cambiado: el faltante sugerido o lo pedido. */
   baseline: SheetValues;
-  /** "Sugerido" (revisar y enviar) o "Pedido" (recibir). */
+  /** "Sugerido" (revisar y enviar), "Pedido" (recibir) o "Mandó fábrica" (confirmar llegada). */
   baselineLabel: string;
+  /** Renglón cambiado que no venía en la base; por omisión "No venía en lo <base>". */
+  absentLabel?: string;
+  /** Algo más bajo el nombre del renglón (al confirmar llegada: lo pedido y el motivo de fábrica). */
+  rowNote?: (row: FactoryFormRow) => ReactNode;
   onChange: (key: string, value: string) => void;
   canSeeCosts: boolean;
   disabled?: boolean;
@@ -59,6 +63,8 @@ export function RestockSummaryList({
   values,
   baseline,
   baselineLabel,
+  absentLabel,
+  rowNote,
   onChange,
   canSeeCosts,
   disabled = false,
@@ -120,9 +126,12 @@ export function RestockSummaryList({
                           <strong>{row.label}</strong>
                           {changed ? (
                             <div className="restock-summary-was">
-                              {before > 0 ? `${baselineLabel}: ${formatQuantity(before)}` : `No venía en lo ${baselineLabel.toLowerCase()}`}
+                              {before > 0
+                                ? `${baselineLabel}: ${formatQuantity(before)}`
+                                : (absentLabel ?? `No venía en lo ${baselineLabel.toLowerCase()}`)}
                             </div>
                           ) : null}
+                          {rowNote?.(row)}
                         </td>
                         <td className="restock-summary-pack rs-pack">{packDescription(row)}</td>
                         <td className="rs-qty">

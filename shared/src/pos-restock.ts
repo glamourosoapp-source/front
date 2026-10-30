@@ -85,7 +85,7 @@ export function restockCancelBlocker(
   if (order.status === RESTOCK_ORDER_STATUS.CANCELLED) return "Este pedido ya está cancelado";
   if (options.factoryModuleEnabled === false) {
     if (order.status === RESTOCK_ORDER_STATUS.RECEIVED) return "Ya se recibió en la sucursal";
-    if (order.status === RESTOCK_ORDER_STATUS.SENT) return "Su inventario ya se cargó a la sucursal";
+    if (order.status === RESTOCK_ORDER_STATUS.SENT) return "Ya salió de fábrica: confirma la llegada en vez de cancelarlo";
     return null;
   }
   if (order.status !== RESTOCK_ORDER_STATUS.PENDING) {

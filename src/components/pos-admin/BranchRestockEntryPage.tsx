@@ -17,7 +17,9 @@ import {
   TextField,
 } from "@mui/material";
 import { ArrowLeft, CheckCheck, Download, PackagePlus, RotateCcw, ShieldAlert, Truck } from "lucide-react";
-import type { FactoryForm } from "@glamouroso/shared";
+import type { FactoryForm, FactoryFormRow } from "@glamouroso/shared";
+import { RESTOCK_ORDER_STATUS } from "@glamouroso/shared/constants";
+import type { RestockOrder, RestockOrderItem } from "@/types";
 import { httpClient, getApiErrorMessage } from "@/services/http-client";
 import { usePermissions } from "@/lib/permissions";
 import { formatMoney, formatQuantity } from "@/lib/format-money";
@@ -29,6 +31,7 @@ import {
   rowKey,
   sameValue,
   sheetPages,
+  targetKey,
   unitOf,
   unlinkedCount,
   type SheetValues,
@@ -45,7 +48,14 @@ import {
   sheetCharges,
   type ChargeQuantityInputs,
 } from "./factory-form-values";
-import { RESTOCK_ORIGIN_LABELS, RESTOCK_STATUS_LABELS, formatDate, unitLabel } from "./pos-labels";
+import {
+  RESTOCK_ORIGIN_LABELS,
+  RESTOCK_STATUS_LABELS,
+  formatDate,
+  packQtyLabel,
+  restockSentDetail,
+  unitLabel,
+} from "./pos-labels";
 import { RestockSummaryList } from "./RestockSummaryList";
 import { RestockSteps } from "./RestockSteps";
 import { RestockChargesEditor, RestockTotalEquation } from "./RestockChargesEditor";
@@ -63,6 +73,100 @@ function basisKeyOf(form: FactoryForm): BasisKey {
   const entry = form.entry;
   if (entry?.kind === "order" && entry.orderId) return `order:${entry.orderId}`;
   return entry?.kind ?? "blank";
+}
+
+/** Lo pedido y lo que mandó fábrica de una partida, en empaques. */
+function sentQuantities(item: RestockOrderItem): { requested: number; sent: number } {
+  const requested = Number(item.requestedQty) || 0;
+  const sent = item.dispatchedQty == null ? requested : Number(item.dispatchedQty) || 0;
+  return { requested, sent };
+}
+
+/** Partida que fábrica mandó distinta a lo pedido o con una nota: la oficina la ve al confirmar. */
+function factoryItemStands(item: RestockOrderItem): boolean {
+  const { requested, sent } = sentQuantities(item);
+  return sent !== requested || Boolean(item.notes?.trim());
+}
+
+/**
+ * Lo que fábrica dejó escrito al enviar desde su app: cuándo y quién, la nota
+ * del envío y cada partida que mandó distinta a lo pedido con su motivo. Se ve
+ * en las dos vistas (Resumen y Formato) arriba de la captura.
+ */
+function FactoryShipmentNotice({ order }: { order: RestockOrder }) {
+  const items = order.items ?? [];
+  const differing = items.filter(factoryItemStands);
+  const short = differing.filter((item) => {
+    const { requested, sent } = sentQuantities(item);
+    return sent < requested;
+  }).length;
+  return (
+    <section className="panel p-5" style={{ display: "grid", gap: 8, borderLeft: "4px solid var(--glam-blue)" }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+        <Truck size={18} style={{ color: "var(--glam-blue)" }} />
+        <strong>Enviado por fábrica</strong>
+        <span className="page-kicker" style={{ margin: 0 }}>
+          {restockSentDetail(order)}
+        </span>
+      </div>
+      {order.dispatchNotes ? (
+        <p style={{ margin: 0, color: "#92400e" }}>
+          <strong>Nota de fábrica:</strong> {order.dispatchNotes}
+        </p>
+      ) : null}
+      {differing.length ? (
+        <>
+          <p className="page-kicker" style={{ margin: 0 }}>
+            {short
+              ? `Fábrica mandó menos de lo pedido en ${short} ${short === 1 ? "partida" : "partidas"}.`
+              : "Fábrica mandó distinto a lo pedido."}{" "}
+            La hoja viene con lo que mandó fábrica.
+          </p>
+          <div className="table-container-premium">
+            <table className="table">
+              <thead>
+                <tr>
+                  <th>Producto</th>
+                  <th style={{ textAlign: "right" }}>Pedido</th>
+                  <th style={{ textAlign: "right" }}>Mandó fábrica</th>
+                  <th>Motivo de fábrica</th>
+                </tr>
+              </thead>
+              <tbody>
+                {differing.map((item) => {
+                  const { requested, sent } = sentQuantities(item);
+                  const less = sent < requested;
+                  return (
+                    <tr key={item.id}>
+                      <td>{item.productName}</td>
+                      <td style={{ textAlign: "right", whiteSpace: "nowrap" }}>
+                        {packQtyLabel(requested, item.unit, item.unitsPerPackage)}
+                      </td>
+                      <td
+                        style={{
+                          textAlign: "right",
+                          whiteSpace: "nowrap",
+                          color: less ? "#92400e" : undefined,
+                          fontWeight: less ? 700 : 400,
+                        }}
+                      >
+                        {sent > 0 ? packQtyLabel(sent, item.unit, item.unitsPerPackage) : "No lo mandó"}
+                      </td>
+                      <td style={{ color: "#92400e" }}>{item.notes?.trim() || "—"}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </>
+      ) : (
+        <p className="page-kicker" style={{ margin: 0 }}>
+          Fábrica mandó todo lo pedido ({items.length} {items.length === 1 ? "partida" : "partidas"}).
+        </p>
+      )}
+    </section>
+  );
 }
 
 /**
@@ -176,6 +280,63 @@ export function BranchRestockEntryPage() {
   const basedOn = form?.entry?.kind === "order"
     ? form.entry.openOrders.find((order) => order.id === form.entry?.orderId) ?? null
     : null;
+  /**
+   * Fábrica ya lo envió desde su app (`sent` sin cargar): esto es "Confirmar
+   * llegada". La hoja viene con lo que mandó fábrica; el pedido completo trae
+   * lo pedido, los motivos y la nota del envío.
+   */
+  const fromFactory = basedOn?.status === RESTOCK_ORDER_STATUS.SENT;
+  const [factoryOrder, setFactoryOrder] = useState<RestockOrder | null>(null);
+  const factoryOrderId = fromFactory ? basedOn.id : null;
+  useEffect(() => {
+    if (!factoryOrderId) {
+      setFactoryOrder(null);
+      return;
+    }
+    let active = true;
+    httpClient
+      .get<RestockOrder>(`/pos/restock/orders/${factoryOrderId}`)
+      .then((order) => {
+        if (active) setFactoryOrder(order);
+      })
+      .catch((error) => toast.error(getApiErrorMessage(error, "No se pudo cargar lo que mandó fábrica")));
+    return () => {
+      active = false;
+    };
+  }, [factoryOrderId]);
+
+  /** Partida del pedido por línea/producto, solo en el primer renglón que la lleva (el formato reparte algunas). */
+  const factoryNoteRows = useMemo(() => {
+    const byTarget = new Map<string, RestockOrderItem>();
+    for (const item of factoryOrder?.items ?? []) {
+      if (!factoryItemStands(item)) continue;
+      const key = item.lineId ? `line:${item.lineId}` : `product:${item.productId}`;
+      if (!byTarget.has(key)) byTarget.set(key, item);
+    }
+    const firstRow = new Map<string, RestockOrderItem>();
+    const seen = new Set<string>();
+    for (const row of rows) {
+      const key = targetKey(row);
+      if (seen.has(key)) continue;
+      seen.add(key);
+      const item = byTarget.get(key);
+      if (item) firstRow.set(rowKey(row), item);
+    }
+    return firstRow;
+  }, [factoryOrder, rows]);
+
+  function factoryRowNote(row: FactoryFormRow) {
+    const item = factoryNoteRows.get(rowKey(row));
+    if (!item) return null;
+    // Lo que mandó fábrica es lo precargado (y sale como "Mandó fábrica: N" si se cambia).
+    const { requested } = sentQuantities(item);
+    return (
+      <div className="restock-summary-was" style={{ color: "#92400e" }}>
+        Pedido: {formatQuantity(requested)}
+        {item.notes?.trim() ? ` · Fábrica: ${item.notes.trim()}` : ""}
+      </div>
+    );
+  }
 
   /**
    * Resumen (la lista del pedido con − / +) o Formato (la hoja de 4 páginas).
@@ -218,7 +379,9 @@ export function BranchRestockEntryPage() {
         ...chargeQuantityPayload(charges, chargeQuantities, true),
       });
       toast.success(
-        `Recibido: ${captured.length} ${captured.length === 1 ? "renglón" : "renglones"} al inventario`
+        `${fromFactory ? "Llegada confirmada" : "Recibido"}: ${captured.length} ${
+          captured.length === 1 ? "renglón" : "renglones"
+        } al inventario`
       );
       setConfirmOpen(false);
       router.push(`/dashboard/pos/sucursales/${branchId}?tab=pedidos`);
@@ -282,11 +445,17 @@ export function BranchRestockEntryPage() {
           <h1 className="page-title" style={{ display: "flex", alignItems: "center", gap: 10 }}>
             <Truck size={22} style={{ color: "var(--glam-blue)", flex: "0 0 auto" }} />
             <span>
-              Recibir surtido{form ? ` · ${form.code ? `${form.code} · ` : ""}${form.name}` : ""}
+              {fromFactory ? "Confirmar llegada" : "Recibir surtido"}
+              {form ? ` · ${form.code ? `${form.code} · ` : ""}${form.name}` : ""}
             </span>
           </h1>
           <p className="page-kicker">
-            {basedOn ? (
+            {fromFactory ? (
+              <>
+                La hoja viene con lo que mandó fábrica. Si todo llegó, presiona <strong>Todo llegó completo</strong>;
+                si algo llegó distinto, corrige solo ese renglón: entra al inventario lo que confirmes.{" "}
+              </>
+            ) : basedOn ? (
               <>
                 La hoja viene con lo pedido. Si todo llegó, presiona <strong>Todo llegó completo</strong>; si algo
                 llegó distinto, corrige solo ese renglón.{" "}
@@ -332,7 +501,9 @@ export function BranchRestockEntryPage() {
 
       {form ? (
         <p className="page-kicker" style={{ margin: 0 }}>
-          {basedOn
+          {fromFactory
+            ? `Precargada con lo que fábrica mandó del pedido del ${formatDate(basedOn.createdAt)}. Al confirmar, ese pedido queda como recibido con lo que captures y sube al inventario; lo que dejes vacío queda como que no llegó y lo que llegue distinto a lo que mandó fábrica queda anotado en la partida.`
+            : basedOn
             ? `Precargada con el pedido del ${formatDate(basedOn.createdAt)} (${
                 RESTOCK_ORIGIN_LABELS[basedOn.origin] ?? basedOn.origin
               }). Al recibir, ese pedido queda como recibido con lo que captures; lo que dejes vacío queda como que no llegó.`
@@ -342,6 +513,8 @@ export function BranchRestockEntryPage() {
           {unlinked ? ` ${unlinked} renglones sin ligar al catálogo se ven en gris y no se capturan.` : ""}
         </p>
       ) : null}
+
+      {fromFactory && factoryOrder ? <FactoryShipmentNotice order={factoryOrder} /> : null}
 
       {loading && !form ? <p className="page-kicker">Cargando hoja...</p> : null}
 
@@ -357,9 +530,10 @@ export function BranchRestockEntryPage() {
           {allAsOrdered && canRegister ? (
             <div className="restock-all-arrived">
               <div>
-                <strong>¿Llegó todo lo que se pidió?</strong>
+                <strong>{fromFactory ? "¿Llegó todo lo que mandó fábrica?" : "¿Llegó todo lo que se pidió?"}</strong>
                 <span className="page-kicker" style={{ margin: 0 }}>
-                  Recíbelo en un clic. Si algo llegó distinto, corrige solo ese renglón abajo.
+                  {fromFactory ? "Confírmalo" : "Recíbelo"} en un clic. Si algo llegó distinto, corrige solo ese
+                  renglón abajo.
                 </span>
               </div>
               <Button variant="contained" color="success" size="large" startIcon={<CheckCheck size={18} />} onClick={() => setConfirmOpen(true)}>
@@ -371,7 +545,9 @@ export function BranchRestockEntryPage() {
             rows={rows}
             values={values}
             baseline={prefill}
-            baselineLabel={basedOn ? "Pedido" : "Precargado"}
+            baselineLabel={fromFactory ? "Mandó fábrica" : basedOn ? "Pedido" : "Precargado"}
+            absentLabel={fromFactory ? "Fábrica no lo mandó" : undefined}
+            rowNote={fromFactory ? factoryRowNote : undefined}
             onChange={(key, value) => setValues((prev) => ({ ...prev, [key]: value }))}
             canSeeCosts={canSeeCosts}
             disabled={!canRegister || saving}
@@ -451,7 +627,7 @@ export function BranchRestockEntryPage() {
               disabled={!captured.length || saving}
               onClick={() => setConfirmOpen(true)}
             >
-              {allAsOrdered ? "Todo llegó completo" : "Recibir"}
+              {allAsOrdered ? "Todo llegó completo" : fromFactory ? "Confirmar llegada" : "Recibir"}
             </Button>
           </div>
         </div>
@@ -462,7 +638,15 @@ export function BranchRestockEntryPage() {
       )}
 
       <Dialog open={confirmOpen} onClose={() => (saving ? null : setConfirmOpen(false))} fullWidth maxWidth="md">
-        <DialogTitle>{allAsOrdered ? "Recibir: todo llegó completo" : "Recibir surtido"}</DialogTitle>
+        <DialogTitle>
+          {fromFactory
+            ? allAsOrdered
+              ? "Confirmar llegada: todo llegó completo"
+              : "Confirmar llegada"
+            : allAsOrdered
+              ? "Recibir: todo llegó completo"
+              : "Recibir surtido"}
+        </DialogTitle>
         <DialogContent dividers>
           <p className="page-kicker" style={{ marginTop: 0 }}>
             Sube el inventario de {form?.name} con {captured.length} {captured.length === 1 ? "renglón" : "renglones"}:{" "}
@@ -475,7 +659,11 @@ export function BranchRestockEntryPage() {
             ) : null}
             .{" "}
             {basedOn
-              ? `El pedido del ${formatDate(basedOn.createdAt)} queda como recibido.`
+              ? `El pedido del ${formatDate(basedOn.createdAt)} queda como recibido.${
+                  fromFactory && changedFromPrefill
+                    ? " Lo que llegó distinto a lo que mandó fábrica queda anotado en cada partida."
+                    : ""
+                }`
               : "Se guarda como entrada manual en el historial de pedidos."}
           </p>
           <div className="table-container-premium" style={{ maxHeight: 320, overflow: "auto" }}>
@@ -525,7 +713,7 @@ export function BranchRestockEntryPage() {
             </>
           ) : null}
           <TextField
-            label="Nota (opcional)"
+            label={fromFactory ? "Nota de la llegada (opcional, se suma a la de fábrica)" : "Nota (opcional)"}
             placeholder="Quién lo trajo, remisión, algo que llegó dañado…"
             value={notes}
             onChange={(event) => setNotes(event.target.value)}
@@ -541,7 +729,7 @@ export function BranchRestockEntryPage() {
             Seguir capturando
           </Button>
           <Button variant="contained" onClick={() => void register()} disabled={saving}>
-            {saving ? "Recibiendo…" : "Recibir"}
+            {saving ? "Guardando…" : fromFactory ? "Confirmar llegada" : "Recibir"}
           </Button>
         </DialogActions>
       </Dialog>

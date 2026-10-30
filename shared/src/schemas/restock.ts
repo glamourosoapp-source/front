@@ -282,6 +282,21 @@ export const queryFactoryFormTargetsSchema = z.object({
 
 export const sendRestockOrderSchema = z.object({
   notes: optionalString,
+  /**
+   * App de fábrica: lo que sale de cada partida, en empaques, en la misma
+   * llamada que marca el pedido enviado. Si sale menos de lo pedido, el motivo
+   * es obligatorio (lo valida el servicio: depende de lo pedido).
+   */
+  items: z
+    .array(
+      z.object({
+        itemId: z.string().uuid(),
+        dispatchedQty: z.coerce.number().min(0).max(100_000),
+        notes: z.union([z.string().max(300), z.null()]).optional(),
+      })
+    )
+    .max(500)
+    .optional(),
 });
 
 /**

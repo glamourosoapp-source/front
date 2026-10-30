@@ -14,7 +14,9 @@ import {
   RESTOCK_STATUS_LABELS,
   formatDate,
   formatDateTime,
+  isAwaitingFactoryArrival,
   restockOrderSheetHref,
+  restockSentDetail,
 } from "./pos-labels";
 
 interface RestockOrderRowsProps {
@@ -39,6 +41,7 @@ function outcome(order: RestockOrder): string {
   if (order.status === "cancelled") {
     return order.cancelReason ? `Cancelado: ${order.cancelReason}` : "Cancelado";
   }
+  if (order.status === "sent" && order.sentAt) return `Enviado por fábrica ${restockSentDetail(order)}`;
   if (order.sentAt) return `Salió ${formatDateTime(order.sentAt)}`;
   return RESTOCK_ORIGIN_LABELS[order.origin] ?? order.origin;
 }
@@ -94,7 +97,13 @@ export function RestockOrderRows({ orders, canUpdate, canDispatch, onChanged, em
                   {(order.items?.length ?? 0) === 1 ? "1 producto" : `${order.items?.length ?? 0} productos`}
                   {short ? (
                     <strong style={{ color: "#92400e", marginLeft: 6 }}>
-                      · {short === 1 ? "1 llegó incompleto" : `${short} llegaron incompletos`}
+                      · {isAwaitingFactoryArrival(order)
+                        ? short === 1
+                          ? "1 va corto"
+                          : `${short} van cortos`
+                        : short === 1
+                          ? "1 llegó incompleto"
+                          : `${short} llegaron incompletos`}
                     </strong>
                   ) : null}
                 </span>
