@@ -144,3 +144,76 @@ export interface DashboardOverview {
   /** Ventas del mes en curso agrupadas por equipo, de mayor a menor facturación. */
   salesByTeam: DashboardTeamSales[];
 }
+
+/**
+ * Query de GET /dashboard/team-performance. Mismo periodo que la gráfica grande:
+ * `year` (por meses), `year` + `month` (por semanas de negocio completas que tocan
+ * el mes) o `week`, el sábado que abre una semana de negocio ("YYYY-MM-DD"), que
+ * baja a días y manda sobre `year`/`month` para el rango.
+ */
+export const queryDashboardTeamPerformanceSchema = z.object({
+  year: z.coerce.number().int().min(2000).max(2100),
+  month: z.coerce.number().int().min(1).max(12).optional(),
+  week: z
+    .union([z.string().regex(/^\d{4}-\d{2}-\d{2}$/), z.literal("")])
+    .optional(),
+});
+
+export type QueryDashboardTeamPerformance = z.infer<typeof queryDashboardTeamPerformanceSchema>;
+
+/**
+ * Barra de la serie de desempeño. `key` es el mes ("1".."12"), el sábado que abre
+ * la semana o el día ("YYYY-MM-DD"); `from`/`to` son el rango civil que cubre.
+ */
+export interface DashboardTeamPerformanceBucket {
+  key: string;
+  from: string;
+  to: string;
+  /** Solo granularidad "week": número de semana de negocio en el año. */
+  weekNumber?: number;
+}
+
+/** Semana de negocio (sábado a viernes) que toca el mes elegido, para el selector de semana. */
+export interface DashboardTeamPerformanceWeek {
+  key: number;
+  weekStart: string;
+  weekEnd: string;
+}
+
+export interface DashboardSellerPerformance {
+  id: string;
+  name: string;
+  team: string | null;
+  isActive: boolean;
+  orders: number;
+  sales: number;
+  /** Ventas / pedidos del periodo; 0 sin pedidos. */
+  avgTicket: number;
+  /** Clientes distintos con pedido del vendedor en el periodo. */
+  customers: number;
+  /** Alineado con `buckets`. */
+  points: { sales: number; orders: number }[];
+}
+
+/**
+ * Respuesta de GET /dashboard/team-performance: ventas por vendedor. "Vendedor" es
+ * el usuario cuyo perfil crea pedidos y solo ve los suyos (scope `own` en
+ * pedidos): quedan fuera admins, supervisores (scope `team`), almacén y
+ * dirección (scope `all`), cajas de sucursal (sin módulo de pedidos) y el agente
+ * IA. Mismo criterio de venta que el resto del dashboard.
+ */
+export interface DashboardTeamPerformance {
+  granularity: "month" | "week" | "day";
+  year: number;
+  month: number | null;
+  /** Sábado de la semana elegida, o `null`. */
+  week: string | null;
+  availableYears: number[];
+  /** Semanas que tocan `month` (vacío sin mes), para el selector. */
+  monthWeeks: DashboardTeamPerformanceWeek[];
+  range: { from: string; to: string };
+  buckets: DashboardTeamPerformanceBucket[];
+  /** Vendedores activos (aunque no vendan) y los inactivos con ventas en el periodo, de mayor a menor venta. */
+  sellers: DashboardSellerPerformance[];
+  totals: { sales: number; orders: number; customers: number; sellersWithSales: number };
+}

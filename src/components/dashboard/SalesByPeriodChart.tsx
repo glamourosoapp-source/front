@@ -14,7 +14,7 @@ import {
 } from "recharts";
 import { formatMoney } from "@/lib/format-money";
 
-const MONTH_SHORT = ["Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"];
+export const MONTH_SHORT = ["Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"];
 export const MONTH_LONG = [
   "Enero",
   "Febrero",
