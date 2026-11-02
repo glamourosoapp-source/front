@@ -35,6 +35,7 @@ import {
   ReceiptText,
   FileSpreadsheet,
   Tags,
+  Trophy,
 } from "lucide-react";
 import type { PermissionModule } from "@glamouroso/shared";
 import { useAuthStore } from "@/stores/auth.store";
@@ -69,6 +70,7 @@ const sections: NavSection[] = [
     label: "Operación",
     links: [
       { href: "/dashboard", label: "Overview", icon: BarChart3, module: "dashboard" },
+      { href: "/dashboard/desempeno", label: "Desempeño del equipo", icon: Trophy, module: "dashboard" },
       { href: "/dashboard/orders", label: "Pedidos", icon: PackageCheck, module: "orders" },
       { href: "/dashboard/customers", label: "Clientes", icon: Users, module: "customers" },
       { href: "/dashboard/seguimiento", label: "Seguimiento", icon: PhoneCall, module: "customerFollowup" },

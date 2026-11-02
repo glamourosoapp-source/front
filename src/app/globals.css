@@ -5156,3 +5156,22 @@ textarea.input {
 .sup-matrix-city {
   color: var(--muted);
 }
+
+/* Desempeño del equipo: una tarjeta con gráfica por vendedor (small multiples). */
+.team-performance-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 16px;
+}
+
+.team-performance-card h3,
+.team-performance-card p {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 640px) {
+  .team-performance-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
