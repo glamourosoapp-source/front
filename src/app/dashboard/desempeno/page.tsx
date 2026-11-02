@@ -11,7 +11,7 @@ import {
   LabelList,
   Tooltip as ChartTooltip,
 } from "recharts";
-import { DollarSign, Receipt, ShoppingBag, Users } from "lucide-react";
+import { ChevronLeft, ChevronRight, DollarSign, Receipt, ShoppingBag, Users } from "lucide-react";
 import type {
   DashboardSellerPerformance,
   DashboardTeamPerformance,
@@ -42,7 +42,43 @@ const TOOLTIP_STYLE = {
   labelStyle: { color: "#9aa3b5", fontWeight: 700 },
 };
 
-const SELECT_STYLE = { width: "auto", minHeight: "36px", padding: "6px 10px" };
+type PeriodMode = "week" | "month" | "year";
+
+const PERIOD_MODES: { value: PeriodMode; label: string }[] = [
+  { value: "week", label: "Semana" },
+  { value: "month", label: "Mes" },
+  { value: "year", label: "Año" },
+];
+
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+function parseDateOnly(dateOnly: string): number {
+  const [year, month, day] = dateOnly.split("-").map(Number);
+  return Date.UTC(year, month - 1, day);
+}
+
+function addDays(dateOnly: string, days: number): string {
+  return new Date(parseDateOnly(dateOnly) + days * DAY_MS).toISOString().slice(0, 10);
+}
+
+/** Hoy en el reloj del navegador, "YYYY-MM-DD". */
+function todayDateOnly(): string {
+  const now = new Date();
+  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+}
+
+/** Sábado que abre la semana de negocio (sábado a viernes) de la fecha dada. */
+function saturdayOf(dateOnly: string): string {
+  const dow = new Date(parseDateOnly(dateOnly)).getUTCDay();
+  return addDays(dateOnly, -((dow + 1) % 7));
+}
+
+/** Primera semana de negocio cuyo viernes cae en el mes (la que el Back cuenta como del mes). */
+function firstWeekOfMonth(year: number, month: number): string {
+  const first = `${year}-${String(month).padStart(2, "0")}-01`;
+  const saturday = saturdayOf(first);
+  return addDays(saturday, 6) < first ? addDays(saturday, 7) : saturday;
+}
 
 /** "sáb 3" para una fecha DATEONLY sin correrla de día por timezone. */
 function dayLabel(dateOnly: string): string {
@@ -92,11 +128,69 @@ function sellerLabel(seller: DashboardSellerPerformance) {
 export default function TeamPerformancePage() {
   const { can } = usePermissions();
   const canView = can("dashboard", "view");
-  const now = new Date();
-  const [year, setYear] = useState(now.getFullYear());
-  const [month, setMonth] = useState<number | null>(now.getMonth() + 1);
-  const [week, setWeek] = useState("");
+  const today = todayDateOnly();
+  const current = { year: Number(today.slice(0, 4)), month: Number(today.slice(5, 7)), week: saturdayOf(today) };
+  const [mode, setMode] = useState<PeriodMode>("month");
+  const [year, setYear] = useState(current.year);
+  const [month, setMonth] = useState(current.month);
+  // Sábado que abre la semana de negocio elegida; solo cuenta en modo "week".
+  const [week, setWeek] = useState(current.week);
   const [metric, setMetric] = useState<Metric>("sales");
+
+  // En modo semana el año y el mes salen del viernes, el mismo criterio con el que
+  // el Back numera las semanas, para que la semana venga en `monthWeeks`.
+  const weekFriday = addDays(week, 6);
+  const query =
+    mode === "year"
+      ? { year }
+      : mode === "month"
+        ? { year, month }
+        : { year: Number(weekFriday.slice(0, 4)), month: Number(weekFriday.slice(5, 7)), week };
+  const queryKey = JSON.stringify(query);
+
+  const isCurrent =
+    mode === "year"
+      ? year === current.year
+      : mode === "month"
+        ? year === current.year && month === current.month
+        : week === current.week;
+  const canGoNext =
+    mode === "year"
+      ? year < current.year
+      : mode === "month"
+        ? year * 12 + month < current.year * 12 + current.month
+        : week < current.week;
+
+  const shiftPeriod = (delta: number) => {
+    if (mode === "year") setYear(year + delta);
+    else if (mode === "week") setWeek(addDays(week, 7 * delta));
+    else {
+      const index = year * 12 + (month - 1) + delta;
+      setYear(Math.floor(index / 12));
+      setMonth((index % 12) + 1);
+    }
+  };
+
+  const goToCurrent = () => {
+    setYear(current.year);
+    setMonth(current.month);
+    setWeek(current.week);
+  };
+
+  // Al cambiar de modo se conserva el periodo: la semana pasa a su mes (por su
+  // viernes) y el mes a su semana en curso, o a su primera semana si es otro mes.
+  const changeMode = (next: PeriodMode) => {
+    if (next === mode) return;
+    if (mode === "week") {
+      setYear(Number(weekFriday.slice(0, 4)));
+      setMonth(Number(weekFriday.slice(5, 7)));
+    }
+    if (next === "week" && mode !== "week") {
+      const sameMonth = year === current.year && month === current.month;
+      setWeek(sameMonth ? current.week : firstWeekOfMonth(year, month));
+    }
+    setMode(next);
+  };
   const [data, setData] = useState<DashboardTeamPerformance | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
@@ -105,18 +199,15 @@ export default function TeamPerformancePage() {
     if (!canView) return;
     setLoading(true);
     httpClient
-      .get<DashboardTeamPerformance>("/dashboard/team-performance", {
-        year,
-        ...(month ? { month } : {}),
-        ...(month && week ? { week } : {}),
-      })
+      .get<DashboardTeamPerformance>("/dashboard/team-performance", query)
       .then((result) => {
         setData(result);
         setError(false);
       })
       .catch(() => setError(true))
       .finally(() => setLoading(false));
-  }, [canView, year, month, week]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [canView, queryKey]);
 
   if (!canView) {
     return (
@@ -127,7 +218,13 @@ export default function TeamPerformancePage() {
     );
   }
 
-  const years = data?.availableYears?.length ? data.availableYears : [year];
+  const minYear = data?.availableYears?.[0] ?? current.year;
+  const canGoPrev =
+    mode === "year"
+      ? year > minYear
+      : mode === "month"
+        ? year * 12 + month > minYear * 12 + 1
+        : Number(addDays(week, -1).slice(0, 4)) >= minYear;
   const sellers = data?.sellers ?? [];
   const totals = data?.totals;
   const granularity = data?.granularity ?? "week";
@@ -135,12 +232,13 @@ export default function TeamPerformancePage() {
   const avgTicket = totals && totals.orders > 0 ? totals.sales / totals.orders : 0;
   const metricName = metric === "sales" ? "Ventas" : "Pedidos";
 
-  const selectedWeek = week ? data?.monthWeeks.find((w) => w.weekStart === week) : undefined;
-  const periodTitle = selectedWeek
-    ? weekBucketTitle({ ...selectedWeek, sales: 0, orders: 0 })
-    : month
-      ? `${MONTH_LONG[month - 1]} ${year}`
-      : `Año ${year}`;
+  const selectedWeek = data?.week === week ? data.monthWeeks.find((w) => w.weekStart === week) : undefined;
+  const weekRange = weekBucketLabel(asWeekPoint({ from: week, to: addDays(week, 6) }));
+  const periodLabel =
+    mode === "week" ? weekRange : mode === "month" ? `${MONTH_LONG[month - 1]} ${year}` : String(year);
+  const periodSub = mode === "week" && selectedWeek ? `Semana ${selectedWeek.key}` : "";
+  const periodTitle =
+    mode === "week" ? (selectedWeek ? weekBucketTitle({ ...selectedWeek, sales: 0, orders: 0 }) : weekRange) : periodLabel;
   const periodHint =
     granularity === "day"
       ? "Día por día de la semana de negocio (sábado a viernes)."
@@ -163,75 +261,66 @@ export default function TeamPerformancePage() {
 
   return (
     <div className="page-stack">
-      <div className="flex flex-wrap items-end justify-between gap-3">
-        <div>
-          <h1 className="page-title">Desempeño del equipo</h1>
-          <p className="page-kicker">
-            Pedidos y ventas de cada vendedor. Solo cuentan los vendedores (perfiles que levantan pedidos y ven los
-            suyos): supervisores, cajas de sucursal, almacén, dirección y el agente IA no aparecen. Pedidos cancelados
-            excluidos.
-          </p>
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <select
-            className="input"
-            style={SELECT_STYLE}
-            value={metric}
-            onChange={(e) => setMetric(e.target.value as Metric)}
-            aria-label="Métrica"
-          >
-            <option value="sales">Ver ventas</option>
-            <option value="orders">Ver pedidos</option>
-          </select>
-          <select
-            className="input"
-            style={SELECT_STYLE}
-            value={month ?? ""}
-            onChange={(e) => {
-              setMonth(e.target.value ? Number(e.target.value) : null);
-              setWeek("");
-            }}
-            aria-label="Mes"
-          >
-            <option value="">Todo el año</option>
-            {MONTH_LONG.map((name, i) => (
-              <option key={name} value={i + 1}>
-                {name}
-              </option>
+      <div>
+        <h1 className="page-title">Desempeño del equipo</h1>
+        <p className="page-kicker">
+          Pedidos y ventas de cada vendedor. Solo cuentan los vendedores (perfiles que levantan pedidos y ven los
+          suyos): supervisores, cajas de sucursal, almacén, dirección y el agente IA no aparecen. Pedidos cancelados
+          excluidos.
+        </p>
+      </div>
+
+      <div className="perf-filters" role="toolbar" aria-label="Filtros de desempeño">
+        <div className="perf-filters-group">
+          <div className="perf-segmented" role="group" aria-label="Periodo">
+            {PERIOD_MODES.map((option) => (
+              <button
+                key={option.value}
+                type="button"
+                aria-pressed={mode === option.value}
+                onClick={() => changeMode(option.value)}
+              >
+                {option.label}
+              </button>
             ))}
-          </select>
-          {month ? (
-            <select
-              className="input"
-              style={SELECT_STYLE}
-              value={week}
-              onChange={(e) => setWeek(e.target.value)}
-              aria-label="Semana"
+          </div>
+          <div className="perf-period">
+            <button
+              type="button"
+              className="perf-period-btn"
+              onClick={() => shiftPeriod(-1)}
+              disabled={!canGoPrev}
+              aria-label="Periodo anterior"
             >
-              <option value="">Todo el mes</option>
-              {(data?.monthWeeks ?? []).map((w) => (
-                <option key={w.weekStart} value={w.weekStart}>
-                  {weekBucketTitle({ ...w, sales: 0, orders: 0 })}
-                </option>
-              ))}
-            </select>
-          ) : null}
-          <select
-            className="input"
-            style={SELECT_STYLE}
-            value={year}
-            onChange={(e) => {
-              setYear(Number(e.target.value));
-              setWeek("");
-            }}
-            aria-label="Año"
-          >
-            {years.map((y) => (
-              <option key={y} value={y}>
-                {y}
-              </option>
-            ))}
-          </select>
+              <ChevronLeft size={18} />
+            </button>
+            <div className="perf-period-label" aria-live="polite">
+              {periodLabel}
+              {periodSub ? <small>{periodSub}</small> : null}
+            </div>
+            <button
+              type="button"
+              className="perf-period-btn"
+              onClick={() => shiftPeriod(1)}
+              disabled={!canGoNext}
+              aria-label="Periodo siguiente"
+            >
+              <ChevronRight size={18} />
+            </button>
+          </div>
+          <button type="button" className="perf-today" onClick={goToCurrent} disabled={isCurrent}>
+            {mode === "week" ? "Esta semana" : mode === "month" ? "Este mes" : "Este año"}
+          </button>
+        </div>
+        <div className="perf-segmented" role="group" aria-label="Métrica">
+          <button type="button" aria-pressed={metric === "sales"} onClick={() => setMetric("sales")}>
+            <DollarSign size={14} />
+            Ventas
+          </button>
+          <button type="button" aria-pressed={metric === "orders"} onClick={() => setMetric("orders")}>
+            <ShoppingBag size={14} />
+            Pedidos
+          </button>
         </div>
       </div>
 

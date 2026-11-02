@@ -5175,3 +5175,161 @@ textarea.input {
     grid-template-columns: minmax(0, 1fr);
   }
 }
+
+/* Desempeño del equipo: barra de filtros (periodo con flechas y métrica). */
+.perf-filters {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 12px;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  box-shadow: var(--shadow-sm);
+}
+
+.perf-filters-group {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+
+.perf-segmented {
+  display: inline-flex;
+  gap: 2px;
+  padding: 3px;
+  background: #eef2f8;
+  border-radius: 10px;
+}
+
+.perf-segmented button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 32px;
+  padding: 6px 14px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--glam-muted);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.perf-segmented button:hover {
+  color: var(--glam-navy);
+}
+
+.perf-segmented button[aria-pressed="true"] {
+  background: #fff;
+  color: var(--glam-navy);
+  box-shadow: 0 1px 3px rgba(38, 45, 96, 0.14);
+}
+
+.perf-segmented button:focus-visible,
+.perf-period-btn:focus-visible,
+.perf-today:focus-visible {
+  outline: 2px solid var(--glam-blue);
+  outline-offset: 1px;
+}
+
+.perf-period {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 3px;
+  background: #fff;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+}
+
+.perf-period-btn {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--glam-navy);
+  cursor: pointer;
+}
+
+.perf-period-btn:hover:not(:disabled) {
+  background: rgba(6, 166, 224, 0.1);
+  color: var(--glam-blue);
+}
+
+.perf-period-btn:disabled {
+  opacity: 0.3;
+  cursor: default;
+}
+
+.perf-period-label {
+  min-width: 200px;
+  padding: 0 6px;
+  color: var(--glam-navy);
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 1.15;
+  text-align: center;
+}
+
+.perf-period-label small {
+  display: block;
+  color: var(--glam-muted);
+  font-size: 11px;
+  font-weight: 500;
+}
+
+.perf-today {
+  padding: 6px 10px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--glam-blue);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.perf-today:hover:not(:disabled) {
+  background: rgba(6, 166, 224, 0.1);
+}
+
+.perf-today:disabled {
+  color: var(--glam-muted);
+  opacity: 0.6;
+  cursor: default;
+}
+
+@media (max-width: 640px) {
+  .perf-filters,
+  .perf-filters-group {
+    width: 100%;
+  }
+
+  .perf-segmented {
+    width: 100%;
+  }
+
+  .perf-segmented button {
+    flex: 1;
+    justify-content: center;
+  }
+
+  .perf-period {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .perf-period-label {
+    flex: 1;
+    min-width: 0;
+  }
+}
