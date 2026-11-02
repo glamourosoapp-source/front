@@ -4,6 +4,7 @@ import axios, { AxiosInstance } from "axios";
 import type { ApiResponse } from "@glamouroso/shared";
 import { config } from "@/config";
 import { activeSpace, activeToken, activeUserRaw, clearSession, loginRoute, writeSessionToken } from "@/lib/session";
+import { shouldStoreRenewedToken } from "@/lib/session-token";
 
 class HttpClient {
   private api: AxiosInstance;
@@ -24,8 +25,14 @@ class HttpClient {
       (response) => {
         // El back renueva una vez al día la sesión de quien está fijado a una
         // sucursal (la caja): se guarda para que no caduque mientras se use.
+        // Solo si es más nuevo que el vigente: un 304 trae el de la caché.
         const renewed = response.headers?.["x-renewed-token"];
-        if (typeof renewed === "string" && renewed && typeof window !== "undefined") {
+        if (
+          typeof renewed === "string" &&
+          renewed &&
+          typeof window !== "undefined" &&
+          shouldStoreRenewedToken(renewed, activeToken())
+        ) {
           writeSessionToken(activeSpace(), renewed);
         }
         return response;
