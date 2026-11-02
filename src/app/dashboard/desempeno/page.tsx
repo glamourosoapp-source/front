@@ -122,8 +122,8 @@ function sellerLabel(seller: DashboardSellerPerformance) {
 
 /**
  * Desempeño del equipo de ventas: ranking, una gráfica por vendedor y el detalle.
- * Solo vendedores (perfiles que crean pedidos y ven los suyos); supervisores,
- * cajas de sucursal, almacén, dirección y el agente IA no aparecen.
+ * Cuenta a quien levanta pedidos (vendedores, almacén, dirección); supervisores,
+ * cajas de sucursal, admins y el agente IA no aparecen.
  */
 export default function TeamPerformancePage() {
   const { can } = usePermissions();
@@ -264,9 +264,8 @@ export default function TeamPerformancePage() {
       <div>
         <h1 className="page-title">Desempeño del equipo</h1>
         <p className="page-kicker">
-          Pedidos y ventas de cada vendedor. Solo cuentan los vendedores (perfiles que levantan pedidos y ven los
-          suyos): supervisores, cajas de sucursal, almacén, dirección y el agente IA no aparecen. Pedidos cancelados
-          excluidos.
+          Pedidos y ventas de cada persona que levanta pedidos (vendedores, almacén, dirección). Supervisores, cajas
+          de sucursal, admins y el agente IA no aparecen. Pedidos cancelados excluidos.
         </p>
       </div>
 

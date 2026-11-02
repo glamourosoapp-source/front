@@ -197,10 +197,9 @@ export interface DashboardSellerPerformance {
 
 /**
  * Respuesta de GET /dashboard/team-performance: ventas por vendedor. "Vendedor" es
- * el usuario cuyo perfil crea pedidos y solo ve los suyos (scope `own` en
- * pedidos): quedan fuera admins, supervisores (scope `team`), almacén y
- * dirección (scope `all`), cajas de sucursal (sin módulo de pedidos) y el agente
- * IA. Mismo criterio de venta que el resto del dashboard.
+ * el usuario cuyo perfil crea pedidos (vendedores, almacén, dirección…): quedan
+ * fuera supervisores (scope `team`), cajas de sucursal (sin módulo de pedidos),
+ * admins y el agente IA. Mismo criterio de venta que el resto del dashboard.
  */
 export interface DashboardTeamPerformance {
   granularity: "month" | "week" | "day";
