@@ -21,12 +21,14 @@ import {
   RESTOCK_STATUS_LABELS,
   formatDate,
   formatDateTime,
+  isAwaitingFactoryArrival,
   packQtyLabel,
   packSummary,
   packTotals,
   relativeDays,
   restockOrderSheetHref,
   restockReviewHref,
+  restockSentDetail,
   unitLabel,
 } from "../pos-labels";
 import { useFactoryFormDownload } from "../useFactoryFormDownload";
@@ -266,13 +268,18 @@ export function BranchRestockTab({ branch }: { branch: Branch }) {
               </span>
               <span className="pos-day-fulldate">
                 Pedido del {formatDateTime(inTransit.createdAt)} · {relativeDays(inTransit.createdAt)}
+                {inTransit.status === RESTOCK_ORDER_STATUS.SENT && inTransit.sentAt
+                  ? ` · enviado por fábrica ${restockSentDetail(inTransit)}`
+                  : ""}
               </span>
             </span>
             <span className="pos-branch-status">
               <span>
                 {inTransit.status === RESTOCK_ORDER_STATUS.PENDING
                   ? "Todavía no se marca como enviado a fábrica: envíalo o, si ya llegó, recíbelo desde el menú."
-                  : "Cuando llegue, presiona Recibir: viene con lo pedido y solo corriges lo que llegó distinto."}
+                  : isAwaitingFactoryArrival(inTransit)
+                    ? "Fábrica ya lo envió. Cuando llegue, presiona Confirmar llegada: viene con lo que mandó fábrica y solo corriges lo que llegó distinto."
+                    : "Cuando llegue, presiona Recibir: viene con lo pedido y solo corriges lo que llegó distinto."}
               </span>
             </span>
             <span className="pos-day-stats">

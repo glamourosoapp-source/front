@@ -22,7 +22,7 @@ import { restockCancelBlocker } from "@glamouroso/shared/pos-restock";
 import { config } from "@/config";
 import { httpClient, getApiErrorMessage } from "@/services/http-client";
 import type { RestockOrder } from "@/types";
-import { approvedRestockMessage, formatDateTime } from "./pos-labels";
+import { approvedRestockMessage, formatDateTime, isAwaitingFactoryArrival, restockSentDetail } from "./pos-labels";
 import { usePosLinks } from "./pos-links";
 import { RestockSendDialog } from "./RestockSendDialog";
 import { useFactoryFormDownload } from "./useFactoryFormDownload";
@@ -69,7 +69,10 @@ interface RestockOrderActionsProps {
  *   menú por si ya llegó;
  * - enviado a fábrica (`approved`/`preparing`) → **Recibir** (la hoja de
  *   entrada precargada; el pedido queda recibido y sube al inventario);
- * - en camino (los que se marcaron con el botón anterior) → **Confirmar llegada**,
+ * - enviado por fábrica desde su app (`sent` sin `stockLoadedAt`) →
+ *   **Confirmar llegada**: la hoja de entrada precargada con lo que mandó
+ *   fábrica; al guardar sube al inventario lo que de verdad llegó;
+ * - enviado viejo (se marcó en el panel y ya cargó) → **Confirmar llegada**,
  *   que solo lo pasa a recibido: su inventario ya subió al enviarse;
  * - recibido → sin acción principal; "Corregir lo recibido" en el menú.
  * No hay "Aprobar" ni "Enviado a sucursal": nadie actúa sobre un pedido
@@ -99,12 +102,15 @@ export function RestockOrderActions({
   const sent = order.status === RESTOCK_ORDER_STATUS.SENT;
   const received = order.status === RESTOCK_ORDER_STATUS.RECEIVED;
   const dispatch = canDispatch && !isFranchise;
+  // Fábrica lo envió desde su app: falta confirmar qué llegó (y ahí sube al inventario).
+  const awaitingArrival = isAwaitingFactoryArrival(order);
   // Con fábrica apagada se cancela hasta que llegue; con fábrica, solo pendiente y sin imprimir.
   const cancelBlocker = restockCancelBlocker(order, { factoryModuleEnabled: factoryOn });
   // Ya enviado a fábrica (o con su formato impreso): cancelar pide motivo.
   const cancelNeedsReason = !pending || Boolean(order.formPrintedAt);
   const canCancel = canUpdate && open && !cancelBlocker;
-  const canCorrect = dispatch && (sent || received);
+  // Lo que fábrica envió y no se ha confirmado se corrige al confirmar la llegada.
+  const canCorrect = dispatch && ((sent && !awaitingArrival) || received);
 
   async function run(action: "approve" | "cancel" | "receive") {
     setBusy(true);
@@ -117,7 +123,11 @@ export function RestockOrderActions({
         toast.success(cancelNeedsReason ? "Pedido cancelado: avísale a fábrica" : "Pedido cancelado");
       } else {
         await httpClient.post(`/pos/restock/orders/${order.id}/receive`, {});
-        toast.success("Llegada confirmada: el pedido quedó recibido");
+        toast.success(
+          awaitingArrival
+            ? "Llegada confirmada: lo que mandó fábrica subió al inventario"
+            : "Llegada confirmada: el pedido quedó recibido"
+        );
       }
       setConfirm(null);
       onChanged();
@@ -130,7 +140,21 @@ export function RestockOrderActions({
 
   // La acción principal: lo siguiente que le toca a este pedido.
   let primary: React.ReactNode = null;
-  if (factoryOn) {
+  if (awaitingArrival) {
+    primary = dispatch ? (
+      <Button
+        size={size}
+        variant="contained"
+        color="success"
+        startIcon={<PackageCheck size={14} />}
+        component={Link}
+        href={links.arrival(order)}
+        title={`Enviado por fábrica ${restockSentDetail(order)}. Captura lo que llegó, precargado con lo que mandó fábrica: queda recibido y sube al inventario`}
+      >
+        Confirmar llegada
+      </Button>
+    ) : null;
+  } else if (factoryOn) {
     if (canUpdate && order.status === RESTOCK_ORDER_STATUS.PENDING) {
       primary = (
         <Button size={size} variant="contained" startIcon={<Check size={14} />} disabled={busy} onClick={() => void run("approve")}>
@@ -241,6 +265,21 @@ export function RestockOrderActions({
       </MenuItem>
     );
   }
+  if (awaitingArrival && dispatch) {
+    // Un clic desde la lista; sirve también si fábrica mandó todo en 0 (la hoja no tendría qué capturar).
+    menuItems.push(
+      <MenuItem
+        key="receive-as-sent"
+        onClick={() => {
+          closeMenu();
+          setConfirm("receive");
+        }}
+      >
+        <ListItemIcon><PackageCheck size={16} /></ListItemIcon>
+        <ListItemText primary="Llegó tal cual lo mandó fábrica" secondary="Sube al inventario lo enviado, sin capturar" />
+      </MenuItem>
+    );
+  }
   if (canCorrect) {
     menuItems.push(
       <MenuItem key="correct" component={Link} href={links.orderSheet(order.id, true)} onClick={closeMenu}>
@@ -266,7 +305,7 @@ export function RestockOrderActions({
         <ListItemText>Cancelar pedido</ListItemText>
       </MenuItem>
     );
-  } else if (canUpdate && open && cancelBlocker) {
+  } else if (canUpdate && (open || awaitingArrival) && cancelBlocker) {
     menuItems.push(
       <MenuItem key="cancel" disabled>
         <ListItemIcon><X size={16} /></ListItemIcon>
@@ -312,7 +351,9 @@ export function RestockOrderActions({
           <p style={{ margin: 0 }}>
             {confirm === "cancel"
               ? `El pedido del ${formatDateTime(order.createdAt)} se cancela y ya no se surte. No mueve inventario.`
-              : `El pedido del ${formatDateTime(order.createdAt)} pasa a recibido. Su inventario ya subió cuando se marcó como enviado, así que no se mueve de nuevo.`}
+              : awaitingArrival
+                ? `El pedido del ${formatDateTime(order.createdAt)} pasa a recibido y sube al inventario exactamente lo que mandó fábrica. Si algo llegó distinto, usa Confirmar llegada para capturarlo.`
+                : `El pedido del ${formatDateTime(order.createdAt)} pasa a recibido. Su inventario ya subió cuando se marcó como enviado, así que no se mueve de nuevo.`}
           </p>
           {confirm === "cancel" && cancelNeedsReason ? (
             <>

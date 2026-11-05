@@ -3,7 +3,7 @@
 import Link from "next/link";
 import axios from "axios";
 import { Alert, Button, Chip, Dialog, DialogActions, DialogContent, DialogTitle } from "@mui/material";
-import { Eye, PackagePlus, Truck } from "lucide-react";
+import { Eye, PackageCheck, PackagePlus, Truck } from "lucide-react";
 import { formatMoney } from "@/lib/format-money";
 import { usePermissions } from "@/lib/permissions";
 import type { RestockOrder } from "@/types";
@@ -11,8 +11,10 @@ import {
   RESTOCK_STATUS_COLORS,
   RESTOCK_STATUS_LABELS,
   formatDateTime,
+  isAwaitingFactoryArrival,
   relativeDays,
   restockOrderSheetHref,
+  restockSentDetail,
 } from "./pos-labels";
 import { isOpenRestockOrder, restockArrivalHref } from "./RestockOrderActions";
 
@@ -75,6 +77,7 @@ export function RestockAwaitingDialog({ order, branchLabel, onClose }: RestockAw
               <div className="page-kicker" style={{ margin: 0 }}>
                 {relativeDays(order.createdAt)} · {order.items?.length ?? 0}{" "}
                 {(order.items?.length ?? 0) === 1 ? "partida" : "partidas"}
+                {order.status === "sent" && order.sentAt ? ` · enviado por fábrica ${restockSentDetail(order)}` : ""}
               </div>
             </span>
             <span style={{ textAlign: "right" }}>
@@ -91,7 +94,7 @@ export function RestockAwaitingDialog({ order, branchLabel, onClose }: RestockAw
         ) : null}
         <p className="page-kicker" style={{ marginBottom: 0 }}>
           Cuando llegue el producto, usa <strong>Recibir</strong> en ese pedido (o{" "}
-          <strong>Confirmar llegada</strong> si ya estaba marcado como enviado). Si ese pedido ya no va a llegar,
+          <strong>Confirmar llegada</strong> si fábrica ya lo envió). Si ese pedido ya no va a llegar,
           cancélalo desde su menú &quot;⋯&quot; y entonces podrás confirmar uno nuevo.
         </p>
       </DialogContent>
@@ -102,7 +105,17 @@ export function RestockAwaitingDialog({ order, branchLabel, onClose }: RestockAw
           </Button>
         ) : null}
         <Button onClick={onClose}>Entendido</Button>
-        {order && canRegister && isOpenRestockOrder(order) ? (
+        {order && canRegister && isAwaitingFactoryArrival(order) ? (
+          <Button
+            variant="contained"
+            color="success"
+            component={Link}
+            href={restockArrivalHref(order)}
+            startIcon={<PackageCheck size={16} />}
+          >
+            Confirmar llegada
+          </Button>
+        ) : order && canRegister && isOpenRestockOrder(order) ? (
           <Button
             variant="contained"
             color="success"

@@ -17,9 +17,11 @@ import {
   RESTOCK_STATUS_COLORS,
   RESTOCK_STATUS_LABELS,
   formatDateTime,
+  isAwaitingFactoryArrival,
   packQtyLabel,
   restockOrderSheetHref,
   restockItemAmount,
+  restockSentDetail,
 } from "./pos-labels";
 import { useFactoryFormDownload } from "./useFactoryFormDownload";
 import { RestockChargesSummary } from "./RestockChargesEditor";
@@ -47,6 +49,8 @@ export function RestockOrderDetail({ order }: { order: RestockOrder }) {
   // captura es lo que llegó a la sucursal.
   const factoryOn = config.factoryModuleEnabled;
   const showPrepared = factoryOn || isFranchise;
+  // Fábrica lo envió desde su app y falta confirmar la llegada: la columna es lo que mandó.
+  const awaitingArrival = isAwaitingFactoryArrival(order);
   const columns = 3 + (isFranchise ? 1 : 0) + (showPrepared ? 1 : 0);
   const isSentOrReceived =
     order.status === RESTOCK_ORDER_STATUS.SENT || order.status === RESTOCK_ORDER_STATUS.RECEIVED;
@@ -88,7 +92,7 @@ export function RestockOrderDetail({ order }: { order: RestockOrder }) {
             <tr>
               <th>Producto</th>
               <th style={{ textAlign: "right" }}>Pedido</th>
-              <th style={{ textAlign: "right" }}>{factoryOn ? "Despachado" : "Llegó"}</th>
+              <th style={{ textAlign: "right" }}>{factoryOn ? "Despachado" : awaitingArrival ? "Mandó fábrica" : "Llegó"}</th>
               {isFranchise ? <th style={{ textAlign: "right" }}>Precio mayoreo</th> : null}
               {showPrepared ? <th>Preparado</th> : null}
             </tr>
@@ -199,7 +203,7 @@ export function RestockOrderDetail({ order }: { order: RestockOrder }) {
       ) : null}
       {order.dispatchNotes ? (
         <p className="page-kicker" style={{ marginBottom: 0, color: "#92400e" }}>
-          <strong>{factoryOn ? "Nota de fábrica:" : "Nota de la llegada:"}</strong> {order.dispatchNotes}
+          <strong>{factoryOn || awaitingArrival ? "Nota de fábrica:" : "Nota de la llegada:"}</strong> {order.dispatchNotes}
         </p>
       ) : null}
     </>
@@ -278,7 +282,8 @@ export function RestockOrderCard({
           ) : null}
           {order.sentAt ? (
             <span className="page-kicker" style={{ margin: 0 }}>
-              · enviado {formatDateTime(order.sentAt)}
+              · {order.status === RESTOCK_ORDER_STATUS.SENT ? "enviado por fábrica" : "enviado"}{" "}
+              {order.status === RESTOCK_ORDER_STATUS.SENT ? restockSentDetail(order) : formatDateTime(order.sentAt)}
             </span>
           ) : null}
           {order.receivedAt ? (

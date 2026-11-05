@@ -1,6 +1,7 @@
 import { config } from "@/config";
 import { BRANCH_TYPES, RESTOCK_ORDER_STATUS, RESTOCK_ORIGIN } from "@glamouroso/shared/constants";
 import type { BranchHealthLevel } from "@glamouroso/shared";
+import type { RestockOrder } from "@/types";
 import { formatQuantity } from "@/lib/format-money";
 
 /** Etiquetas y colores compartidos por las pantallas del POS en el panel. */
@@ -10,15 +11,17 @@ export const WEEKDAY_LABELS = ["Domingo", "Lunes", "Martes", "Miércoles", "Juev
 /**
  * Con fábrica apagada el ciclo es de la sucursal: "Por enviar" (pendiente: los
  * viejos o los del corte automático), "Pedido a fábrica" (enviado desde la
- * revisión, `approved`) y "En camino" (los que se marcaron como enviados: su
- * inventario ya subió). Con fábrica prendida se conservan los pasos de fábrica.
+ * revisión, `approved`) y "Enviado por fábrica" (`sent`: lo marcó la app de
+ * fábrica y falta que la oficina confirme la llegada; los `sent` viejos del
+ * panel ya habían subido al inventario). Con fábrica prendida se conservan los
+ * pasos de fábrica.
  */
 const FACTORY_ON = config.factoryModuleEnabled;
 export const RESTOCK_STATUS_LABELS: Record<string, string> = {
   [RESTOCK_ORDER_STATUS.PENDING]: FACTORY_ON ? "Pendiente de aprobar" : "Por enviar",
   [RESTOCK_ORDER_STATUS.APPROVED]: FACTORY_ON ? "Aprobado" : "Pedido a fábrica",
   [RESTOCK_ORDER_STATUS.PREPARING]: FACTORY_ON ? "En preparación" : "Pedido a fábrica",
-  [RESTOCK_ORDER_STATUS.SENT]: FACTORY_ON ? "Enviado" : "En camino",
+  [RESTOCK_ORDER_STATUS.SENT]: "Enviado por fábrica",
   [RESTOCK_ORDER_STATUS.RECEIVED]: "Recibido",
   [RESTOCK_ORDER_STATUS.CANCELLED]: "Cancelado",
 };
@@ -223,6 +226,32 @@ export function packQtyLabel(
  * PIEZA (o por bidón), y la cantidad son empaques, así que una caja × 24 vale
  * `qty × 24 × precio`. `quantity` permite valuar lo despachado en vez de lo pedido.
  */
+/** El pedido como lo manda el Back: trae a quien lo marcó enviado (`sender`). */
+type RestockOrderWithSender = Pick<RestockOrder, "status" | "stockLoadedAt" | "origin" | "sentAt"> & {
+  branch?: { type?: string | null } | null;
+  sender?: { id: string; name?: string | null } | null;
+};
+
+/**
+ * Fábrica lo envió desde su app y la oficina todavía no confirma la llegada:
+ * su inventario aún no sube (`stockLoadedAt` vacío). Los `sent` viejos del
+ * panel ya cargaron, y una franquicia no lleva inventario en el sistema.
+ */
+export function isAwaitingFactoryArrival(order: RestockOrderWithSender): boolean {
+  return (
+    order.status === RESTOCK_ORDER_STATUS.SENT &&
+    !order.stockLoadedAt &&
+    order.origin !== RESTOCK_ORIGIN.FRANCHISE &&
+    order.branch?.type !== BRANCH_TYPES.FRANCHISE
+  );
+}
+
+/** "30 oct 2026, 10:15 · Juan Pérez": cuándo y quién lo marcó enviado (sin nombre si no viene). */
+export function restockSentDetail(order: RestockOrderWithSender): string {
+  const who = order.sender?.name?.trim();
+  return [formatDateTime(order.sentAt), who].filter(Boolean).join(" · ");
+}
+
 /** Hoja de un pedido de surtido: cómo quedó (`edit` = editar lo que se envía). */
 export function restockOrderSheetHref(orderId: string, edit = false): string {
   return `/dashboard/pos/surtido/pedidos/${orderId}${edit ? "?modo=editar" : ""}`;
