@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import {
   Button,
@@ -9,7 +9,7 @@ import {
   Switch,
   Tooltip,
 } from "@mui/material";
-import { ChevronDown, CloudOff, PackageX, TriangleAlert, Truck } from "lucide-react";
+import { ChevronDown, CloudOff, PackageX, TriangleAlert, Truck, Undo2 } from "lucide-react";
 import { isHomeDeliverySale } from "@/lib/pos/delivery-ticket";
 import {
   POS_PAYMENT_METHODS,
@@ -21,6 +21,7 @@ import { formatMoney, formatQuantity } from "@/lib/format-money";
 import { useRealtime } from "@/components/realtime/RealtimeProvider";
 import type { ListResponse, PosSale } from "@/types";
 import { toast } from "sonner";
+import type { BranchDayRow } from "../BranchCutRows";
 import { PosSaleDialog } from "../PosSaleDialog";
 import { FilterBar, FilterDateRange, FilterMeta, type DateRangeOption } from "../FilterBar";
 import {
@@ -44,15 +45,93 @@ function hasContainerWarning(sale: PosSale): boolean {
   return (sale.items ?? []).some((item) => Boolean(item.containerWarning));
 }
 
-interface DayGroup {
+/** Encabezado de un día: las mismas cifras que el corte de la sucursal. */
+interface DaySummary {
   day: string;
-  sales: PosSale[];
   total: number;
   tickets: number;
   items: number;
   voided: number;
-  /** Lo cobrado por forma de pago, sin anulados. */
+  /** Lo cobrado por forma de pago, sin anulados y con devoluciones restadas. */
   byPayment: Record<string, number>;
+  /** Venta a domicilio: ya incluida en total y tickets. */
+  delivery: number;
+  deliveryTickets: number;
+  /** Devoluciones de cliente del día: ya restadas del total. */
+  returns: number;
+  returnsCount: number;
+}
+
+/** Tickets de un día y la recarga de la que salieron (ver `version`). */
+interface DaySales {
+  version: number;
+  sales: PosSale[];
+}
+
+const emptySummary = (day: string): DaySummary => ({
+  day,
+  total: 0,
+  tickets: 0,
+  items: 0,
+  voided: 0,
+  byPayment: {},
+  delivery: 0,
+  deliveryTickets: 0,
+  returns: 0,
+  returnsCount: 0,
+});
+
+/** Filas `día × forma de pago` de `/pos/reports/branch-days` → un encabezado por día. */
+function summariesFromRows(rows: BranchDayRow[]): DaySummary[] {
+  const byDay = new Map<string, DaySummary>();
+  for (const row of rows) {
+    const summary = byDay.get(row.day) ?? emptySummary(row.day);
+    summary.total += row.total;
+    summary.tickets += row.tickets;
+    summary.items += row.items;
+    summary.voided += row.voided;
+    if (row.total) summary.byPayment[row.paymentMethod] = (summary.byPayment[row.paymentMethod] ?? 0) + row.total;
+    summary.delivery += row.deliveryTotal ?? 0;
+    summary.deliveryTickets += row.deliveryTickets ?? 0;
+    summary.returns += row.returnsTotal ?? 0;
+    summary.returnsCount += row.returns ?? 0;
+    byDay.set(row.day, summary);
+  }
+  return Array.from(byDay.values()).sort((a, b) => b.day.localeCompare(a.day));
+}
+
+/**
+ * El día sale de `soldAt` en la zona del negocio, no de la fecha del
+ * navegador: un ticket de las 9 de la noche en México es de ese día aunque en
+ * UTC ya sea el siguiente.
+ */
+function salesByDay(sales: PosSale[]): Map<string, PosSale[]> {
+  const byDay = new Map<string, PosSale[]>();
+  for (const sale of sales) {
+    const day = businessDayOf(sale.soldAt);
+    byDay.set(day, [...(byDay.get(day) ?? []), sale]);
+  }
+  return byDay;
+}
+
+/** Encabezados armados con los tickets cargados: solo para el filtro de envase. */
+function summariesFromSales(byDay: Map<string, PosSale[]>): DaySummary[] {
+  return Array.from(byDay.entries())
+    .map(([day, sales]) => {
+      const summary = emptySummary(day);
+      for (const sale of sales) {
+        if (sale.status === POS_SALE_STATUS.VOIDED) {
+          summary.voided += 1;
+          continue;
+        }
+        summary.tickets += 1;
+        summary.total += Number(sale.total);
+        summary.items += Number(sale.itemsCount);
+        summary.byPayment[sale.paymentMethod] = (summary.byPayment[sale.paymentMethod] ?? 0) + Number(sale.total);
+      }
+      return summary;
+    })
+    .sort((a, b) => b.day.localeCompare(a.day));
 }
 
 /** Orden y color fijos: la barra de un día se compara a ojo con la del otro. */
@@ -74,13 +153,23 @@ function splitDayLabel(day: string): [string, string] {
  * total, sus tickets y sus productos, y cada renglón con la hora. En una lista
  * plana no se veía dónde terminaba un día y empezaba otro, que es justo como
  * se revisa la caja. Clic en un renglón abre el ticket completo.
+ *
+ * Las cifras de cada día salen de `/pos/reports/branch-days`, igual que el
+ * corte, y los tickets se piden por día al desplegarlo, todas las páginas: la
+ * lista del rango entero tope 200 tickets y al día más viejo le faltaban.
  */
 export function BranchSalesTab({ branchId }: { branchId: string }) {
   const { subscribe } = useRealtime();
   const [from, setFrom] = useState(shiftDateOnly(todayInMexico(), -6));
   const [to, setTo] = useState(todayInMexico());
-  const [sales, setSales] = useState<PosSale[]>([]);
-  const [total, setTotal] = useState(0);
+  const [summaries, setSummaries] = useState<DaySummary[]>([]);
+  const [daySales, setDaySales] = useState<Record<string, DaySales>>({});
+  /** Sube en cada recarga: los días ya cargados se vuelven a pedir al verse. */
+  const [version, setVersion] = useState(0);
+  /** `día|versión` ya pedidos: una carrera entre respuestas pedía el mismo día dos veces. */
+  const requested = useRef(new Set<string>());
+  /** Con el filtro de envase: tickets que trajo la lista contra los que hay. */
+  const [filtered, setFiltered] = useState<{ shown: number; total: number } | null>(null);
   const [loading, setLoading] = useState(false);
   const [selected, setSelected] = useState<PosSale | null>(null);
   const [onlyContainerWarning, setOnlyContainerWarning] = useState(false);
@@ -95,18 +184,35 @@ export function BranchSalesTab({ branchId }: { branchId: string }) {
     setOpenDays({});
   }, [from, to]);
 
+  /**
+   * Encabezados del rango. Con el filtro de envase no hay corte que comparar:
+   * se piden los tickets marcados (son pocos) y los días se arman con ellos.
+   */
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const result = await httpClient.get<ListResponse<PosSale>>("/pos/sales", {
-        branchId,
-        from,
-        to,
-        limit: 200,
-        ...(onlyContainerWarning ? { withContainerWarning: "true" } : {}),
-      });
-      setSales(result.items);
-      setTotal(result.total);
+      if (onlyContainerWarning) {
+        const result = await httpClient.get<ListResponse<PosSale>>("/pos/sales", {
+          branchId,
+          from,
+          to,
+          limit: 200,
+          withContainerWarning: "true",
+        });
+        const byDay = salesByDay(result.items);
+        setSummaries(summariesFromSales(byDay));
+        setDaySales(Object.fromEntries(Array.from(byDay, ([day, sales]) => [day, { version: Infinity, sales }])));
+        setFiltered({ shown: result.items.length, total: result.total });
+      } else {
+        const rows = await httpClient.get<BranchDayRow[]>("/pos/reports/branch-days", {
+          from,
+          to,
+          branchIds: branchId,
+        });
+        setSummaries(summariesFromRows(rows));
+        setFiltered(null);
+        setVersion((current) => current + 1);
+      }
     } catch (error) {
       toast.error(getApiErrorMessage(error, "No se pudieron cargar las ventas"));
     } finally {
@@ -115,50 +221,73 @@ export function BranchSalesTab({ branchId }: { branchId: string }) {
   }, [branchId, from, to, onlyContainerWarning]);
 
   useEffect(() => {
+    setDaySales({});
     void load();
   }, [load]);
 
+  /*
+   * Cada cobro de la sucursal mueve las cifras. Se junta en una recarga cada
+   * 5 s, como en Cortes: recargar por ticket gasta el límite de solicitudes.
+   */
+  const reloadTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => {
-    return subscribe((event) => {
-      if (event.type === "pos_sales_changed" && event.branchId === branchId) void load();
+    const unsubscribe = subscribe((event) => {
+      if (event.type !== "pos_sales_changed" || event.branchId !== branchId || reloadTimer.current) return;
+      reloadTimer.current = setTimeout(() => {
+        reloadTimer.current = null;
+        void load();
+      }, 5000);
     });
+    return () => {
+      unsubscribe();
+      if (reloadTimer.current) clearTimeout(reloadTimer.current);
+      reloadTimer.current = null;
+    };
   }, [subscribe, branchId, load]);
 
-  /**
-   * El día sale de `soldAt` en la zona del negocio, no de la fecha del
-   * navegador: un ticket de las 9 de la noche en México es de ese día aunque
-   * en UTC ya sea el siguiente. Los anulados salen en su día pero no suman al
-   * total: un ticket anulado no vendió.
-   */
-  const groups = useMemo<DayGroup[]>(() => {
-    const byDay = new Map<string, DayGroup>();
-    for (const sale of sales) {
-      const day = businessDayOf(sale.soldAt);
-      const group = byDay.get(day) ?? {
-        day,
-        sales: [],
-        total: 0,
-        tickets: 0,
-        items: 0,
-        voided: 0,
-        byPayment: {},
-      };
-      group.sales.push(sale);
-      if (sale.status === POS_SALE_STATUS.VOIDED) {
-        group.voided += 1;
-      } else {
-        group.tickets += 1;
-        group.total += Number(sale.total);
-        group.items += Number(sale.itemsCount);
-        group.byPayment[sale.paymentMethod] = (group.byPayment[sale.paymentMethod] ?? 0) + Number(sale.total);
+  /** Todos los tickets de un día, página por página (anulados incluidos, en su día). */
+  const loadDay = useCallback(
+    async (day: string, forVersion: number) => {
+      const key = `${day}|${forVersion}`;
+      if (requested.current.has(key)) return;
+      requested.current.add(key);
+      try {
+        const sales: PosSale[] = [];
+        for (let page = 1; ; page += 1) {
+          const result = await httpClient.get<ListResponse<PosSale>>("/pos/sales", {
+            branchId,
+            date: day,
+            limit: 200,
+            page,
+          });
+          sales.push(...result.items);
+          if (page >= result.totalPages) break;
+        }
+        // Una respuesta que llega tarde no pisa la de una recarga más nueva.
+        setDaySales((current) =>
+          (current[day]?.version ?? -1) > forVersion ? current : { ...current, [day]: { version: forVersion, sales } },
+        );
+      } catch (error) {
+        requested.current.delete(key);
+        toast.error(getApiErrorMessage(error, "No se pudieron cargar los tickets del día"));
       }
-      byDay.set(day, group);
-    }
-    return Array.from(byDay.values()).sort((a, b) => b.day.localeCompare(a.day));
-  }, [sales]);
+    },
+    [branchId],
+  );
 
-  const isDayOpen = (day: string, index: number) => openDays[day] ?? index === 0;
+  const groups = summaries;
+  const isDayOpen = useCallback((day: string, index: number) => openDays[day] ?? index === 0, [openDays]);
   const allOpen = groups.every((group, index) => isDayOpen(group.day, index));
+
+  /** Cada día abierto con tickets de una recarga vieja (o sin cargar) se pide. */
+  useEffect(() => {
+    if (onlyContainerWarning) return;
+    groups.forEach((group, index) => {
+      if (isDayOpen(group.day, index) && (daySales[group.day]?.version ?? -1) < version) {
+        void loadDay(group.day, version);
+      }
+    });
+  }, [groups, isDayOpen, daySales, version, loadDay, onlyContainerWarning]);
   const toggleDay = (day: string, index: number) =>
     setOpenDays((current) => ({ ...current, [day]: !isDayOpen(day, index) }));
   const setAllDays = (open: boolean) =>
@@ -200,7 +329,7 @@ export function BranchSalesTab({ branchId }: { branchId: string }) {
         <FilterMeta>
           <strong>{formatMoney(rangeTotal)}</strong> en {rangeTickets}{" "}
           {rangeTickets === 1 ? "ticket" : "tickets"}
-          {total > sales.length ? ` · se muestran ${sales.length} de ${total}` : ""}
+          {filtered && filtered.total > filtered.shown ? ` · se muestran ${filtered.shown} de ${filtered.total}` : ""}
         </FilterMeta>
       </FilterBar>
 
@@ -249,6 +378,16 @@ export function BranchSalesTab({ branchId }: { branchId: string }) {
                       </span>
                     ) : null,
                   )}
+                  {group.deliveryTickets ? (
+                    <span className="is-delivery" title="Ya incluido en el total: la surte la fábrica">
+                      <Truck size={12} /> A domicilio {formatMoney(group.delivery)} ({group.deliveryTickets})
+                    </span>
+                  ) : null}
+                  {group.returnsCount ? (
+                    <span className="is-voided" title="Ya restado del total y de cada forma de pago">
+                      <Undo2 size={12} /> Devoluciones -{formatMoney(group.returns)} ({group.returnsCount})
+                    </span>
+                  ) : null}
                   {group.voided ? (
                     <span className="is-voided">
                       {group.voided} {group.voided === 1 ? "anulado" : "anulados"}
@@ -287,7 +426,14 @@ export function BranchSalesTab({ branchId }: { branchId: string }) {
                     </tr>
                   </thead>
                   <tbody>
-                    {group.sales.map((sale) => {
+                    {!daySales[group.day] ? (
+                      <tr>
+                        <td colSpan={8} style={{ color: "var(--muted)" }}>
+                          Cargando tickets...
+                        </td>
+                      </tr>
+                    ) : null}
+                    {(daySales[group.day]?.sales ?? []).map((sale) => {
                       const voided = sale.status === POS_SALE_STATUS.VOIDED;
                       return (
                         <tr
@@ -411,7 +557,7 @@ export function BranchSalesTab({ branchId }: { branchId: string }) {
       })}
 
       {loading ? <p className="page-kicker">Cargando...</p> : null}
-      {!loading && !sales.length ? (
+      {!loading && !groups.length ? (
         <div className="panel p-5" style={{ textAlign: "center", color: "var(--muted)" }}>
           Sin tickets en este periodo.
         </div>
