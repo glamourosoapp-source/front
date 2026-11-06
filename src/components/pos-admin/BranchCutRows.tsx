@@ -14,7 +14,7 @@ import { FilterBar, FilterMeta } from "./FilterBar";
 import { formatBusinessDayLong, formatDateOnlyRange, posWeekStart, shiftDateOnly, todayInMexico } from "./pos-labels";
 
 /** Fila de `/pos/reports/branch-days`: un día, una sucursal, una forma de pago. */
-interface BranchDayRow {
+export interface BranchDayRow {
   day: string;
   branchId: string;
   paymentMethod: string;
