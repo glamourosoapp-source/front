@@ -18,7 +18,6 @@ import { BranchOverviewTab } from "./tabs/BranchOverviewTab";
 import { BranchSalesTab } from "./tabs/BranchSalesTab";
 import { BranchReturnsTab } from "./tabs/BranchReturnsTab";
 import { BranchRestockTab } from "./tabs/BranchRestockTab";
-import { BranchCutsTab } from "./tabs/BranchCutsTab";
 import { BranchInventoryTab } from "./tabs/BranchInventoryTab";
 import { BranchUsersTab } from "./tabs/BranchUsersTab";
 import { BranchCustomersTab } from "./tabs/BranchCustomersTab";
@@ -30,7 +29,6 @@ type TabKey =
   | "ventas"
   | "devoluciones"
   | "pedidos"
-  | "cortes"
   | "inventario"
   | "usuarios"
   | "clientes"
@@ -38,8 +36,8 @@ type TabKey =
   | "caja";
 
 /**
- * Detalle de una sucursal o franquicia: resumen, ventas, pedidos a fábrica,
- * cortes, inventario con stock mínimo, usuarios y clientes registrados. La
+ * Detalle de una sucursal o franquicia: resumen, tickets, pedidos a fábrica,
+ * inventario con stock mínimo, usuarios y clientes registrados. La
  * pestaña va en la URL (`?tab=`) para poder enlazarla desde otros módulos.
  */
 export function BranchDetailPage({ type }: { type: BranchType }) {
@@ -69,7 +67,6 @@ export function BranchDetailPage({ type }: { type: BranchType }) {
         { key: "ventas", label: "Tickets" },
         { key: "devoluciones", label: "Devoluciones" },
         { key: "pedidos", label: "Pedidos a fábrica" },
-        { key: "cortes", label: "Cortes" },
         { key: "inventario", label: "Inventario y stock" },
         { key: "usuarios", label: "Usuarios" },
         { key: "clientes", label: "Clientes" },
@@ -220,7 +217,6 @@ export function BranchDetailPage({ type }: { type: BranchType }) {
       {tab === "ventas" ? <BranchSalesTab branchId={branch.id} /> : null}
       {tab === "devoluciones" ? <BranchReturnsTab branchId={branch.id} /> : null}
       {tab === "pedidos" ? <BranchRestockTab branch={branch} /> : null}
-      {tab === "cortes" ? <BranchCutsTab branchId={branch.id} /> : null}
       {tab === "inventario" ? (
         <BranchInventoryTab branchId={branch.id} initialBelowMin={searchParams.get("bajo") === "1"} />
       ) : null}
