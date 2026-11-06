@@ -66,7 +66,7 @@ export function BranchDetailPage({ type }: { type: BranchType }) {
       ]
     : [
         { key: "resumen", label: "Resumen" },
-        { key: "ventas", label: "Ventas" },
+        { key: "ventas", label: "Tickets" },
         { key: "devoluciones", label: "Devoluciones" },
         { key: "pedidos", label: "Pedidos a fábrica" },
         { key: "cortes", label: "Cortes" },

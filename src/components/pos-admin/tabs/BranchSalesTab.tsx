@@ -23,7 +23,8 @@ import type { ListResponse, PosSale } from "@/types";
 import { toast } from "sonner";
 import type { BranchDayRow } from "../BranchCutRows";
 import { PosSaleDialog } from "../PosSaleDialog";
-import { FilterBar, FilterDateRange, FilterMeta, type DateRangeOption } from "../FilterBar";
+import { FilterBar, FilterDivider, FilterMeta } from "../FilterBar";
+import { PeriodPicker, periodBounds, type PeriodValue } from "../PeriodPicker";
 import {
   businessDayOf,
   formatBusinessDayLong,
@@ -32,13 +33,6 @@ import {
   shiftDateOnly,
   todayInMexico,
 } from "../pos-labels";
-
-/** La caja siempre se mira por periodo: aquí no hay opción "Todo". */
-const RANGES: DateRangeOption[] = [
-  { key: "hoy", label: "Hoy", days: 0 },
-  { key: "7d", label: "7 días", days: 6 },
-  { key: "30d", label: "30 días", days: 29 },
-];
 
 /** Alguna partida vendida no descontó envase ni tapa. */
 function hasContainerWarning(sale: PosSale): boolean {
@@ -160,8 +154,16 @@ function splitDayLabel(day: string): [string, string] {
  */
 export function BranchSalesTab({ branchId }: { branchId: string }) {
   const { subscribe } = useRealtime();
-  const [from, setFrom] = useState(shiftDateOnly(todayInMexico(), -6));
-  const [to, setTo] = useState(todayInMexico());
+  /**
+   * Mismo selector que Cortes: un día, la semana vie–jue, el mes o un rango.
+   * Arranca con los últimos 7 días, lo que la pestaña mostraba siempre.
+   */
+  const [period, setPeriod] = useState<PeriodValue>(() => ({
+    granularity: "range",
+    anchor: shiftDateOnly(todayInMexico(), -6),
+    rangeTo: todayInMexico(),
+  }));
+  const { from, to } = periodBounds(period);
   const [summaries, setSummaries] = useState<DaySummary[]>([]);
   const [daySales, setDaySales] = useState<Record<string, DaySales>>({});
   /** Sube en cada recarga: los días ya cargados se vuelven a pedir al verse. */
@@ -302,15 +304,8 @@ export function BranchSalesTab({ branchId }: { branchId: string }) {
   return (
     <div className="page-stack">
       <FilterBar>
-        <FilterDateRange
-          options={RANGES}
-          from={from}
-          to={to}
-          onChange={(range) => {
-            setFrom(range.from);
-            setTo(range.to);
-          }}
-        />
+        <PeriodPicker value={period} onChange={setPeriod} />
+        <FilterDivider />
         <FormControlLabel
           control={
             <Switch
