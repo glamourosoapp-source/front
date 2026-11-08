@@ -285,15 +285,26 @@ export const sendRestockOrderSchema = z.object({
   /**
    * App de fábrica: lo que sale de cada partida, en empaques, en la misma
    * llamada que marca el pedido enviado. Si sale menos de lo pedido, el motivo
-   * es obligatorio (lo valida el servicio: depende de lo pedido).
+   * es obligatorio (lo valida el servicio: depende de lo pedido). Con
+   * `lineId` o `productId` en vez de `itemId`: un producto que la
+   * sucursal no pidió y fábrica agrega (partida nueva, pedido en 0).
    */
   items: z
     .array(
-      z.object({
-        itemId: z.string().uuid(),
-        dispatchedQty: z.coerce.number().min(0).max(100_000),
-        notes: z.union([z.string().max(300), z.null()]).optional(),
-      })
+      z
+        .object({
+          itemId: z.string().uuid().optional(),
+          lineId: z.string().uuid().optional(),
+          productId: z.string().uuid().optional(),
+          dispatchedQty: z.coerce.number().min(0).max(100_000),
+          notes: z.union([z.string().max(300), z.null()]).optional(),
+        })
+        .superRefine((value, ctx) => {
+          const targets = [value.itemId, value.lineId, value.productId].filter(Boolean).length;
+          if (targets !== 1) {
+            ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Indica itemId, lineId o productId (solo uno)" });
+          }
+        })
     )
     .max(500)
     .optional(),
