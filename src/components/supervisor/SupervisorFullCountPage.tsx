@@ -90,6 +90,12 @@ export function SupervisorFullCountPage() {
   const [category, setCategory] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const [showMap, setShowMap] = useState(true);
+  // En el celular el mapa de una sucursal grande (600+ cuadros) empuja la lista
+  // muy abajo: empieza cerrado y se abre con su botón. Antes de que llegue el
+  // conteo solo se ve "Abriendo…", así que no hay parpadeo.
+  useEffect(() => {
+    if (window.matchMedia("(max-width: 720px)").matches) setShowMap(false);
+  }, []);
   const [confirmClose, setConfirmClose] = useState(false);
   const [closing, setClosing] = useState(false);
   const [cancelOpen, setCancelOpen] = useState(false);
@@ -572,7 +578,7 @@ export function SupervisorFullCountPage() {
             Mapa de avance
             <ChevronDown size={15} className={showMap ? "is-open" : undefined} />
           </button>
-          <span>Toca un cuadro para ir al producto</span>
+          {showMap ? <span>Toca un cuadro para ir al producto</span> : null}
         </div>
         {showMap ? (
           <div className="supi-map" role="list" aria-label="Avance por producto">
