@@ -369,6 +369,19 @@ export const INVENTORY_COUNT_SELECTION = {
   RISK: "risk",
   /** Puro azar, para que la lista no se pueda adivinar. */
   RANDOM: "random",
+  /** Inventario completo: entra todo lo vivo de la sucursal. */
+  FULL: "full",
+} as const;
+
+/**
+ * Tipo de conteo: el cíclico (lista sorpresa de 30) o el inventario completo
+ * de la sucursal (todo lo vivo), que el supervisor hace sucursal por sucursal.
+ * Mismas reglas de ciego, reconteo y ajuste al cerrar. Un solo conteo abierto
+ * por sucursal, del tipo que sea.
+ */
+export const INVENTORY_COUNT_KINDS = {
+  RANDOM: "random",
+  FULL: "full",
 } as const;
 
 export const INVENTORY_COUNT_DEFAULTS = {
@@ -559,6 +572,7 @@ export type RestockOrigin = (typeof RESTOCK_ORIGIN)[keyof typeof RESTOCK_ORIGIN]
 export type InventoryCountStatus = (typeof INVENTORY_COUNT_STATUS)[keyof typeof INVENTORY_COUNT_STATUS];
 export type InventoryCountItemStatus =
   (typeof INVENTORY_COUNT_ITEM_STATUS)[keyof typeof INVENTORY_COUNT_ITEM_STATUS];
+export type InventoryCountKind = (typeof INVENTORY_COUNT_KINDS)[keyof typeof INVENTORY_COUNT_KINDS];
 export type InventoryCountSelection =
   (typeof INVENTORY_COUNT_SELECTION)[keyof typeof INVENTORY_COUNT_SELECTION];
 export type AbcClass = "A" | "B" | "C";

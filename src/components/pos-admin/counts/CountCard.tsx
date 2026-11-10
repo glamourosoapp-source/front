@@ -83,6 +83,7 @@ export function CountCard({ count }: { count: CountListRow }) {
         <span className="pos-day-date">
           <span className="pos-day-weekday">
             {count.branch ? `${count.branch.code} · ${count.branch.name}` : "Sucursal"}
+            {count.kind === "full" ? <span className="pos-day-badge count-full-badge">Inventario completo</span> : null}
             {count.pendingSync ? <span className="pos-day-badge count-sync-badge">Ventas por subir</span> : null}
           </span>
           <span className="pos-day-fulldate">

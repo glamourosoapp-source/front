@@ -1,10 +1,16 @@
 import { z } from "zod";
 import { paginationSchema } from "./common";
-import { INVENTORY_COUNT_STATUS } from "../constants";
+import { INVENTORY_COUNT_KINDS, INVENTORY_COUNT_STATUS } from "../constants";
 
-/** Iniciar un conteo cíclico en una sucursal (la lista sorpresa la arma el servidor). */
+const countKindSchema = z.enum([INVENTORY_COUNT_KINDS.RANDOM, INVENTORY_COUNT_KINDS.FULL]);
+
+/**
+ * Iniciar un conteo en una sucursal: cíclico (por omisión, la lista sorpresa
+ * la arma el servidor) o `kind: "full"`, el inventario completo.
+ */
 export const startInventoryCountSchema = z.object({
   branchId: z.string().uuid(),
+  kind: countKindSchema.optional(),
 });
 
 /**
@@ -40,6 +46,7 @@ export const queryInventoryCountsSchema = paginationSchema.extend({
   status: z
     .enum([INVENTORY_COUNT_STATUS.IN_PROGRESS, INVENTORY_COUNT_STATUS.CLOSED, INVENTORY_COUNT_STATUS.CANCELLED])
     .optional(),
+  kind: countKindSchema.optional(),
   /** Día de negocio (YYYY-MM-DD) del inicio del conteo, inclusive. */
   from: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
   to: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),

@@ -3,7 +3,7 @@
 import { ReactNode, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { ClipboardCheck, LogOut, Receipt, ShieldAlert, Store, Truck } from "lucide-react";
+import { ClipboardCheck, LogOut, Receipt, ShieldAlert, Store, Truck, Warehouse } from "lucide-react";
 import { RealtimeProvider } from "@/components/realtime/RealtimeProvider";
 import { ForcePasswordChangeDialog } from "@/components/auth/ForcePasswordChangeDialog";
 import { PosLinksProvider, SUPERVISOR_POS_LINKS } from "@/components/pos-admin/pos-links";
@@ -17,6 +17,8 @@ const NAV = [
   { href: "/supervisor/pedidos", label: "Pedidos", icon: Truck },
   // Solo con el permiso de conteos (perfil Supervisor de caja desde la migración de conteos).
   { href: "/supervisor/conteos", label: "Conteos", icon: ClipboardCheck, module: "posCounts" },
+  // Inventario completo de una sucursal (mismo permiso y casilla Conteos de la matriz).
+  { href: "/supervisor/inventarios", label: "Inventarios", icon: Warehouse, module: "posCounts" },
   // Solo si su matriz (ficha del usuario) le da Cortes en alguna sucursal.
   { href: "/supervisor/cortes", label: "Cortes", icon: Receipt, cuts: true },
 ] as const;
@@ -27,8 +29,8 @@ function isActive(pathname: string, href: string): boolean {
 
 /**
  * Marco de la app del supervisor: barra de arriba con el logo y, para
- * moverse, sus secciones (Sucursales, Pedidos, Conteos y, si tiene sucursales
- * asignadas, Cortes). En el celular la
+ * moverse, sus secciones (Sucursales, Pedidos, Conteos, Inventarios y, si
+ * tiene sucursales asignadas, Cortes). En el celular la
  * navegación baja a una barra fija abajo, al alcance del pulgar; dentro de un
  * pedido o de un conteo se esconde para dejarle la pantalla a la hoja y a su
  * barra de enviar o de cerrar.
@@ -79,7 +81,10 @@ export default function SupervisorShell({ children }: { children: ReactNode }) {
   }
 
   // Dentro de un pedido (revisar o ver la hoja) o de un conteo la barra de abajo estorba.
-  const inOrder = pathname.startsWith("/supervisor/pedidos/") || pathname.startsWith("/supervisor/conteos/");
+  const inOrder =
+    pathname.startsWith("/supervisor/pedidos/") ||
+    pathname.startsWith("/supervisor/conteos/") ||
+    pathname.startsWith("/supervisor/inventarios/");
   const hasCuts = Boolean(supervisorScope.ids("cuts")?.length);
   const nav = NAV.filter(
     (item) => (!("module" in item) || can(item.module, "view")) && (!("cuts" in item) || hasCuts),

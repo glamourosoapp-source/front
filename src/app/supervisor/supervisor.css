@@ -622,13 +622,23 @@ a.sup-card:hover {
     box-shadow: 0 -6px 18px rgba(38, 45, 96, 0.06);
   }
 
+  /* Hasta cinco secciones (con Inventarios y Cortes): se reparten el ancho sin cortarse. */
   .sup-nav a {
-    flex: 1;
+    flex: 1 1 0;
     flex-direction: column;
     justify-content: center;
     gap: 2px;
+    min-width: 0;
     min-height: 52px;
+    padding: 0 2px;
     font-size: 12px;
+  }
+
+  .sup-nav a span {
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 
   .sup-nav a.is-active {
@@ -2061,5 +2071,516 @@ p.supc-hero-branch {
   .sup .pos-cut .pos-day-stat.is-total {
     flex: 1.5;
     min-width: 0;
+  }
+}
+
+/* ---------- Inventario completo (/supervisor/inventarios) ----------
+ * Cada producto lleva el color de su estado en todo: el renglón, el cuadro
+ * del mapa de avance y la barra. Verde = contado, ámbar = recontar, gris =
+ * por contar; azul = el que se está capturando.
+ */
+
+.supi-page {
+  --supi-done: #16a34a;
+  --supi-done-soft: #f0fdf4;
+  --supi-done-line: #bbf7d0;
+  --supi-recount: #f59e0b;
+  --supi-recount-soft: #fffbeb;
+  --supi-todo: #cbd5e1;
+}
+
+.supi-kicker {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--glam-blue);
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+
+.supi-progress {
+  display: grid;
+  gap: 8px;
+}
+
+.supi-progress-numbers {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.supi-progress-numbers strong {
+  color: var(--glam-navy);
+  font-size: 30px;
+  font-weight: 800;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+
+.supi-progress-numbers strong small {
+  color: var(--muted);
+  font-size: 16px;
+  font-weight: 700;
+}
+
+.supi-progress-numbers > span {
+  color: var(--supi-done, #16a34a);
+  font-size: 20px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Barra apilada: verde lo contado y, junto, ámbar lo que pide reconteo. */
+.supi-bar {
+  display: flex;
+  height: 14px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: #e2e8f0;
+}
+
+.supi-bar.is-small {
+  height: 8px;
+}
+
+.supi-bar span {
+  height: 100%;
+  transition: width 0.3s ease;
+}
+
+.supi-bar .is-done {
+  background: #16a34a;
+}
+
+.supi-bar .is-recount {
+  background: #f59e0b;
+}
+
+.supi-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 14px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.supi-legend li {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.supi-legend i {
+  width: 12px;
+  height: 12px;
+  border-radius: 4px;
+  background: var(--supi-todo);
+}
+
+.supi-legend .is-done i {
+  background: var(--supi-done);
+}
+
+.supi-legend .is-recount i {
+  background: var(--supi-recount);
+}
+
+.supi-legend .is-done {
+  color: #166534;
+}
+
+.supi-legend .is-recount {
+  color: #92400e;
+}
+
+/* Mapa de avance: un cuadro por producto, en el orden de la lista. */
+.supi-map-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 4px 10px;
+}
+
+.supi-map-head > span {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.supi-map-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 0;
+  border: 0;
+  background: none;
+  color: var(--glam-navy);
+  font: inherit;
+  font-size: 14px;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.supi-map-toggle svg:last-child {
+  transition: transform 0.2s ease;
+}
+
+.supi-map-toggle svg.is-open {
+  transform: rotate(180deg);
+}
+
+.supi-map {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(16px, 1fr));
+  gap: 4px;
+}
+
+.supi-cell {
+  aspect-ratio: 1;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 4px;
+  background: var(--supi-todo);
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+.supi-cell.is-done {
+  background: var(--supi-done);
+}
+
+.supi-cell.is-recount {
+  background: var(--supi-recount);
+}
+
+.supi-cell.is-open {
+  outline: 2px solid var(--glam-blue);
+  outline-offset: 1px;
+}
+
+.supi-cell:hover,
+.supi-cell:focus-visible {
+  outline: 2px solid var(--glam-navy);
+  outline-offset: 1px;
+}
+
+.supi-saved {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 0;
+  color: #166534;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.35;
+}
+
+.supi-saved svg {
+  flex: 0 0 auto;
+  margin-top: 1px;
+}
+
+/* Categorías: chips con su avance; la completa se pone verde. */
+.supi-cats {
+  display: flex;
+  gap: 8px;
+  margin: 0 -16px;
+  padding: 2px 16px 6px;
+  overflow-x: auto;
+  scroll-snap-type: x proximity;
+  scrollbar-width: thin;
+}
+
+.supi-cat {
+  display: grid;
+  flex: 0 0 auto;
+  grid-template-columns: auto auto;
+  align-items: center;
+  gap: 4px 10px;
+  min-width: 128px;
+  padding: 9px 12px 10px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--card);
+  color: var(--glam-navy);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  scroll-snap-align: start;
+}
+
+.supi-cat-name {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 14px;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.supi-cat-count {
+  justify-self: end;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+
+.supi-cat-bar {
+  grid-column: 1 / -1;
+  height: 5px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: #e2e8f0;
+}
+
+.supi-cat-bar span {
+  display: block;
+  height: 100%;
+  background: var(--supi-done);
+  transition: width 0.3s ease;
+}
+
+.supi-cat.has-recount {
+  border-color: #fcd34d;
+}
+
+.supi-cat.is-complete {
+  border-color: var(--supi-done-line);
+  background: var(--supi-done-soft);
+}
+
+.supi-cat.is-complete .supi-cat-name,
+.supi-cat.is-complete .supi-cat-count {
+  color: #166534;
+}
+
+.supi-cat.is-active {
+  border-color: var(--glam-blue);
+  box-shadow: inset 0 0 0 1px var(--glam-blue);
+}
+
+.supc-segmented.supi-filters button.is-done b {
+  color: #166534;
+}
+
+/* Lista por categoría. */
+.supi-group {
+  display: grid;
+  gap: 8px;
+}
+
+.supi-group-head {
+  position: sticky;
+  top: 58px;
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 8px 2px;
+  background: var(--bg);
+}
+
+.supi-group-head h2 {
+  margin: 0;
+  color: var(--glam-navy);
+  font-size: 16px;
+  font-weight: 800;
+}
+
+.supi-group-head > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 2px 9px;
+  border-radius: 999px;
+  background: #f1f5f9;
+  color: #475569;
+  font-size: 12px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+
+.supi-group-head > span.is-complete {
+  background: #dcfce7;
+  color: #166534;
+}
+
+.supi-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 340px), 1fr));
+  gap: 8px;
+}
+
+.supi-row {
+  display: grid;
+  align-content: start;
+  gap: 10px;
+  min-width: 0;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--card);
+  box-shadow: inset 4px 0 0 var(--supi-todo);
+  transition: background 0.2s ease, border-color 0.2s ease;
+}
+
+.supi-row.is-done {
+  border-color: var(--supi-done-line);
+  background: var(--supi-done-soft);
+  box-shadow: inset 4px 0 0 var(--supi-done);
+}
+
+.supi-row.is-recount {
+  border-color: #fcd34d;
+  background: var(--supi-recount-soft);
+  box-shadow: inset 4px 0 0 var(--supi-recount);
+}
+
+.supi-row.is-open {
+  grid-column: 1 / -1;
+  padding: 12px 14px 12px 18px;
+  border-color: var(--glam-blue);
+  background: var(--card);
+  box-shadow: inset 4px 0 0 var(--glam-blue), var(--shadow-sm);
+}
+
+.supi-row.is-flash {
+  animation: supi-flash 1.6s ease;
+}
+
+@keyframes supi-flash {
+  0%,
+  40% {
+    border-color: var(--glam-blue);
+    box-shadow: inset 4px 0 0 var(--glam-blue), 0 0 0 3px rgba(37, 99, 235, 0.25);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .supi-row.is-flash {
+    animation: none;
+  }
+}
+
+.supi-row-main {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  min-height: 56px;
+  padding: 8px 12px 8px 16px;
+  border: 0;
+  border-radius: inherit;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+.supi-row-main:disabled {
+  cursor: default;
+}
+
+.supi-row-main .supc-row-name {
+  flex: 1 1 auto;
+}
+
+.supi-row-main .supc-row-name strong {
+  font-size: 14px;
+}
+
+.supi-dot {
+  display: inline-grid;
+  flex: 0 0 auto;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  border: 2px solid var(--supi-todo);
+  border-radius: 999px;
+  background: var(--card);
+}
+
+.supi-row.is-done .supi-dot {
+  border-color: var(--supi-done);
+  background: var(--supi-done);
+  color: #fff;
+}
+
+.supi-row.is-recount .supi-dot {
+  border-color: var(--supi-recount);
+  background: var(--supi-recount);
+  color: #fff;
+}
+
+.supi-qty {
+  display: grid;
+  flex: 0 0 auto;
+  justify-items: end;
+  gap: 1px;
+  line-height: 1.1;
+}
+
+.supi-qty b {
+  color: #166534;
+  font-size: 15px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.supi-qty small {
+  color: var(--glam-blue);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.supi-go {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 2px;
+  color: var(--glam-blue);
+  font-size: 14px;
+  font-weight: 800;
+}
+
+.supi-current {
+  margin: 0;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.supi-current b {
+  color: #166534;
+}
+
+/* Tarjetas de la lista de sucursales. */
+.supi-card.is-progress {
+  border-color: #fcd34d;
+}
+
+@media (max-width: 720px) {
+  .supi-group-head {
+    top: calc(56px + env(safe-area-inset-top));
+  }
+
+  .supi-progress-numbers strong {
+    font-size: 26px;
+  }
+
+  .supi-map {
+    grid-template-columns: repeat(auto-fill, minmax(14px, 1fr));
+    gap: 3px;
   }
 }
