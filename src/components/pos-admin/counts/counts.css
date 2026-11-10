@@ -255,3 +255,9 @@
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
+
+/* Inventario completo (kind: full): todo lo vivo de la sucursal, no la lista sorpresa. */
+.count-full-badge {
+  background: var(--soft-blue) !important;
+  color: var(--glam-navy) !important;
+}

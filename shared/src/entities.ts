@@ -5,6 +5,7 @@ import type {
   FactoryReturnReason,
   InventoryCountItemStatus,
   InventoryCountSelection,
+  InventoryCountKind,
   InventoryCountStatus,
   InventoryMovementType,
   NotificationType,
@@ -1178,6 +1179,8 @@ export interface InventoryCountItem {
   packLabel: string;
   /** Envase, tapa o similar (categoría Envase o producto de una regla de envase de la caja). */
   isContainer: boolean;
+  /** Categoría del catálogo (Líquidos, Jarciería…), para agrupar el inventario completo; solo al leer el conteo. */
+  category?: string | null;
   abcClass: AbcClass;
   selectionReason: InventoryCountSelection;
   countedQty: number | null;
@@ -1203,7 +1206,8 @@ export interface InventoryCount {
   branchId: string;
   branch?: { id: string; code: string; name: string } | null;
   status: InventoryCountStatus;
-  kind: "random";
+  /** `random` = cíclico (30 al azar); `full` = inventario completo de la sucursal. */
+  kind: InventoryCountKind;
   startedBy: string | null;
   startedByUser?: { id: string; name: string } | null;
   startedAt: string;

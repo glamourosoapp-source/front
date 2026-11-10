@@ -23,6 +23,7 @@ export const COUNT_SELECTION_LABELS: Record<string, { label: string; hint: strin
   due: { label: "Vencido", hint: "Le tocaba por su clase ABC (A cada mes, B cada 2, C cada 3) o nunca se había contado." },
   risk: { label: "Riesgo", hint: "Tuvo diferencias en conteos anteriores o existencia negativa." },
   random: { label: "Azar", hint: "Elegido al azar para que la lista no se pueda adivinar." },
+  full: { label: "Completo", hint: "Inventario completo: entra todo lo vivo de la sucursal." },
 };
 
 /**

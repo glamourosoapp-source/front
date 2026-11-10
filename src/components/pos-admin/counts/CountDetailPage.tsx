@@ -161,7 +161,7 @@ export function CountDetailPage() {
           <h1 className="page-title" style={{ display: "flex", alignItems: "center", gap: 10 }}>
             <ClipboardCheck size={22} style={{ color: "var(--glam-blue)", flex: "0 0 auto" }} />
             <span>
-              Conteo
+              {count?.kind === "full" ? "Inventario completo" : "Conteo"}
               {count?.branch ? ` · ${count.branch.code} · ${count.branch.name}` : ""}
             </span>
           </h1>

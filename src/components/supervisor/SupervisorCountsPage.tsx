@@ -5,7 +5,7 @@ import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { ChevronRight, ClipboardCheck, ClipboardList, RefreshCw, Search } from "lucide-react";
 import { toast } from "sonner";
-import { BRANCH_TYPES, INVENTORY_COUNT_STATUS } from "@glamouroso/shared/constants";
+import { BRANCH_TYPES, INVENTORY_COUNT_KINDS, INVENTORY_COUNT_STATUS } from "@glamouroso/shared/constants";
 import type { InventoryCount } from "@glamouroso/shared";
 import { httpClient, getApiErrorMessage } from "@/services/http-client";
 import { relativeDays } from "@/components/pos-admin/pos-labels";
@@ -14,6 +14,7 @@ import type { Branch, ListResponse } from "@/types";
 import { useSupervisorScope } from "@/lib/supervisor-scope";
 import { StartCountDialog, type CountBranch } from "./StartCountDialog";
 import { accuracyPercent, countProgress, itemsWithDifference } from "./supervisor-counts";
+import { fullCountHref } from "./full-count";
 
 /** Días tras los que una sucursal vuelve a "Por contar" (la frecuencia de la clase A). */
 const STALE_DAYS = 30;
@@ -49,6 +50,7 @@ function CountCard({ row, canStart, onStart }: { row: Row; canStart: boolean; on
   const differences = last ? itemsWithDifference(last) : null;
   const accuracy = last ? accuracyPercent(last.accuracy) : null;
   const Icon = step === "progress" ? ClipboardList : ClipboardCheck;
+  const fullOpen = current?.kind === INVENTORY_COUNT_KINDS.FULL;
 
   return (
     <article className="sup-card sup-order">
@@ -68,7 +70,7 @@ function CountCard({ row, canStart, onStart }: { row: Row; canStart: boolean; on
           <div className="supc-card-progress">
             <p>
               <strong>
-                En curso · {progress.counted}/{progress.total || "—"}
+                {fullOpen ? "Inventario completo" : "En curso"} · {progress.counted}/{progress.total || "—"}
               </strong>{" "}
               <span className="supc-muted">· empezó {relativeDays(current.startedAt)}</span>
             </p>
@@ -100,8 +102,8 @@ function CountCard({ row, canStart, onStart }: { row: Row; canStart: boolean; on
 
       {current ? (
         <div className="sup-card-links">
-          <Link href={`/supervisor/conteos/${current.id}`} className="sup-card-link">
-            Continuar conteo
+          <Link href={fullOpen ? fullCountHref(current.id) : `/supervisor/conteos/${current.id}`} className="sup-card-link">
+            {fullOpen ? "Continuar inventario completo" : "Continuar conteo"}
             <ChevronRight size={16} />
           </Link>
         </div>
@@ -150,7 +152,12 @@ export function SupervisorCountsPage() {
           status: INVENTORY_COUNT_STATUS.IN_PROGRESS,
           limit: 200,
         }),
-        httpClient.get<ListResponse<InventoryCount>>("/pos/counts", { status: INVENTORY_COUNT_STATUS.CLOSED, limit: 200 }),
+        // Solo cíclicos: los inventarios completos tienen su sección.
+        httpClient.get<ListResponse<InventoryCount>>("/pos/counts", {
+          status: INVENTORY_COUNT_STATUS.CLOSED,
+          kind: INVENTORY_COUNT_KINDS.RANDOM,
+          limit: 200,
+        }),
       ]);
       // Con matriz, solo las sucursales donde tiene la casilla Conteos.
       const stores = branchList.items.filter(
@@ -173,6 +180,7 @@ export function SupervisorCountsPage() {
               const one = await httpClient.get<ListResponse<InventoryCount>>("/pos/counts", {
                 branchId: branch.id,
                 status: INVENTORY_COUNT_STATUS.CLOSED,
+                kind: INVENTORY_COUNT_KINDS.RANDOM,
                 limit: 1,
               });
               if (one.items[0]) closedMap[branch.id] = one.items[0];
@@ -235,7 +243,12 @@ export function SupervisorCountsPage() {
     const row = rows.find((item) => item.branch.id === requestedBranch);
     router.replace(pathname);
     if (!row) return;
-    if (row.current) router.push(`/supervisor/conteos/${row.current.id}`);
+    if (row.current)
+      router.push(
+        row.current.kind === INVENTORY_COUNT_KINDS.FULL
+          ? fullCountHref(row.current.id)
+          : `/supervisor/conteos/${row.current.id}`
+      );
     else if (canStart) setStarting({ id: row.branch.id, name: row.branch.name, code: row.branch.code });
   }, [requestedBranch, loaded, rows, router, pathname, canStart]);
 
