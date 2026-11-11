@@ -14,10 +14,10 @@ import {
   ToggleButton,
   ToggleButtonGroup,
 } from "@mui/material";
-import { AlertTriangle, Boxes, ClipboardList, Download, MinusCircle } from "lucide-react";
+import { AlertTriangle, Boxes, ClipboardList, Download, MinusCircle, Wallet } from "lucide-react";
 import { countedQuantity, type FactoryForm, type FactoryFormRow } from "@glamouroso/shared";
 import { httpClient, getApiErrorMessage } from "@/services/http-client";
-import { formatQuantity } from "@/lib/format-money";
+import { formatMoney, formatQuantity } from "@/lib/format-money";
 import { usePermissions } from "@/lib/permissions";
 import { useRealtime } from "@/components/realtime/RealtimeProvider";
 import { exportFactoryFormPdf, factoryFormFileName, INVENTORY_FORM_OPTIONS } from "@/lib/export-factory-form";
@@ -26,6 +26,7 @@ import { toast } from "sonner";
 import { FilterBar, FilterMeta, FilterSearch } from "../FilterBar";
 import { formatDateTime, unitLabel } from "../pos-labels";
 import { BranchStockSheet } from "../BranchMinStockFormPage";
+import { StatTile } from "../StatTile";
 import { cleanInput } from "@/components/supervisor/count-fields";
 import type { InventoryOverview } from "../BranchesInventoryMatrix";
 import {
@@ -59,6 +60,8 @@ interface TargetStock {
   name: string;
   stock: number;
   minStock: number;
+  /** Costo de compra por litro o pieza; null sin costo capturado o sin permiso de ver costos. */
+  unitCost: number | null;
 }
 
 /** Lo que el diálogo de un renglón necesita para ver el kardex, ajustar y cambiar el stock. */
@@ -73,6 +76,7 @@ interface Target {
   packLabel: string;
   stock: number;
   minStock: number;
+  unitCost: number | null;
 }
 
 function normalize(text: string): string {
@@ -180,6 +184,7 @@ function BranchInventorySheet({ branchId, initialBelowMin }: { branchId: string;
   const { can } = usePermissions();
   const { subscribe } = useRealtime();
   const canEdit = can("posInventory", "update");
+  const withCost = can("productCosts", "view");
 
   const [form, setForm] = useState<FactoryForm | null>(null);
   const [stocks, setStocks] = useState<Map<string, TargetStock>>(new Map());
@@ -200,7 +205,12 @@ function BranchInventorySheet({ branchId, initialBelowMin }: { branchId: string;
       const map = new Map<string, TargetStock>();
       for (const line of inventory.lines) {
         const cell = line.byBranch[branchId];
-        map.set(`line:${line.lineId}`, { name: line.name, stock: cell?.stock ?? 0, minStock: cell?.minStock ?? 0 });
+        map.set(`line:${line.lineId}`, {
+          name: line.name,
+          stock: cell?.stock ?? 0,
+          minStock: cell?.minStock ?? 0,
+          unitCost: line.unitCost ?? null,
+        });
       }
       for (const product of inventory.products) {
         const cell = product.byBranch[branchId];
@@ -208,6 +218,7 @@ function BranchInventorySheet({ branchId, initialBelowMin }: { branchId: string;
           name: product.name,
           stock: cell?.stock ?? 0,
           minStock: cell?.minStock ?? 0,
+          unitCost: product.unitCost ?? null,
         });
       }
       setForm(sheet);
@@ -339,6 +350,30 @@ function BranchInventorySheet({ branchId, initialBelowMin }: { branchId: string;
     [filter, query]
   );
 
+  /**
+   * Lo que vale la sucursal a costo de compra, igual que la pantalla Inventario:
+   * la existencia (lo negativo vale 0), su Stock y lo que falta para completarlo.
+   * Toda la sucursal, no solo lo que se ve con los filtros.
+   */
+  const money = useMemo(() => {
+    if (!withCost) return null;
+    let existence = 0;
+    let stock = 0;
+    let missing = 0;
+    let withoutCost = 0;
+    for (const info of stocks.values()) {
+      if (!info.stock && !info.minStock) continue;
+      if (info.unitCost == null) {
+        withoutCost += 1;
+        continue;
+      }
+      existence += Math.max(0, info.stock) * info.unitCost;
+      stock += info.minStock * info.unitCost;
+      missing += Math.max(0, info.minStock - info.stock) * info.unitCost;
+    }
+    return { existence: round2(existence), stock: round2(stock), missing: round2(missing), withoutCost };
+  }, [stocks, withCost]);
+
   const counts = useMemo(() => {
     const seen = new Set<string>();
     let low = 0;
@@ -386,6 +421,7 @@ function BranchInventorySheet({ branchId, initialBelowMin }: { branchId: string;
       packLabel: row.packLabel || (row.lineId ? "bidón" : "pieza"),
       stock: item.info?.stock ?? 0,
       minStock: item.info?.minStock ?? 0,
+      unitCost: item.info?.unitCost ?? null,
     });
   }
 
@@ -436,6 +472,29 @@ function BranchInventorySheet({ branchId, initialBelowMin }: { branchId: string;
           {exporting ? "Generando…" : "Descargar PDF"}
         </Button>
       </div>
+
+      {money ? (
+        <div className="stat-tiles cols-3">
+          <StatTile
+            icon={Wallet}
+            label="Existencia a costo"
+            value={formatMoney(money.existence)}
+            hint={
+              money.withoutCost
+                ? `Sin contar ${money.withoutCost} producto${money.withoutCost === 1 ? "" : "s"} sin costo capturado`
+                : "Lo que hay hoy en la sucursal"
+            }
+          />
+          <StatTile icon={ClipboardList} label="Stock a costo" value={formatMoney(money.stock)} hint="Lo que la sucursal debe tener siempre" />
+          <StatTile
+            icon={AlertTriangle}
+            label="Para completar el stock"
+            value={formatMoney(money.missing)}
+            hint="Lo que falta, a costo"
+            tone={money.missing > 0 ? "warning" : undefined}
+          />
+        </div>
+      ) : null}
 
       <FilterBar>
         <FilterSearch value={search} onChange={setSearch} placeholder="Buscar en la hoja o en el catálogo" />
@@ -633,7 +692,8 @@ function InventoryRowDialog({
   const looseUnit = isLiquid ? "L" : "pz";
   /** "2 bidones + 7 L", "1 caja + 3 pz": como se ve en el anaquel. */
   const breakdown = (base: number) => {
-    if (!hasPacks || base < 0) return "";
+    // Menos de un envase: el desglose solo repetiría la cifra de arriba.
+    if (!hasPacks || base < target.packSize) return "";
     const full = Math.floor(base / target.packSize + 1e-9);
     const rest = round2(base - full * target.packSize);
     const parts = [];
@@ -641,6 +701,9 @@ function InventoryRowDialog({
     if (rest || !full) parts.push(`${formatQuantity(rest)} ${looseUnit}`);
     return parts.join(" + ");
   };
+  /** Importe a costo de compra de una cantidad en litros o piezas (sin permiso de costos, nada). */
+  const value = (base: number) =>
+    target.unitCost != null ? <b className="inv-detail-money">{formatMoney(round2(base * target.unitCost))}</b> : null;
   const packOne = unitLabel(1, isLiquid ? "bidon" : "paquete", target.packLabel);
   const packName = unitLabel(2, isLiquid ? "bidon" : "paquete", target.packLabel);
   const packsField = `${packName.charAt(0).toUpperCase()}${packName.slice(1)}${
@@ -712,11 +775,13 @@ function InventoryRowDialog({
               {formatQuantity(target.stock)} {target.unit}
             </strong>
             <em>{breakdown(target.stock)}</em>
+            {value(Math.max(0, target.stock))}
           </div>
           <div>
             <span>Stock</span>
             <strong>{target.minStock ? `${formatQuantity(target.minStock)} ${target.unit}` : "Sin stock definido"}</strong>
             <em>{target.minStock ? breakdown(target.minStock) : ""}</em>
+            {target.minStock ? value(target.minStock) : null}
           </div>
           <div>
             <span>Faltante</span>
@@ -724,6 +789,7 @@ function InventoryRowDialog({
               {shortage > 0 ? `${formatQuantity(shortage)} ${target.unit}` : "—"}
             </strong>
             <em>{shortage > 0 ? breakdown(shortage) : ""}</em>
+            {shortage > 0 ? value(shortage) : null}
           </div>
         </div>
 
