@@ -1,48 +1,46 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
-import Link from "next/link";
-import { Button, Chip, Dialog, DialogActions, DialogContent, DialogTitle, Tab, Tabs, TextField } from "@mui/material";
-import { AlertTriangle, Check, ClipboardList, Droplets, History, Package, Pencil, X } from "lucide-react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import {
+  Button,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogTitle,
+  Tab,
+  Tabs,
+  TextField,
+  ToggleButton,
+  ToggleButtonGroup,
+} from "@mui/material";
+import { AlertTriangle, Boxes, ClipboardList, Download, MinusCircle } from "lucide-react";
+import type { FactoryForm, FactoryFormRow } from "@glamouroso/shared";
 import { httpClient, getApiErrorMessage } from "@/services/http-client";
-import { useDebounce } from "@/hooks/useDebounce";
 import { formatQuantity } from "@/lib/format-money";
 import { usePermissions } from "@/lib/permissions";
 import { useRealtime } from "@/components/realtime/RealtimeProvider";
+import { exportFactoryFormPdf, factoryFormFileName, INVENTORY_FORM_OPTIONS } from "@/lib/export-factory-form";
 import type { InventoryMovement, ListResponse } from "@/types";
 import { toast } from "sonner";
 import { FilterBar, FilterMeta, FilterSearch } from "../FilterBar";
 import { formatDateTime } from "../pos-labels";
+import { BranchStockSheet } from "../BranchMinStockFormPage";
+import type { InventoryOverview } from "../BranchesInventoryMatrix";
+import {
+  PAGE_HINTS,
+  allRows,
+  isLinked,
+  packDescription,
+  round2,
+  rowKey,
+  sheetPages,
+  targetKey,
+  unitOf,
+  type SheetPage,
+} from "../FactoryFormSheet";
 
-interface LineRow {
-  lineId: string;
-  name: string;
-  categoryName: string | null;
-  stock: number;
-  minStock: number;
-  litersPerBidon: number;
-  bidonesEquivalent: number;
-  canSellByLiter: boolean;
-  updatedAt: string | null;
-}
-
-interface ProductRow {
-  productId: string;
-  name: string;
-  sku: string | null;
-  categoryName: string | null;
-  unit: string;
-  stock: number;
-  minStock: number;
-  updatedAt: string | null;
-}
-
-interface InventoryResponse {
-  lines: LineRow[];
-  products: ProductRow[];
-}
-
-type Target = { kind: "line" | "product"; id: string; name: string; stock: number; minStock: number };
+type View = "inventario" | "stock";
 
 const MOVEMENT_LABELS: Record<string, string> = {
   sale: "Venta",
@@ -52,53 +50,172 @@ const MOVEMENT_LABELS: Record<string, string> = {
   restock_in: "Surtido recibido",
   adjustment: "Ajuste",
   initial: "Carga inicial",
+  count_adjustment: "Conteo",
 };
 
+/** Existencia y stock de una línea o producto (litros o piezas), con su nombre en el catálogo. */
+interface TargetStock {
+  name: string;
+  stock: number;
+  minStock: number;
+}
+
+/** Lo que el diálogo de un renglón necesita para ver el kardex, ajustar y cambiar el stock. */
+interface Target {
+  kind: "line" | "product";
+  id: string;
+  name: string;
+  label: string;
+  unit: string;
+  packSize: number;
+  stock: number;
+  minStock: number;
+}
+
+function normalize(text: string): string {
+  return text
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "")
+    .toLowerCase();
+}
+
 /**
- * Inventario de la sucursal con el stock mínimo editable en la propia fila:
- * es el único parámetro del faltante y es distinto por sucursal, así que
- * cambiarlo no debería costar abrir un diálogo por producto.
+ * Inventario y stock de la sucursal, los dos como la hoja de pedido a fábrica:
+ * las mismas 4 hojas, en el mismo orden de renglones que el papel con el que
+ * trabaja la sucursal.
+ *
+ * - **Inventario**: la existencia de cada renglón (de consulta). Clic en un
+ *   renglón = su kardex, ajustar existencia o cambiar su stock.
+ * - **Stock**: lo que la sucursal debe tener siempre, capturable de corrido
+ *   (la misma hoja de `/minimos`).
+ *
+ * La vista va en la URL (`?hoja=stock`) para poder enlazarla.
  */
 export function BranchInventoryTab({
   branchId,
   initialBelowMin = false,
 }: {
   branchId: string;
-  /** Abre ya filtrada a lo que está bajo mínimo (el link de la señal de salud). */
+  /** Abre ya filtrada a lo que está bajo su stock (el link de la señal de salud). */
   initialBelowMin?: boolean;
 }) {
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const { can } = usePermissions();
+  const canView = can("posInventory", "view");
+  const view: View = searchParams.get("hoja") === "stock" ? "stock" : "inventario";
+  const stockDirty = useRef(false);
+  const onDirtyChange = useCallback((dirty: boolean) => {
+    stockDirty.current = dirty;
+  }, []);
+
+  function selectView(next: View | null) {
+    if (!next || next === view) return;
+    if (
+      stockDirty.current &&
+      !window.confirm("Tienes cambios de stock sin guardar. ¿Salir de la hoja de stock y perderlos?")
+    ) {
+      return;
+    }
+    stockDirty.current = false;
+    const query = new URLSearchParams(searchParams.toString());
+    query.delete("bajo");
+    if (next === "inventario") query.delete("hoja");
+    else query.set("hoja", next);
+    router.replace(`${pathname}?${query.toString()}`);
+  }
+
+  if (!canView) {
+    return (
+      <div className="panel p-5" style={{ color: "var(--muted)" }}>
+        El inventario necesita el permiso de Inventario del punto de venta.
+      </div>
+    );
+  }
+
+  return (
+    <div className="page-stack">
+      <ToggleButtonGroup
+        exclusive
+        value={view}
+        onChange={(_e, next: View | null) => selectView(next)}
+        size="small"
+        color="primary"
+        className="inv-view-toggle"
+        aria-label="Vista del inventario"
+      >
+        <ToggleButton value="inventario">
+          <Boxes size={16} /> Inventario
+        </ToggleButton>
+        <ToggleButton value="stock">
+          <ClipboardList size={16} /> Stock
+        </ToggleButton>
+      </ToggleButtonGroup>
+
+      {view === "inventario" ? (
+        <BranchInventorySheet branchId={branchId} initialBelowMin={initialBelowMin} />
+      ) : (
+        <BranchStockSheet branchId={branchId} embedded onDirtyChange={onDirtyChange} />
+      )}
+    </div>
+  );
+}
+
+/** Renglón de la hoja de inventario con lo que se pinta en él. */
+interface InvRow {
+  row: FactoryFormRow;
+  key: string;
+  target: string | null;
+  /** Primer renglón de su línea/producto: es el que lleva la existencia. */
+  first: boolean;
+  firstLabel: string;
+  info: TargetStock | null;
+}
+
+function BranchInventorySheet({ branchId, initialBelowMin }: { branchId: string; initialBelowMin: boolean }) {
   const { can } = usePermissions();
   const { subscribe } = useRealtime();
-  const canView = can("posInventory", "view");
   const canEdit = can("posInventory", "update");
 
-  const [tab, setTab] = useState(0);
-  const [data, setData] = useState<InventoryResponse>({ lines: [], products: [] });
+  const [form, setForm] = useState<FactoryForm | null>(null);
+  const [stocks, setStocks] = useState<Map<string, TargetStock>>(new Map());
+  const [overview, setOverview] = useState<InventoryOverview | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [page, setPage] = useState(1);
   const [search, setSearch] = useState("");
-  const [belowMin, setBelowMin] = useState(initialBelowMin);
-  const [loading, setLoading] = useState(false);
-  const [editingMin, setEditingMin] = useState<{ target: Target; value: string } | null>(null);
-  const [adjust, setAdjust] = useState<Target | null>(null);
-  const [movements, setMovements] = useState<{ target: Target; rows: InventoryMovement[] } | null>(null);
-  const debouncedSearch = useDebounce(search, 300);
+  const [filter, setFilter] = useState<"" | "low" | "negative">(initialBelowMin ? "low" : "");
+  const [selected, setSelected] = useState<Target | null>(null);
+  const [exporting, setExporting] = useState(false);
 
   const load = useCallback(async () => {
-    if (!canView) return;
-    setLoading(true);
     try {
-      setData(
-        await httpClient.get<InventoryResponse>(`/pos/branches/${branchId}/inventory`, {
-          search: debouncedSearch,
-          limit: 500,
-          ...(belowMin ? { belowMin: "true" } : {}),
-        })
-      );
+      const [sheet, inventory] = await Promise.all([
+        httpClient.get<FactoryForm>(`/pos/branches/${branchId}/min-stock-form`),
+        httpClient.get<InventoryOverview>("/pos/inventory", { branchIds: branchId }),
+      ]);
+      const map = new Map<string, TargetStock>();
+      for (const line of inventory.lines) {
+        const cell = line.byBranch[branchId];
+        map.set(`line:${line.lineId}`, { name: line.name, stock: cell?.stock ?? 0, minStock: cell?.minStock ?? 0 });
+      }
+      for (const product of inventory.products) {
+        const cell = product.byBranch[branchId];
+        map.set(`product:${product.productId}`, {
+          name: product.name,
+          stock: cell?.stock ?? 0,
+          minStock: cell?.minStock ?? 0,
+        });
+      }
+      setForm(sheet);
+      setOverview(inventory);
+      setStocks(map);
     } catch (error) {
       toast.error(getApiErrorMessage(error, "Error al cargar el inventario"));
     } finally {
       setLoading(false);
     }
-  }, [canView, branchId, debouncedSearch, belowMin]);
+  }, [branchId]);
 
   useEffect(() => {
     void load();
@@ -115,337 +232,578 @@ export function BranchInventoryTab({
     });
   }, [subscribe, branchId, load]);
 
-  const belowMinCount = useMemo(
-    () =>
-      data.lines.filter((row) => row.minStock > 0 && row.stock < row.minStock).length +
-      data.products.filter((row) => row.minStock > 0 && row.stock < row.minStock).length,
-    [data]
+  const query = normalize(search.trim());
+
+  /**
+   * Las hojas del formato más "Otros": lo que no está en el formato pero tiene
+   * stock o existencia en esta sucursal y, al buscar, cualquier línea o
+   * producto del catálogo que coincida (para poder fijarle su stock).
+   */
+  const pages = useMemo<SheetPage[]>(() => {
+    if (!form) return [];
+    const covered = new Set(allRows(form).filter(isLinked).map(targetKey));
+    const extras: FactoryFormRow[] = [...form.extras];
+    const extraRow = (
+      kind: "line" | "product",
+      id: string,
+      name: string,
+      packSize: number,
+      packLabel: string
+    ): FactoryFormRow => ({
+      page: 0,
+      block: 0,
+      row: 0,
+      kind: "product",
+      label: name.toUpperCase(),
+      packSize,
+      packLabel,
+      lineId: kind === "line" ? id : null,
+      productId: kind === "product" ? id : null,
+      qty: null,
+      unitCost: null,
+      amount: null,
+      minStock: stocks.get(`${kind}:${id}`)?.minStock ?? 0,
+    });
+    const wanted = (key: string, name: string) => {
+      if (covered.has(key)) return false;
+      const info = stocks.get(key);
+      return (info && (info.stock !== 0 || info.minStock !== 0)) || (query && normalize(name).includes(query));
+    };
+    for (const line of overview?.lines ?? []) {
+      const key = `line:${line.lineId}`;
+      if (!wanted(key, line.name)) continue;
+      covered.add(key);
+      extras.push(extraRow("line", line.lineId, line.name, line.litersPerBidon || 20, line.litersPerBidon >= 20 ? "bidón" : "garrafa"));
+    }
+    for (const product of overview?.products ?? []) {
+      const key = `product:${product.productId}`;
+      if (!wanted(key, `${product.name} ${product.sku ?? ""}`)) continue;
+      covered.add(key);
+      extras.push(extraRow("product", product.productId, product.name, 1, "pieza"));
+    }
+    extras.sort((a, b) => a.label.localeCompare(b.label, "es"));
+    extras.forEach((row, index) => {
+      row.row = index;
+    });
+    return sheetPages({ ...form, extras });
+  }, [form, overview, stocks, query]);
+
+  /** Cada renglón con su existencia; los renglones que reparten un producto la muestran solo en el primero. */
+  const rowsByPage = useMemo(() => {
+    const firstOf = new Map<string, FactoryFormRow>();
+    const result = new Map<number, InvRow[][]>();
+    for (const p of pages) {
+      result.set(
+        p.page,
+        p.blocks.map((block) =>
+          block.map((row) => {
+            const target = isLinked(row) ? targetKey(row) : null;
+            let first = false;
+            if (target && !firstOf.has(target)) {
+              firstOf.set(target, row);
+              first = true;
+            }
+            return {
+              row,
+              key: rowKey(row),
+              target,
+              first,
+              firstLabel: target ? (firstOf.get(target)?.label ?? row.label) : row.label,
+              info: target ? (stocks.get(target) ?? null) : null,
+            };
+          })
+        )
+      );
+    }
+    return result;
+  }, [pages, stocks]);
+
+  const isLow = (info: TargetStock | null) => Boolean(info && info.minStock > 0 && info.stock < info.minStock);
+  const isNegative = (info: TargetStock | null) => Boolean(info && info.stock < 0);
+
+  const filtering = Boolean(query) || filter !== "";
+  const matches = useCallback(
+    (item: InvRow) => {
+      if (!item.target) return false;
+      if (filter === "low" && !(item.first && isLow(item.info))) return false;
+      if (filter === "negative" && !(item.first && isNegative(item.info))) return false;
+      if (query) {
+        const text = normalize(`${item.row.label} ${item.info?.name ?? ""}`);
+        if (!text.includes(query)) return false;
+      }
+      return true;
+    },
+    [filter, query]
   );
 
-  if (!canView) {
-    return (
-      <div className="panel p-5" style={{ color: "var(--muted)" }}>
-        El inventario necesita el permiso de Inventario del punto de venta.
-      </div>
-    );
+  const counts = useMemo(() => {
+    const seen = new Set<string>();
+    let low = 0;
+    let negative = 0;
+    for (const blocks of rowsByPage.values()) {
+      for (const item of blocks.flat()) {
+        if (!item.target || seen.has(item.target)) continue;
+        seen.add(item.target);
+        if (isLow(item.info)) low += 1;
+        if (isNegative(item.info)) negative += 1;
+      }
+    }
+    return { low, negative, items: seen.size };
+  }, [rowsByPage]);
+
+  const matchCount = useCallback(
+    (pageNumber: number) => (rowsByPage.get(pageNumber) ?? []).flat().filter(matches).length,
+    [rowsByPage, matches]
+  );
+
+  // Al buscar o filtrar, saltar a la primera hoja que tenga algo.
+  useEffect(() => {
+    if (!filtering || !pages.length) return;
+    if (matchCount(page) > 0) return;
+    const firstWith = pages.find((p) => matchCount(p.page) > 0);
+    if (firstWith) setPage(firstWith.page);
+    // Solo cuando cambia el filtro, no al cambiar de hoja a mano.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [query, filter, pages.length]);
+
+  const current = pages.find((p) => p.page === page) ?? pages[0];
+  const blocks = current ? (rowsByPage.get(current.page) ?? []) : [];
+
+  function open(item: InvRow) {
+    const row = item.row;
+    if (!item.target) return;
+    const [kind, id] = item.target.split(":") as ["line" | "product", string];
+    setSelected({
+      kind,
+      id,
+      name: item.info?.name ?? row.label,
+      label: item.firstLabel,
+      unit: unitOf(row),
+      packSize: Math.max(1, row.packSize),
+      stock: item.info?.stock ?? 0,
+      minStock: item.info?.minStock ?? 0,
+    });
   }
 
-  async function saveMin() {
-    if (!editingMin) return;
-    const value = Number(editingMin.value);
-    if (!Number.isFinite(value) || value < 0) {
-      toast.error("El stock debe ser un número mayor o igual a cero");
-      return;
-    }
+  /** PDF de la hoja con la existencia en empaques (como el papel), para contar o revisar. */
+  async function exportPdf() {
+    if (!form) return;
+    setExporting(true);
     try {
-      await httpClient.put(`/pos/branches/${branchId}/inventory`, {
-        ...(editingMin.target.kind === "line"
-          ? { lineId: editingMin.target.id }
-          : { productId: editingMin.target.id }),
-        minStock: value,
-        reason: "Stock de la sucursal actualizado",
-      });
-      toast.success(`Stock de ${editingMin.target.name} guardado`);
-      setEditingMin(null);
-      await load();
-    } catch (error) {
-      toast.error(getApiErrorMessage(error, "No se pudo guardar el stock"));
-    }
-  }
-
-  async function saveAdjust(form: FormData) {
-    if (!adjust) return;
-    const stock = String(form.get("stock") || "");
-    const reason = String(form.get("reason") || "").trim();
-    try {
-      await httpClient.put(`/pos/branches/${branchId}/inventory`, {
-        ...(adjust.kind === "line" ? { lineId: adjust.id } : { productId: adjust.id }),
-        ...(stock !== "" ? { stock: Number(stock) } : {}),
-        reason,
-      });
-      toast.success("Existencia ajustada");
-      setAdjust(null);
-      await load();
-    } catch (error) {
-      toast.error(getApiErrorMessage(error, "No se pudo ajustar la existencia"));
-    }
-  }
-
-  const rows = tab === 0 ? data.lines : data.products;
-  const isLine = tab === 0;
-  const unit = isLine ? "L" : "pz";
-
-  async function openMovements(target: Target) {
-    try {
-      const result = await httpClient.get<ListResponse<InventoryMovement>>(
-        `/pos/branches/${branchId}/movements`,
-        { ...(target.kind === "line" ? { lineId: target.id } : { productId: target.id }), limit: 50 }
+      const seen = new Set<string>();
+      const withStock = (row: FactoryFormRow): FactoryFormRow => {
+        if (!isLinked(row)) return row;
+        const target = targetKey(row);
+        const info = stocks.get(target);
+        const firstTime = !seen.has(target);
+        seen.add(target);
+        const packs = firstTime && info && info.stock !== 0 ? round2(info.stock / Math.max(1, row.packSize)) : null;
+        return { ...row, qty: packs, amount: null, unitCost: null };
+      };
+      await exportFactoryFormPdf(
+        {
+          ...form,
+          pages: form.pages.map((p) => ({ ...p, total: 0, blocks: p.blocks.map((block) => block.map(withStock)) })),
+          extras: (pages.find((p) => p.page === 0)?.blocks[0] ?? []).map(withStock),
+        },
+        INVENTORY_FORM_OPTIONS,
+        factoryFormFileName(form).replace(/^stock-sucursal/, "inventario-sucursal")
       );
-      setMovements({ target, rows: result.items });
     } catch (error) {
-      toast.error(getApiErrorMessage(error, "No se pudo cargar el kardex"));
+      toast.error(getApiErrorMessage(error, "No se pudo generar el PDF"));
+    } finally {
+      setExporting(false);
     }
   }
 
   return (
-    <div className="page-stack">
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
-        <p className="page-kicker" style={{ margin: 0 }}>
-          Los líquidos se llevan en litros por línea; el resto por pieza.{" "}
-          {canEdit ? "Stock = lo que esta sucursal debe tener siempre; da clic en el lápiz para cambiarlo." : ""}
+    <div className="page-stack msf-page">
+      <div className="toolbar">
+        <p className="page-kicker" style={{ margin: 0, maxWidth: 560 }}>
+          La existencia de hoy en el orden de la hoja de pedido, en empaques como en el papel (junto a cada
+          empaque, su equivalencia en litros o piezas). Da clic en un renglón para ver su kardex o ajustarlo.
         </p>
-        {/* El stock se captura de corrido en el orden de la hoja de pedido a fábrica. */}
         <Button
           variant="outlined"
-          startIcon={<ClipboardList size={16} />}
-          component={Link}
-          href={`/dashboard/pos/sucursales/${branchId}/minimos`}
+          startIcon={<Download size={16} />}
+          onClick={() => void exportPdf()}
+          disabled={!form || exporting}
         >
-          Capturar stock en el formato
+          {exporting ? "Generando…" : "Descargar PDF"}
         </Button>
       </div>
 
       <FilterBar>
-        <FilterSearch
-          value={search}
-          onChange={setSearch}
-          placeholder="Buscar línea o producto por nombre"
-        />
+        <FilterSearch value={search} onChange={setSearch} placeholder="Buscar en la hoja o en el catálogo" />
         <Button
-          variant={belowMin ? "contained" : "outlined"}
-          color={belowMin ? "warning" : "inherit"}
+          variant={filter === "low" ? "contained" : "outlined"}
+          color={filter === "low" ? "warning" : "inherit"}
           startIcon={<AlertTriangle size={15} />}
-          onClick={() => setBelowMin((value) => !value)}
+          onClick={() => setFilter((value) => (value === "low" ? "" : "low"))}
           sx={{ whiteSpace: "nowrap", height: 40 }}
         >
-          Bajo su stock{belowMinCount ? ` (${belowMinCount})` : ""}
+          Bajo su stock ({counts.low})
+        </Button>
+        <Button
+          variant={filter === "negative" ? "contained" : "outlined"}
+          color={filter === "negative" ? "error" : "inherit"}
+          startIcon={<MinusCircle size={15} />}
+          onClick={() => setFilter((value) => (value === "negative" ? "" : "negative"))}
+          sx={{ whiteSpace: "nowrap", height: 40 }}
+        >
+          En negativo ({counts.negative})
         </Button>
         <FilterMeta>
-          <strong>{rows.length}</strong> {isLine ? "líneas" : "productos"}
+          <strong>{counts.items}</strong> renglones
         </FilterMeta>
       </FilterBar>
 
-      <Tabs value={tab} onChange={(_e, value) => setTab(value)}>
-        <Tab icon={<Droplets size={15} />} iconPosition="start" label={`Líquidos en litros (${data.lines.length})`} />
-        <Tab icon={<Package size={15} />} iconPosition="start" label={`Piezas (${data.products.length})`} />
-      </Tabs>
+      {loading && !form ? <p className="page-kicker">Cargando inventario...</p> : null}
 
-      <div className="table-container-premium">
-        <table className="table">
-          <thead>
-            <tr>
-              <th>{isLine ? "Línea" : "Producto"}</th>
-              {!isLine ? <th>SKU</th> : null}
-              <th>Categoría</th>
-              <th style={{ textAlign: "right" }}>Existencia</th>
-              {isLine ? <th style={{ textAlign: "right" }}>≈ Bidones</th> : null}
-              <th style={{ textAlign: "right", minWidth: 190 }}>Stock</th>
-              <th style={{ textAlign: "right" }}>Faltante</th>
-              <th />
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map((row) => {
-              const line = row as LineRow;
-              const product = row as ProductRow;
-              const id = isLine ? line.lineId : product.productId;
-              const target: Target = {
-                kind: isLine ? "line" : "product",
-                id,
-                name: row.name,
-                stock: row.stock,
-                minStock: row.minStock,
-              };
-              const shortage = Math.max(0, row.minStock - row.stock);
-              const editing = editingMin?.target.id === id;
-              return (
-                <tr key={id}>
-                  <td>
-                    <strong>{row.name}</strong>
-                    {isLine && !line.canSellByLiter ? (
-                      <Chip label="sin venta por litro" size="small" color="warning" sx={{ ml: 1, height: 18, fontSize: 10 }} />
-                    ) : null}
-                  </td>
-                  {!isLine ? <td>{product.sku || "—"}</td> : null}
-                  <td>{row.categoryName || "Sin categoría"}</td>
-                  <td style={{ textAlign: "right", color: row.stock < 0 ? "#ef4444" : undefined, fontWeight: row.stock < 0 ? 700 : 400 }}>
-                    {formatQuantity(row.stock)} {unit}
-                  </td>
-                  {isLine ? <td style={{ textAlign: "right" }}>{formatQuantity(line.bidonesEquivalent)}</td> : null}
-                  <td style={{ textAlign: "right" }}>
-                    {editing ? (
-                      <form
-                        style={{ display: "inline-flex", gap: 4, alignItems: "center" }}
-                        onSubmit={(event) => {
-                          event.preventDefault();
-                          void saveMin();
-                        }}
-                      >
-                        <input
-                          className="input"
-                          type="number"
-                          min={0}
-                          step={isLine ? 0.01 : 1}
-                          autoFocus
-                          onFocus={(event) => event.currentTarget.select()}
-                          value={editingMin.value}
-                          onChange={(event) =>
-                            setEditingMin((current) => current && { ...current, value: event.target.value })
-                          }
-                          onKeyDown={(event) => {
-                            if (event.key === "Escape") setEditingMin(null);
-                          }}
-                          style={{ width: 96, padding: "4px 8px", textAlign: "right" }}
-                          aria-label={`Stock de ${row.name}`}
-                        />
-                        <span>{unit}</span>
-                        <Button
-                          size="small"
-                          variant="contained"
-                          type="submit"
-                          sx={{ minWidth: 0, px: 1 }}
-                          aria-label={`Guardar stock de ${row.name}`}
-                        >
-                          <Check size={14} />
-                        </Button>
-                        <Button
-                          size="small"
-                          color="inherit"
-                          onClick={() => setEditingMin(null)}
-                          sx={{ minWidth: 0, px: 1 }}
-                          aria-label="Cancelar edición del stock"
-                        >
-                          <X size={14} />
-                        </Button>
-                      </form>
-                    ) : (
-                      <span style={{ display: "inline-flex", gap: 6, alignItems: "center" }}>
-                        {row.minStock ? `${formatQuantity(row.minStock)} ${unit}` : <span className="pill-muted">Sin stock definido</span>}
-                        {canEdit ? (
-                          <Button
-                            size="small"
-                            color="inherit"
-                            sx={{ minWidth: 0, px: 0.5 }}
-                            onClick={() => setEditingMin({ target, value: String(row.minStock ?? 0) })}
-                            aria-label={`Editar stock de ${row.name}`}
-                          >
-                            <Pencil size={14} />
-                          </Button>
-                        ) : null}
-                      </span>
-                    )}
-                  </td>
-                  <td style={{ textAlign: "right" }}>
-                    {shortage > 0 ? (
-                      <strong style={{ color: "var(--glam-navy)" }}>
-                        {formatQuantity(shortage)} {unit}
-                      </strong>
-                    ) : (
-                      "—"
-                    )}
-                  </td>
-                  <td style={{ whiteSpace: "nowrap", textAlign: "right" }}>
-                    <Button size="small" startIcon={<History size={14} />} onClick={() => void openMovements(target)}>
-                      Kardex
-                    </Button>
-                    {canEdit ? (
-                      <Button size="small" onClick={() => setAdjust(target)}>
-                        Ajustar
-                      </Button>
-                    ) : null}
-                  </td>
-                </tr>
-              );
-            })}
-            {!loading && !rows.length ? (
-              <tr>
-                <td colSpan={8} style={{ textAlign: "center", padding: 32, color: "var(--muted)" }}>
-                  No hay registros con estos filtros.
-                </td>
-              </tr>
-            ) : null}
-          </tbody>
-        </table>
-      </div>
-      {loading ? <p className="page-kicker">Cargando...</p> : null}
-
-      <Dialog open={Boolean(adjust)} onClose={() => setAdjust(null)} fullWidth maxWidth="sm">
-        <form
-          onSubmit={(event) => {
-            event.preventDefault();
-            void saveAdjust(new FormData(event.currentTarget));
-          }}
+      {pages.length ? (
+        <Tabs
+          value={current?.page ?? 1}
+          onChange={(_e, value) => setPage(value as number)}
+          variant="scrollable"
+          allowScrollButtonsMobile
         >
-          <DialogTitle>Ajustar existencia de {adjust?.name}</DialogTitle>
-          <DialogContent className="form-grid" dividers>
-            <TextField
-              name="stock"
-              label={`Existencia (${adjust?.kind === "line" ? "litros" : "piezas"})`}
-              type="number"
-              defaultValue={adjust?.stock ?? 0}
-              fullWidth
-              inputProps={{ step: adjust?.kind === "line" ? 0.01 : 1 }}
-              helperText="Se registra el movimiento con la diferencia contra lo que había."
+          {pages.map((p) => (
+            <Tab
+              key={p.page}
+              value={p.page}
+              label={
+                <span className="msf-tab">
+                  <strong>
+                    {p.page === 0 ? "Otros" : `Hoja ${p.page}`}
+                    {filtering ? ` · ${matchCount(p.page)}` : ""}
+                  </strong>
+                  <span>{PAGE_HINTS[p.page] ?? ""}</span>
+                </span>
+              }
             />
-            <TextField
-              name="reason"
-              label="Motivo"
-              required
-              fullWidth
-              placeholder="Conteo físico, merma, corrección de captura…"
-            />
-          </DialogContent>
-          <DialogActions>
-            <Button onClick={() => setAdjust(null)}>Cancelar</Button>
-            <Button type="submit" variant="contained">
-              Guardar ajuste
-            </Button>
-          </DialogActions>
-        </form>
-      </Dialog>
+          ))}
+        </Tabs>
+      ) : null}
 
-      <Dialog open={Boolean(movements)} onClose={() => setMovements(null)} fullWidth maxWidth="md">
-        <DialogTitle>Kardex · {movements?.target.name}</DialogTitle>
-        <DialogContent dividers>
-          <table className="table">
-            <thead>
-              <tr>
-                <th>Fecha</th>
-                <th>Movimiento</th>
-                <th style={{ textAlign: "right" }}>Cantidad</th>
-                <th style={{ textAlign: "right" }}>Saldo</th>
-                <th>Usuario</th>
-                <th>Nota</th>
-              </tr>
-            </thead>
-            <tbody>
-              {(movements?.rows ?? []).map((movement) => (
-                <tr key={movement.id}>
-                  <td>{formatDateTime(movement.createdAt)}</td>
-                  <td>{MOVEMENT_LABELS[movement.type] ?? movement.type}</td>
-                  <td style={{ textAlign: "right", color: Number(movement.quantity) < 0 ? "#c62828" : "#15803d", fontWeight: 700 }}>
-                    {Number(movement.quantity) > 0 ? "+" : ""}
-                    {formatQuantity(movement.quantity)}
-                  </td>
-                  <td style={{ textAlign: "right" }}>{formatQuantity(movement.balanceAfter)}</td>
-                  <td>{movement.user?.name ?? "—"}</td>
-                  <td>{movement.notes ?? "—"}</td>
-                </tr>
-              ))}
-              {movements && !movements.rows.length ? (
-                <tr>
-                  <td colSpan={6} style={{ textAlign: "center", padding: 24, color: "var(--muted)" }}>
-                    Sin movimientos todavía.
-                  </td>
-                </tr>
-              ) : null}
-            </tbody>
-          </table>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setMovements(null)}>Cerrar</Button>
-        </DialogActions>
-      </Dialog>
+      {current ? (
+        <div className="msf-sheet msf-sheet--inv" key={current.page}>
+          {filtering && !blocks.flat().some(matches) ? (
+            <p className="page-kicker" style={{ margin: 0 }}>
+              Nada en esta hoja con estos filtros.
+            </p>
+          ) : null}
+          {blocks.map((block, blockIndex) => {
+            const visible = filtering ? block.filter(matches) : block;
+            if (!visible.length) return null;
+            return (
+              <div className="msf-block" key={blockIndex}>
+                <div className="msf-head">
+                  <span>Producto</span>
+                  <span>Empaque</span>
+                  <span>Exist.</span>
+                  <span>Stock</span>
+                </div>
+                {visible.map((item) => {
+                  const { row } = item;
+                  if (row.kind === "blank") return null;
+                  if (row.kind === "section") {
+                    return (
+                      <div className="msf-section" key={item.key}>
+                        {row.label}
+                      </div>
+                    );
+                  }
+                  if (!item.target) {
+                    return (
+                      <div className="msf-row msf-row--unlinked" key={item.key} title="Sin ligar al catálogo">
+                        <span className="msf-label">{row.label}</span>
+                        <span className="msf-pack">sin ligar</span>
+                        <span />
+                        <span />
+                      </div>
+                    );
+                  }
+                  const packSize = Math.max(1, row.packSize);
+                  const info = item.info;
+                  const stock = info?.stock ?? 0;
+                  const low = item.first && isLow(info);
+                  const negative = item.first && isNegative(info);
+                  const minPacks = (row.minStock ?? 0) > 0 ? round2((row.minStock ?? 0) / packSize) : 0;
+                  return (
+                    <button
+                      type="button"
+                      className={`msf-row msf-row--btn${negative ? " msf-row--neg" : low ? " msf-row--low" : ""}`}
+                      key={item.key}
+                      onClick={() => open(item)}
+                      title={item.first ? `Ver kardex de ${info?.name ?? row.label}` : `Se cuenta junto con «${item.firstLabel}»`}
+                    >
+                      <span className="msf-label">{row.label}</span>
+                      <span className="msf-pack">
+                        {packDescription(row)}
+                        {item.first && packSize > 1 && stock !== 0 ? (
+                          <em>
+                            = {formatQuantity(stock)} {unitOf(row)}
+                          </em>
+                        ) : null}
+                        {!item.first ? <em className="msf-pack--muted">junto con «{item.firstLabel}»</em> : null}
+                      </span>
+                      <span className={`msf-num msf-num--stock${item.first && stock === 0 ? " msf-num--zero" : ""}`}>
+                        {!item.first ? "↑" : stock !== 0 ? formatQuantity(round2(stock / packSize)) : "0"}
+                      </span>
+                      <span className="msf-num msf-num--min">{minPacks ? formatQuantity(minPacks) : ""}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            );
+          })}
+        </div>
+      ) : null}
+
+      <InventoryRowDialog
+        branchId={branchId}
+        target={selected}
+        canEdit={canEdit}
+        onClose={() => setSelected(null)}
+        onSaved={async (next) => {
+          await load();
+          setSelected(next);
+        }}
+      />
     </div>
+  );
+}
+
+/**
+ * Detalle de un renglón: existencia, stock y faltante, su kardex, y (con
+ * permiso) ajustar la existencia o cambiar el stock. Ambos en litros o piezas.
+ */
+function InventoryRowDialog({
+  branchId,
+  target,
+  canEdit,
+  onClose,
+  onSaved,
+}: {
+  branchId: string;
+  target: Target | null;
+  canEdit: boolean;
+  onClose: () => void;
+  onSaved: (next: Target | null) => Promise<void>;
+}) {
+  const [movements, setMovements] = useState<InventoryMovement[] | null>(null);
+  const [mode, setMode] = useState<"" | "adjust" | "min">("");
+  const [value, setValue] = useState("");
+  const [reason, setReason] = useState("");
+  const [saving, setSaving] = useState(false);
+
+  const targetId = target?.id;
+  const targetKind = target?.kind;
+  useEffect(() => {
+    setMode("");
+    setMovements(null);
+    if (!targetId || !targetKind) return;
+    let cancelled = false;
+    httpClient
+      .get<ListResponse<InventoryMovement>>(`/pos/branches/${branchId}/movements`, {
+        ...(targetKind === "line" ? { lineId: targetId } : { productId: targetId }),
+        limit: 50,
+      })
+      .then((result) => {
+        if (!cancelled) setMovements(result.items);
+      })
+      .catch((error) => {
+        if (!cancelled) toast.error(getApiErrorMessage(error, "No se pudo cargar el kardex"));
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [branchId, targetId, targetKind, target?.stock, target?.minStock]);
+
+  if (!target) return null;
+  const shortage = Math.max(0, round2(target.minStock - target.stock));
+  const packs = (base: number) =>
+    target.packSize > 1 ? ` (${formatQuantity(round2(base / target.packSize))} emp.)` : "";
+
+  function start(next: "adjust" | "min") {
+    if (!target) return;
+    setMode(next);
+    setValue(String(next === "adjust" ? target.stock : target.minStock));
+    setReason("");
+  }
+
+  async function save() {
+    if (!target) return;
+    const number = Number(value);
+    if (value.trim() === "" || !Number.isFinite(number) || (mode === "min" && number < 0)) {
+      toast.error(mode === "min" ? "El stock debe ser un número mayor o igual a cero" : "Escribe la existencia");
+      return;
+    }
+    if (mode === "adjust" && !reason.trim()) {
+      toast.error("Escribe el motivo del ajuste");
+      return;
+    }
+    setSaving(true);
+    try {
+      await httpClient.put(`/pos/branches/${branchId}/inventory`, {
+        ...(target.kind === "line" ? { lineId: target.id } : { productId: target.id }),
+        ...(mode === "adjust" ? { stock: number, reason: reason.trim() } : { minStock: number, reason: "Stock de la sucursal actualizado" }),
+      });
+      toast.success(mode === "adjust" ? "Existencia ajustada" : `Stock de ${target.name} guardado`);
+      await onSaved(
+        mode === "adjust" ? { ...target, stock: number } : { ...target, minStock: number }
+      );
+      setMode("");
+    } catch (error) {
+      toast.error(getApiErrorMessage(error, mode === "adjust" ? "No se pudo ajustar la existencia" : "No se pudo guardar el stock"));
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <Dialog open onClose={onClose} fullWidth maxWidth="md">
+      <DialogTitle>
+        {target.name}
+        {normalize(target.label) !== normalize(target.name) ? (
+          <span className="page-kicker" style={{ display: "block", margin: 0 }}>
+            En la hoja: {target.label}
+          </span>
+        ) : null}
+      </DialogTitle>
+      <DialogContent dividers className="page-stack" sx={{ gap: 2 }}>
+        <div className="inv-detail-stats">
+          <div>
+            <span>Existencia</span>
+            <strong style={{ color: target.stock < 0 ? "#dc2626" : undefined }}>
+              {formatQuantity(target.stock)} {target.unit}
+            </strong>
+            <em>{packs(target.stock)}</em>
+          </div>
+          <div>
+            <span>Stock</span>
+            <strong>{target.minStock ? `${formatQuantity(target.minStock)} ${target.unit}` : "Sin stock definido"}</strong>
+            <em>{target.minStock ? packs(target.minStock) : ""}</em>
+          </div>
+          <div>
+            <span>Faltante</span>
+            <strong style={{ color: shortage > 0 ? "#c2410c" : undefined }}>
+              {shortage > 0 ? `${formatQuantity(shortage)} ${target.unit}` : "—"}
+            </strong>
+            <em>{shortage > 0 ? packs(shortage) : ""}</em>
+          </div>
+        </div>
+
+        {mode ? (
+          <form
+            className="inv-detail-form"
+            onSubmit={(event) => {
+              event.preventDefault();
+              void save();
+            }}
+          >
+            <TextField
+              label={mode === "adjust" ? `Existencia contada (${target.unit})` : `Stock (${target.unit})`}
+              type="number"
+              size="small"
+              autoFocus
+              value={value}
+              onChange={(event) => setValue(event.target.value)}
+              inputProps={{ step: target.unit === "L" ? 0.01 : 1, min: mode === "min" ? 0 : undefined }}
+              helperText={
+                mode === "adjust"
+                  ? "Se registra en el kardex la diferencia contra lo que había."
+                  : "Lo que la sucursal debe tener siempre."
+              }
+            />
+            {mode === "adjust" ? (
+              <TextField
+                label="Motivo"
+                size="small"
+                required
+                value={reason}
+                onChange={(event) => setReason(event.target.value)}
+                placeholder="Conteo físico, merma, corrección de captura…"
+                sx={{ flex: 1, minWidth: 220 }}
+              />
+            ) : null}
+            <div style={{ display: "flex", gap: 8, alignItems: "flex-start" }}>
+              <Button onClick={() => setMode("")} disabled={saving}>
+                Cancelar
+              </Button>
+              <Button type="submit" variant="contained" disabled={saving}>
+                {saving ? "Guardando…" : "Guardar"}
+              </Button>
+            </div>
+          </form>
+        ) : null}
+
+        <div>
+          <h3 style={{ margin: "0 0 8px", fontSize: 14 }}>Kardex</h3>
+          <div className="table-container-premium">
+            <table className="table">
+              <thead>
+                <tr>
+                  <th>Fecha</th>
+                  <th>Movimiento</th>
+                  <th style={{ textAlign: "right" }}>Cantidad</th>
+                  <th style={{ textAlign: "right" }}>Saldo</th>
+                  <th>Usuario</th>
+                  <th>Nota</th>
+                </tr>
+              </thead>
+              <tbody>
+                {(movements ?? []).map((movement) => (
+                  <tr key={movement.id}>
+                    <td>{formatDateTime(movement.createdAt)}</td>
+                    <td>{MOVEMENT_LABELS[movement.type] ?? movement.type}</td>
+                    <td
+                      style={{
+                        textAlign: "right",
+                        color: Number(movement.quantity) < 0 ? "#c62828" : "#15803d",
+                        fontWeight: 700,
+                      }}
+                    >
+                      {Number(movement.quantity) > 0 ? "+" : ""}
+                      {formatQuantity(movement.quantity)}
+                    </td>
+                    <td style={{ textAlign: "right" }}>{formatQuantity(movement.balanceAfter)}</td>
+                    <td>{movement.user?.name ?? "—"}</td>
+                    <td>{movement.notes ?? "—"}</td>
+                  </tr>
+                ))}
+                {movements && !movements.length ? (
+                  <tr>
+                    <td colSpan={6} style={{ textAlign: "center", padding: 24, color: "var(--muted)" }}>
+                      Sin movimientos todavía.
+                    </td>
+                  </tr>
+                ) : null}
+                {!movements ? (
+                  <tr>
+                    <td colSpan={6} style={{ textAlign: "center", padding: 24, color: "var(--muted)" }}>
+                      Cargando kardex…
+                    </td>
+                  </tr>
+                ) : null}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </DialogContent>
+      <DialogActions sx={{ flexWrap: "wrap", gap: 1 }}>
+        {canEdit && !mode ? (
+          <>
+            <Button variant="outlined" onClick={() => start("min")}>
+              Cambiar stock
+            </Button>
+            <Button variant="outlined" onClick={() => start("adjust")}>
+              Ajustar existencia
+            </Button>
+          </>
+        ) : null}
+        <Button onClick={onClose}>Cerrar</Button>
+      </DialogActions>
+    </Dialog>
   );
 }

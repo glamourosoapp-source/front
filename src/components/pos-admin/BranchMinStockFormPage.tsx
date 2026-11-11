@@ -49,7 +49,23 @@ function packsText(minStock: number | null | undefined, packSize: number): strin
  */
 export function BranchMinStockFormPage() {
   const params = useParams<{ id: string }>();
-  const branchId = params.id;
+  return <BranchStockSheet branchId={params.id} />;
+}
+
+/**
+ * La hoja de stock en sí. `embedded` = dentro de la pestaña Inventario y stock
+ * del detalle de la sucursal: sin título ni "volver", solo las acciones.
+ */
+export function BranchStockSheet({
+  branchId,
+  embedded = false,
+  onDirtyChange,
+}: {
+  branchId: string;
+  embedded?: boolean;
+  /** Avisa si hay cambios sin guardar (para no perderlos al cambiar de vista). */
+  onDirtyChange?: (dirty: boolean) => void;
+}) {
   const { can } = usePermissions();
   const canView = can("posInventory", "view");
   const canEdit = can("posInventory", "update");
@@ -119,6 +135,10 @@ export function BranchMinStockFormPage() {
     window.addEventListener("beforeunload", warn);
     return () => window.removeEventListener("beforeunload", warn);
   }, [dirtyKeys.length]);
+
+  useEffect(() => {
+    onDirtyChange?.(dirtyKeys.length > 0);
+  }, [dirtyKeys.length, onDirtyChange]);
 
   const pages = useMemo(() => (form ? sheetPages(form) : []), [form]);
   const unlinked = useMemo(() => (form ? unlinkedCount(form) : 0), [form]);
@@ -244,6 +264,13 @@ export function BranchMinStockFormPage() {
   return (
     <div className="page-stack msf-page">
       <div className="toolbar">
+        {embedded ? (
+          <p className="page-kicker" style={{ margin: 0, maxWidth: 560 }}>
+            Lo que la sucursal debe tener siempre. Se captura en empaques, como en el papel:{" "}
+            <strong>2</strong> en un bidón son 40 L, <strong>1</strong> en una caja de 24 son 24 pz. Enter baja al
+            siguiente renglón. Vacío o 0 = sin stock definido.
+          </p>
+        ) : (
         <div>
           <Link
             href={backHref}
@@ -262,6 +289,7 @@ export function BranchMinStockFormPage() {
             siguiente renglón. Vacío o 0 = sin stock definido.
           </p>
         </div>
+        )}
         <div style={{ display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap" }}>
           {canEdit && branches.length ? (
             <TextField
@@ -309,8 +337,14 @@ export function BranchMinStockFormPage() {
 
       {unlinked ? (
         <p className="page-kicker" style={{ margin: 0 }}>
-          {unlinked} renglones del formato no están ligados al catálogo y se muestran en gris; su
-          stock se captura desde <Link href={backHref}>Inventario y stock</Link>.
+          {unlinked} renglones del formato no están ligados al catálogo y se muestran en gris. El stock de
+          lo que no está en el formato se cambia desde{" "}
+          {embedded ? (
+            <>la vista Inventario (búscalo y da clic en su renglón)</>
+          ) : (
+            <Link href={`${backHref}&hoja=inventario`}>Inventario</Link>
+          )}
+          .
         </p>
       ) : null}
 
