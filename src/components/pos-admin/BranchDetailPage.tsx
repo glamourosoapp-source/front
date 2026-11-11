@@ -107,6 +107,8 @@ export function BranchDetailPage({ type }: { type: BranchType }) {
     const query = new URLSearchParams(searchParams.toString());
     // `bajo=1` solo aplica al llegar desde el dato "Bajo su stock" del Resumen.
     query.delete("bajo");
+    // `hoja` = vista Inventario/Stock de la pestaña de inventario.
+    query.delete("hoja");
     if (next === "resumen") query.delete("tab");
     else query.set("tab", next);
     const qs = query.toString();

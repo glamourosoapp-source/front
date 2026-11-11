@@ -642,8 +642,23 @@ export function factoryFormFileName(form: FactoryForm): string {
   return `${prefix}-${who}-${form.date}.pdf`;
 }
 
+/**
+ * Existencia de la sucursal en la misma hoja (pestaña Inventario del panel):
+ * en empaques, como el papel, sin importes ni pies.
+ */
+export const INVENTORY_FORM_OPTIONS: FactoryFormDrawOptions = {
+  title: "INVENTARIO DE LA SUCURSAL",
+  qtyHeader: "Exist.",
+  footers: false,
+};
+
 /** Genera y descarga el formato de pedido a fábrica (o el de stock mínimo, según `options`). */
-export async function exportFactoryFormPdf(form: FactoryForm, options?: FactoryFormDrawOptions): Promise<void> {
+export async function exportFactoryFormPdf(
+  form: FactoryForm,
+  options?: FactoryFormDrawOptions,
+  /** Nombre del archivo; por omisión sale del tipo de formato, la sucursal y la fecha. */
+  fileName?: string
+): Promise<void> {
   const { default: JsPDF } = await import("jspdf");
   const doc = new JsPDF({ orientation: "portrait", unit: "mm", format: "letter" });
   const fallback =
@@ -655,5 +670,5 @@ export async function exportFactoryFormPdf(form: FactoryForm, options?: FactoryF
           ? RESTOCK_ORDER_FORM_OPTIONS
           : {};
   drawFactoryForm(doc, form, options ?? fallback);
-  doc.save(factoryFormFileName(form));
+  doc.save(fileName ?? factoryFormFileName(form));
 }
