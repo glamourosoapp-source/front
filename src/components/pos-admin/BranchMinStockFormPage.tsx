@@ -4,11 +4,14 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { Button, MenuItem, TextField } from "@mui/material";
-import { ArrowLeft, ClipboardList, Download, FileSpreadsheet, RotateCcw, Save, ShieldAlert } from "lucide-react";
+import { ArrowLeft, ClipboardList, Download, FileSpreadsheet, RotateCcw, Save, ShieldAlert, Wallet } from "lucide-react";
 import type { FactoryForm, FactoryFormRow } from "@glamouroso/shared";
 import { BRANCH_TYPES } from "@glamouroso/shared/constants";
 import { httpClient, getApiErrorMessage } from "@/services/http-client";
 import { usePermissions } from "@/lib/permissions";
+import { formatMoney } from "@/lib/format-money";
+import type { InventoryOverview } from "./BranchesInventoryMatrix";
+import { StatTile } from "./StatTile";
 import { exportFactoryFormPdf, MIN_STOCK_FORM_OPTIONS } from "@/lib/export-factory-form";
 import type { Branch, ListResponse } from "@/types";
 import type { StockSheetResult } from "@/lib/stock-sheet";
@@ -69,6 +72,9 @@ export function BranchStockSheet({
   const { can } = usePermissions();
   const canView = can("posInventory", "view");
   const canEdit = can("posInventory", "update");
+  const withCost = can("productCosts", "view");
+  /** Costo de compra por litro o pieza (`line:<id>` / `product:<id>`), para el valor del stock. */
+  const [unitCosts, setUnitCosts] = useState<Map<string, number> | null>(null);
 
   const [form, setForm] = useState<FactoryForm | null>(null);
   const [loading, setLoading] = useState(true);
@@ -113,6 +119,22 @@ export function BranchStockSheet({
     void load();
   }, [load]);
 
+  // El mismo costo que la pantalla Inventario (`/pos/inventory` lo trae solo con permiso de costos).
+  useEffect(() => {
+    if (!canView || !withCost) return;
+    httpClient
+      .get<InventoryOverview>("/pos/inventory", { branchIds: branchId })
+      .then((overview) => {
+        const map = new Map<string, number>();
+        for (const line of overview.lines) if (line.unitCost != null) map.set(`line:${line.lineId}`, line.unitCost);
+        for (const product of overview.products) {
+          if (product.unitCost != null) map.set(`product:${product.productId}`, product.unitCost);
+        }
+        setUnitCosts(map);
+      })
+      .catch(() => setUnitCosts(null));
+  }, [branchId, canView, withCost]);
+
   useEffect(() => {
     if (!canEdit) return;
     httpClient
@@ -141,6 +163,24 @@ export function BranchStockSheet({
   }, [dirtyKeys.length, onDirtyChange]);
 
   const pages = useMemo(() => (form ? sheetPages(form) : []), [form]);
+
+  /** Valor del stock a costo con lo capturado (en vivo) y con lo guardado. */
+  const stockValue = useMemo(() => {
+    if (!unitCosts) return null;
+    const rows = [...rowsByKey.values()];
+    const sum = (sheet: SheetValues) => {
+      let total = 0;
+      let withoutCost = 0;
+      for (const target of targetTotals(rows, sheet).values()) {
+        if (target.base <= 0) continue;
+        const cost = unitCosts.get(target.key);
+        if (cost == null) withoutCost += 1;
+        else total += target.base * cost;
+      }
+      return { total: round2(total), withoutCost };
+    };
+    return { now: sum(values), saved: sum(baseline) };
+  }, [unitCosts, rowsByKey, values, baseline]);
   const unlinked = useMemo(() => (form ? unlinkedCount(form) : 0), [form]);
 
   async function save() {
@@ -346,6 +386,23 @@ export function BranchStockSheet({
           )}
           .
         </p>
+      ) : null}
+
+      {stockValue ? (
+        <div className="stat-tiles cols-2">
+          <StatTile
+            icon={Wallet}
+            label="Stock a costo"
+            value={formatMoney(stockValue.now.total)}
+            hint={
+              stockValue.now.total !== stockValue.saved.total
+                ? `Guardado: ${formatMoney(stockValue.saved.total)} · cambia al guardar`
+                : stockValue.now.withoutCost
+                  ? `Sin contar ${stockValue.now.withoutCost} producto${stockValue.now.withoutCost === 1 ? "" : "s"} sin costo capturado`
+                  : "Lo que vale todo lo que la sucursal debe tener siempre"
+            }
+          />
+        </div>
       ) : null}
 
       {loading && !form ? <p className="page-kicker">Cargando formato...</p> : null}

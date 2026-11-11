@@ -3519,6 +3519,13 @@ textarea.input {
   color: var(--muted);
 }
 
+.inv-detail-money {
+  font-size: 13px;
+  font-weight: 700;
+  color: #15803d;
+  font-variant-numeric: tabular-nums;
+}
+
 .inv-detail-form {
   display: flex;
   flex-wrap: wrap;
