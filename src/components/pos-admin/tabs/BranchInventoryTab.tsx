@@ -15,7 +15,7 @@ import {
   ToggleButtonGroup,
 } from "@mui/material";
 import { AlertTriangle, Boxes, ClipboardList, Download, MinusCircle } from "lucide-react";
-import type { FactoryForm, FactoryFormRow } from "@glamouroso/shared";
+import { countedQuantity, type FactoryForm, type FactoryFormRow } from "@glamouroso/shared";
 import { httpClient, getApiErrorMessage } from "@/services/http-client";
 import { formatQuantity } from "@/lib/format-money";
 import { usePermissions } from "@/lib/permissions";
@@ -24,8 +24,9 @@ import { exportFactoryFormPdf, factoryFormFileName, INVENTORY_FORM_OPTIONS } fro
 import type { InventoryMovement, ListResponse } from "@/types";
 import { toast } from "sonner";
 import { FilterBar, FilterMeta, FilterSearch } from "../FilterBar";
-import { formatDateTime } from "../pos-labels";
+import { formatDateTime, unitLabel } from "../pos-labels";
 import { BranchStockSheet } from "../BranchMinStockFormPage";
+import { cleanInput } from "@/components/supervisor/count-fields";
 import type { InventoryOverview } from "../BranchesInventoryMatrix";
 import {
   PAGE_HINTS,
@@ -68,6 +69,8 @@ interface Target {
   label: string;
   unit: string;
   packSize: number;
+  /** "bidón", "garrafa", "caja", "pieza": cómo se cuenta en la tienda. */
+  packLabel: string;
   stock: number;
   minStock: number;
 }
@@ -380,6 +383,7 @@ function BranchInventorySheet({ branchId, initialBelowMin }: { branchId: string;
       label: item.firstLabel,
       unit: unitOf(row),
       packSize: Math.max(1, row.packSize),
+      packLabel: row.packLabel || (row.lineId ? "bidón" : "pieza"),
       stock: item.info?.stock ?? 0,
       minStock: item.info?.minStock ?? 0,
     });
@@ -593,7 +597,9 @@ function InventoryRowDialog({
 }) {
   const [movements, setMovements] = useState<InventoryMovement[] | null>(null);
   const [mode, setMode] = useState<"" | "adjust" | "min">("");
-  const [value, setValue] = useState("");
+  // Como el conteo del supervisor: envases llenos + lo suelto (litros del abierto o piezas sueltas).
+  const [packsInput, setPacksInput] = useState("");
+  const [looseInput, setLooseInput] = useState("");
   const [reason, setReason] = useState("");
   const [saving, setSaving] = useState(false);
 
@@ -622,21 +628,48 @@ function InventoryRowDialog({
 
   if (!target) return null;
   const shortage = Math.max(0, round2(target.minStock - target.stock));
-  const packs = (base: number) =>
-    target.packSize > 1 ? ` (${formatQuantity(round2(base / target.packSize))} emp.)` : "";
+  const isLiquid = target.kind === "line";
+  const hasPacks = target.packSize > 1;
+  const looseUnit = isLiquid ? "L" : "pz";
+  /** "2 bidones + 7 L", "1 caja + 3 pz": como se ve en el anaquel. */
+  const breakdown = (base: number) => {
+    if (!hasPacks || base < 0) return "";
+    const full = Math.floor(base / target.packSize + 1e-9);
+    const rest = round2(base - full * target.packSize);
+    const parts = [];
+    if (full) parts.push(`${formatQuantity(full)} ${unitLabel(full, isLiquid ? "bidon" : "paquete", target.packLabel)}`);
+    if (rest || !full) parts.push(`${formatQuantity(rest)} ${looseUnit}`);
+    return parts.join(" + ");
+  };
+  const packOne = unitLabel(1, isLiquid ? "bidon" : "paquete", target.packLabel);
+  const packName = unitLabel(2, isLiquid ? "bidon" : "paquete", target.packLabel);
+  const packsField = `${packName.charAt(0).toUpperCase()}${packName.slice(1)}${
+    isLiquid ? (packName.endsWith("as") ? " llenas" : " llenos") : ""
+  }`;
+  const looseField = hasPacks ? (isLiquid ? "Litros del abierto" : "Piezas sueltas") : isLiquid ? "Litros" : "Piezas";
+  const typed = Boolean(packsInput.trim() || looseInput.trim());
+  const total = countedQuantity({
+    packs: hasPacks ? Number(packsInput) || 0 : 0,
+    packSize: target.packSize,
+    loose: Number(looseInput) || 0,
+  });
 
   function start(next: "adjust" | "min") {
     if (!target) return;
     setMode(next);
-    setValue(String(next === "adjust" ? target.stock : target.minStock));
+    const base = Math.max(0, next === "adjust" ? target.stock : target.minStock);
+    const full = hasPacks ? Math.floor(base / target.packSize + 1e-9) : 0;
+    setPacksInput(hasPacks && full ? String(full) : "");
+    const rest = round2(base - full * target.packSize);
+    setLooseInput(rest ? String(rest) : "");
     setReason("");
   }
 
   async function save() {
     if (!target) return;
-    const number = Number(value);
-    if (value.trim() === "" || !Number.isFinite(number) || (mode === "min" && number < 0)) {
-      toast.error(mode === "min" ? "El stock debe ser un número mayor o igual a cero" : "Escribe la existencia");
+    const number = total;
+    if (mode === "adjust" && !typed) {
+      toast.error("Escribe la existencia contada");
       return;
     }
     if (mode === "adjust" && !reason.trim()) {
@@ -678,19 +711,19 @@ function InventoryRowDialog({
             <strong style={{ color: target.stock < 0 ? "#dc2626" : undefined }}>
               {formatQuantity(target.stock)} {target.unit}
             </strong>
-            <em>{packs(target.stock)}</em>
+            <em>{breakdown(target.stock)}</em>
           </div>
           <div>
             <span>Stock</span>
             <strong>{target.minStock ? `${formatQuantity(target.minStock)} ${target.unit}` : "Sin stock definido"}</strong>
-            <em>{target.minStock ? packs(target.minStock) : ""}</em>
+            <em>{target.minStock ? breakdown(target.minStock) : ""}</em>
           </div>
           <div>
             <span>Faltante</span>
             <strong style={{ color: shortage > 0 ? "#c2410c" : undefined }}>
               {shortage > 0 ? `${formatQuantity(shortage)} ${target.unit}` : "—"}
             </strong>
-            <em>{shortage > 0 ? packs(shortage) : ""}</em>
+            <em>{shortage > 0 ? breakdown(shortage) : ""}</em>
           </div>
         </div>
 
@@ -702,19 +735,35 @@ function InventoryRowDialog({
               void save();
             }}
           >
+            {hasPacks ? (
+              <TextField
+                label={packsField}
+                size="small"
+                autoFocus
+                value={packsInput}
+                placeholder="0"
+                onChange={(event) => setPacksInput(cleanInput(event.target.value, false))}
+                onFocus={(event) => event.currentTarget.select()}
+                inputProps={{ inputMode: "numeric" }}
+                helperText={`${packOne.charAt(0).toUpperCase()}${packOne.slice(1)} de ${formatQuantity(target.packSize)} ${looseUnit}`}
+                sx={{ width: 150 }}
+              />
+            ) : null}
             <TextField
-              label={mode === "adjust" ? `Existencia contada (${target.unit})` : `Stock (${target.unit})`}
-              type="number"
+              label={looseField}
               size="small"
-              autoFocus
-              value={value}
-              onChange={(event) => setValue(event.target.value)}
-              inputProps={{ step: target.unit === "L" ? 0.01 : 1, min: mode === "min" ? 0 : undefined }}
+              autoFocus={!hasPacks}
+              value={looseInput}
+              placeholder="0"
+              onChange={(event) => setLooseInput(cleanInput(event.target.value, isLiquid))}
+              onFocus={(event) => event.currentTarget.select()}
+              inputProps={{ inputMode: isLiquid ? "decimal" : "numeric" }}
               helperText={
-                mode === "adjust"
-                  ? "Se registra en el kardex la diferencia contra lo que había."
-                  : "Lo que la sucursal debe tener siempre."
+                <>
+                  {mode === "adjust" ? "Existencia" : "Stock"} = <strong>{formatQuantity(total)} {looseUnit}</strong>
+                </>
               }
+              sx={{ width: 170 }}
             />
             {mode === "adjust" ? (
               <TextField
@@ -724,6 +773,7 @@ function InventoryRowDialog({
                 value={reason}
                 onChange={(event) => setReason(event.target.value)}
                 placeholder="Conteo físico, merma, corrección de captura…"
+                helperText="Se registra en el kardex la diferencia contra lo que había."
                 sx={{ flex: 1, minWidth: 220 }}
               />
             ) : null}
