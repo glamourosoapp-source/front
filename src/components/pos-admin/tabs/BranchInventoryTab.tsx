@@ -14,7 +14,7 @@ import {
   ToggleButton,
   ToggleButtonGroup,
 } from "@mui/material";
-import { AlertTriangle, Boxes, ClipboardList, Download, MinusCircle, Wallet } from "lucide-react";
+import { AlertTriangle, Boxes, ClipboardList, Download, MinusCircle, TrendingUp, Wallet } from "lucide-react";
 import { countedQuantity, type FactoryForm, type FactoryFormRow } from "@glamouroso/shared";
 import { httpClient, getApiErrorMessage } from "@/services/http-client";
 import { formatMoney, formatQuantity } from "@/lib/format-money";
@@ -352,7 +352,10 @@ function BranchInventorySheet({ branchId, initialBelowMin }: { branchId: string;
 
   /**
    * Lo que vale la sucursal a costo de compra, igual que la pantalla Inventario:
-   * la existencia (lo negativo vale 0), su Stock y lo que falta para completarlo.
+   * la existencia (lo negativo vale 0), su Stock, lo que falta para completarlo
+   * y lo que hay arriba de él. Falta y sobra se cuentan producto por producto
+   * (lo que sobra de uno no tapa lo que falta de otro), así que
+   * Stock = Existencia + Falta − Arriba − (lo que falta por debajo de cero).
    * Toda la sucursal, no solo lo que se ve con los filtros.
    */
   const money = useMemo(() => {
@@ -360,6 +363,11 @@ function BranchInventorySheet({ branchId, initialBelowMin }: { branchId: string;
     let existence = 0;
     let stock = 0;
     let missing = 0;
+    let missingCount = 0;
+    let belowZero = 0;
+    let belowZeroCount = 0;
+    let surplus = 0;
+    let surplusCount = 0;
     let withoutCost = 0;
     for (const info of stocks.values()) {
       if (!info.stock && !info.minStock) continue;
@@ -369,9 +377,33 @@ function BranchInventorySheet({ branchId, initialBelowMin }: { branchId: string;
       }
       existence += Math.max(0, info.stock) * info.unitCost;
       stock += info.minStock * info.unitCost;
-      missing += Math.max(0, info.minStock - info.stock) * info.unitCost;
+      if (info.minStock > info.stock) {
+        missing += (info.minStock - info.stock) * info.unitCost;
+        missingCount += 1;
+        // Un negativo falta desde abajo de cero: es lo que hay que mandar para
+        // llegar al Stock, pero la existencia lo cuenta como 0.
+        if (info.stock < 0) {
+          belowZero += -info.stock * info.unitCost;
+          belowZeroCount += 1;
+        }
+      }
+      const over = Math.max(0, info.stock) - info.minStock;
+      if (over > 0) {
+        surplus += over * info.unitCost;
+        surplusCount += 1;
+      }
     }
-    return { existence: round2(existence), stock: round2(stock), missing: round2(missing), withoutCost };
+    return {
+      existence: round2(existence),
+      stock: round2(stock),
+      missing: round2(missing),
+      missingCount,
+      belowZero: round2(belowZero),
+      belowZeroCount,
+      surplus: round2(surplus),
+      surplusCount,
+      withoutCost,
+    };
   }, [stocks, withCost]);
 
   const counts = useMemo(() => {
@@ -474,7 +506,7 @@ function BranchInventorySheet({ branchId, initialBelowMin }: { branchId: string;
       </div>
 
       {money ? (
-        <div className="stat-tiles cols-3">
+        <div className="stat-tiles">
           <StatTile
             icon={Wallet}
             label="Existencia a costo"
@@ -490,8 +522,18 @@ function BranchInventorySheet({ branchId, initialBelowMin }: { branchId: string;
             icon={AlertTriangle}
             label="Para completar el stock"
             value={formatMoney(money.missing)}
-            hint="Lo que falta, a costo"
+            hint={
+              money.belowZeroCount
+                ? `${plural(money.missingCount, "producto")} · incluye ${formatMoney(money.belowZero)} de ${plural(money.belowZeroCount, "producto")} en negativo`
+                : `${plural(money.missingCount, "producto")} abajo de su stock`
+            }
             tone={money.missing > 0 ? "warning" : undefined}
+          />
+          <StatTile
+            icon={TrendingUp}
+            label="Arriba del stock"
+            value={formatMoney(money.surplus)}
+            hint={`${plural(money.surplusCount, "producto")} con más de su stock`}
           />
         </div>
       ) : null}
@@ -922,4 +964,8 @@ function InventoryRowDialog({
       </DialogActions>
     </Dialog>
   );
+}
+
+function plural(count: number, word: string): string {
+  return `${count.toLocaleString("es-MX")} ${word}${count === 1 ? "" : "s"}`;
 }
