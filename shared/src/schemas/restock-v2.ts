@@ -73,8 +73,9 @@ export const factoryAddItemSchema = z
     lineId: z.union([uuid, z.null()]).optional(),
     productId: z.union([uuid, z.null()]).optional(),
     qty: z.coerce.number().positive().max(100_000),
+    /** null = solo se edita la cantidad (amarillo) sin separarlo ni subirlo al camión. */
     mark: z
-      .enum([FACTORY_ITEM_MARKS.SEPARATED, FACTORY_ITEM_MARKS.LOADED])
+      .union([z.enum([FACTORY_ITEM_MARKS.SEPARATED, FACTORY_ITEM_MARKS.LOADED]), z.null()])
       .optional(),
   })
   .superRefine((value, ctx) => {
