@@ -1,3 +1,4 @@
+import type { FactoryProgress } from "./pos-restock-v2";
 import type { ContainerMaterial } from "./constants";
 import type {
   AbcClass,
@@ -743,6 +744,16 @@ export interface RestockOrderItem {
   unitPrice?: string | number | null;
   /** Por qué esta partida se despachó distinto de lo pedido. Lo escribe fábrica. */
   notes?: string | null;
+  /** Pedido a fábrica v2: hoja del formato (1 líquidos; 2–4 jarcería), congelada al elegir. */
+  sheet?: number | null;
+  /** v2: separated (azul) | loaded (verde/amarillo) | missing (rojo). */
+  factoryMark?: string | null;
+  /** v2: lo que se separó o cargó, en empaques; null = lo pedido. */
+  factoryQty?: string | number | null;
+  separatedAt?: string | null;
+  loadedAt?: string | null;
+  /** v2: el renglón vino ajustado a mano (supervisor | cashier | office). */
+  editedSource?: string | null;
 }
 
 export interface RestockOrder {
@@ -798,6 +809,25 @@ export interface RestockOrder {
   total?: number | null;
   /** Desglose de `total`: el producto y cada cargo de fábrica. `null` en franquicias. */
   charges?: RestockOrderCharges | null;
+  // Pedido a fábrica v2 (Richi elige, Alex separa, Richi carga, la oficina confirma).
+  /** `v2` = elegido con el flujo nuevo. */
+  flow?: string | null;
+  pickedAt?: string | null;
+  /** Último ajuste del faltante antes de elegirlo ("Editado"): supervisor | cashier | office. */
+  editedAt?: string | null;
+  editedSource?: string | null;
+  separationStartedAt?: string | null;
+  hardwareReadyAt?: string | null;
+  loadingStartedAt?: string | null;
+  senderEntryId?: string | null;
+  truckEntryId?: string | null;
+  driverEntryId?: string | null;
+  /** v2 (detalle): nombres de quién envió, camión y chofer. */
+  senderEntry?: { id: string; name: string } | null;
+  truckEntry?: { id: string; name: string } | null;
+  driverEntry?: { id: string; name: string } | null;
+  /** v2 (detalle): cuántos renglones de cada color y cuántos faltan para enviar. */
+  progress?: FactoryProgress | null;
   createdAt?: string;
   updatedAt?: string;
 }

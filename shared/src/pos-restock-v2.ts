@@ -68,8 +68,19 @@ export function factoryAreaOfSheet(sheet: number | null | undefined): FactoryAre
   return (sheet ?? FACTORY_LIQUIDS_SHEET) <= FACTORY_LIQUIDS_SHEET ? FACTORY_AREAS.LIQUIDS : FACTORY_AREAS.HARDWARE;
 }
 
+/** Avance de un pedido: renglones de cada color y cuántos faltan para poder enviar. */
+export interface FactoryProgress {
+  total: number;
+  none: number;
+  blue: number;
+  green: number;
+  yellow: number;
+  red: number;
+  pending: number;
+}
+
 /** Avance de un pedido en preparación, para la tarjeta y la tabla de fábrica. */
-export function factoryProgress(lines: FactoryLineState[]) {
+export function factoryProgress(lines: FactoryLineState[]): FactoryProgress {
   const counts = { total: lines.length, none: 0, blue: 0, green: 0, yellow: 0, red: 0 };
   for (const line of lines) counts[factoryLineColor(line)] += 1;
   return { ...counts, pending: factoryLinesPending(lines) };
@@ -97,4 +108,76 @@ export function restockStatusLabelV2(status: string): string {
     default:
       return status;
   }
+}
+
+/** Quién ajustó el faltante, en palabras. */
+export function editedSourceLabel(source: string | null | undefined): string {
+  switch (source) {
+    case "cashier":
+      return "Editado por la caja";
+    case "office":
+      return "Editado por la oficina";
+    case "supervisor":
+      return "Editado por supervisora";
+    default:
+      return "Editado";
+  }
+}
+
+/** Una fila de la tabla de fábrica (`GET /factory/board` y `/pos/restock/board`). */
+export interface FactoryBoardRow {
+  branch: { id: string; code: string; name: string };
+  /** to_prepare: libre para elegir; preparing: En preparación; on_the_way: En camino. */
+  state: "to_prepare" | "preparing" | "on_the_way";
+  order: {
+    id: string;
+    status: string;
+    flow: string | null;
+    pickedAt: string | null;
+    hardwareReadyAt: string | null;
+    sentAt: string | null;
+    submittedAt: string | null;
+    progress: FactoryProgress;
+  } | null;
+  shortage: { lines: number; bidones: number; packages: number };
+  edited: { source: string | null; by?: { id: string; name: string } | null; at: string } | null;
+}
+
+/** Renglón de "Por preparar": el faltante en vivo con el ajuste encima. */
+export interface ToPrepareLine {
+  lineId: string | null;
+  productId: string | null;
+  name: string;
+  unit: string;
+  packLabel: string;
+  sheet: number;
+  stock: number | null;
+  minStock: number | null;
+  computedQty: number;
+  qty: number;
+  edited: { source: string; by: string | null; at: string } | null;
+}
+
+/** `GET /pos/restock/branches/:id/to-prepare`. */
+export interface ToPrepareView {
+  branch: { id: string; code: string; name: string };
+  /** Fábrica ya lo eligió (o está en camino): solo lectura. */
+  locked: boolean;
+  order: { id: string; status: string; flow: string | null; pickedAt: string | null } | null;
+  edited: { source: string; by: { id: string; name: string } | null; at: string } | null;
+  items: ToPrepareLine[];
+}
+
+/** Un nombre de las listas de envío. */
+export interface FactoryCatalogEntry {
+  id: string;
+  kind: "sender" | "truck" | "driver";
+  name: string;
+  active: boolean;
+  sort: number;
+}
+
+/** Resultado de elegir sucursales: una que falla no detiene a las demás. */
+export interface FactoryPickResult {
+  results: Array<{ branchId: string; ok: boolean; orderId?: string; error?: string }>;
 }
