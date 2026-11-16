@@ -13,7 +13,7 @@ import type { FactoryArea } from "./constants";
  */
 
 /** Color de un renglón en la tablet de fábrica. */
-export type FactoryLineColor = "none" | "blue" | "green" | "yellow" | "red";
+export type FactoryLineColor = "none" | "blue" | "green" | "red";
 
 export interface FactoryLineState {
   requestedQty: number | string;
@@ -34,26 +34,33 @@ export function factoryLineQty(line: FactoryLineState): number {
 }
 
 /**
- * Azul = separado, verde = cargado completo, amarillo = separado o cargado con
- * más o menos de lo pedido, rojo = no hubo. El amarillo no se guarda: sale de
- * comparar la cantidad con lo pedido (como hoy en la app).
+ * Azul = separado, verde = va en el camión (aunque haya cambiado la cantidad),
+ * rojo = no hubo. Que la cantidad cambió no es un color: se marca aparte con
+ * `factoryLineChanged` (decisión 2026-11-16: todo lo que va en el camión, verde).
  */
 export function factoryLineColor(line: FactoryLineState): FactoryLineColor {
   switch (line.factoryMark) {
     case FACTORY_ITEM_MARKS.MISSING:
       return "red";
     case FACTORY_ITEM_MARKS.SEPARATED:
-    case FACTORY_ITEM_MARKS.LOADED: {
-      const changed = Math.abs(factoryLineQty(line) - num(line.requestedQty)) > 1e-9;
-      if (changed) return "yellow";
-      return line.factoryMark === FACTORY_ITEM_MARKS.LOADED ? "green" : "blue";
-    }
+      return "blue";
+    case FACTORY_ITEM_MARKS.LOADED:
+      return "green";
     default:
       return "none";
   }
 }
 
-/** Un renglón listo para enviar: cargado (verde o amarillo) o rojo. */
+/**
+ * ¿Se separó o se cargó otra cantidad que la pedida (o un producto que no
+ * venía)? No se guarda: sale de comparar con lo pedido. Rojo no cuenta.
+ */
+export function factoryLineChanged(line: FactoryLineState): boolean {
+  if (line.factoryMark !== FACTORY_ITEM_MARKS.SEPARATED && line.factoryMark !== FACTORY_ITEM_MARKS.LOADED) return false;
+  return Math.abs(factoryLineQty(line) - num(line.requestedQty)) > 1e-9;
+}
+
+/** Un renglón listo para enviar: cargado (verde) o rojo. */
 export function factoryLineReady(line: FactoryLineState): boolean {
   return line.factoryMark === FACTORY_ITEM_MARKS.LOADED || line.factoryMark === FACTORY_ITEM_MARKS.MISSING;
 }
@@ -74,16 +81,17 @@ export interface FactoryProgress {
   none: number;
   blue: number;
   green: number;
-  yellow: number;
   red: number;
+  /** Separados o cargados con otra cantidad que la pedida. */
+  changed: number;
   pending: number;
 }
 
 /** Avance de un pedido en preparación, para la tarjeta y la tabla de fábrica. */
 export function factoryProgress(lines: FactoryLineState[]): FactoryProgress {
-  const counts = { total: lines.length, none: 0, blue: 0, green: 0, yellow: 0, red: 0 };
+  const counts = { total: lines.length, none: 0, blue: 0, green: 0, red: 0 };
   for (const line of lines) counts[factoryLineColor(line)] += 1;
-  return { ...counts, pending: factoryLinesPending(lines) };
+  return { ...counts, changed: lines.filter(factoryLineChanged).length, pending: factoryLinesPending(lines) };
 }
 
 /**
