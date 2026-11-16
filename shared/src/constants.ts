@@ -123,6 +123,8 @@ export const NOTIFICATION_TYPES = {
   RESTOCK_ORDER_CREATED: "restock_order_created",
   /** Un pedido de surtido se envió a fábrica desde el panel. */
   RESTOCK_ORDER_SUBMITTED: "restock_order_submitted",
+  /** Flujo v2: fábrica mandó el pedido de una sucursal (En camino); la oficina confirma la llegada. */
+  RESTOCK_ORDER_ON_THE_WAY: "restock_order_on_the_way",
 } as const;
 
 /** Path del gateway WebSocket del Back (mismo host que la API). */
@@ -474,6 +476,52 @@ export const RESTOCK_ORDER_STATUS = {
   CANCELLED: "cancelled",
 } as const;
 
+/**
+ * Flujo del pedido a fábrica v2 (2026-11-16): la sucursal ya no manda pedidos;
+ * Richi elige del faltante en vivo, Alex separa la jarcería, Richi carga y la
+ * oficina confirma la llegada. Lo prende la bandera de Railway `pedido-fabrica-v2`
+ * y cada pedido elegido guarda `flow = v2`. Plan:
+ * docs/exec-plans/active/pos-estados-pedido-fabrica-v2.md.
+ */
+export const RESTOCK_FLOW = { V2: "v2" } as const;
+
+/** Marca de fábrica en un renglón (v2). El amarillo no se guarda: se calcula. */
+export const FACTORY_ITEM_MARKS = {
+  /** Azul: Alex lo separó (jarcería). */
+  SEPARATED: "separated",
+  /** Verde (o amarillo si cambió la cantidad): ya va en el camión. */
+  LOADED: "loaded",
+  /** Rojo: no hubo; sale en 0. */
+  MISSING: "missing",
+} as const;
+
+/** Listas que se eligen al enviar (v2): quién envía, camión y chofer. */
+export const FACTORY_CATALOG_KINDS = {
+  SENDER: "sender",
+  TRUCK: "truck",
+  DRIVER: "driver",
+} as const;
+
+/** Bodega de un usuario de fábrica: decide a qué tablets llega cada aviso. */
+export const FACTORY_AREAS = {
+  /** Hoja 1: líquidos, envases y tapas (Richi). */
+  LIQUIDS: "liquids",
+  /** Hojas 2–4: jarcería (Alex). */
+  HARDWARE: "hardware",
+} as const;
+
+/** Quién ajustó un renglón del faltante (v2): se pinta "Editado" en la tabla de fábrica. */
+export const SHORTAGE_OVERRIDE_SOURCES = {
+  SUPERVISOR: "supervisor",
+  /** La caja de una sucursal con `cashier_restock` (Tepic Boulevard). */
+  CASHIER: "cashier",
+  /** El admin desde el panel. */
+  OFFICE: "office",
+} as const;
+
+/** Hoja del formato de fábrica que surte la bodega de líquidos; las demás son jarcería. */
+export const FACTORY_LIQUIDS_SHEET = 1;
+
 /** Unidad en la que fábrica despacha una partida de surtido. */
 export const RESTOCK_ITEM_UNITS = {
   PIECE: "pieza",
@@ -597,6 +645,10 @@ export type PosPaymentMethod = (typeof POS_PAYMENT_METHODS)[keyof typeof POS_PAY
 export type PosSaleUnit = (typeof POS_SALE_UNITS)[keyof typeof POS_SALE_UNITS];
 export type InventoryMovementType =
   (typeof INVENTORY_MOVEMENT_TYPES)[keyof typeof INVENTORY_MOVEMENT_TYPES];
+export type FactoryItemMark = (typeof FACTORY_ITEM_MARKS)[keyof typeof FACTORY_ITEM_MARKS];
+export type FactoryCatalogKind = (typeof FACTORY_CATALOG_KINDS)[keyof typeof FACTORY_CATALOG_KINDS];
+export type FactoryArea = (typeof FACTORY_AREAS)[keyof typeof FACTORY_AREAS];
+export type ShortageOverrideSource = (typeof SHORTAGE_OVERRIDE_SOURCES)[keyof typeof SHORTAGE_OVERRIDE_SOURCES];
 export type RestockOrigin = (typeof RESTOCK_ORIGIN)[keyof typeof RESTOCK_ORIGIN];
 export type InventoryCountStatus = (typeof INVENTORY_COUNT_STATUS)[keyof typeof INVENTORY_COUNT_STATUS];
 export type InventoryCountItemStatus =

@@ -28,3 +28,4 @@ export * from "./franchise";
 export * from "./price-list";
 export * from "./opportunity-map";
 export * from "./push";
+export * from "./restock-v2";
