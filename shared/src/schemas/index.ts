@@ -27,3 +27,4 @@ export * from "./restock";
 export * from "./franchise";
 export * from "./price-list";
 export * from "./push";
+export * from "./restock-v2";

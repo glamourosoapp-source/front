@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { ROLES } from "../constants";
+import { FACTORY_AREAS, ROLES } from "../constants";
 import { SUPERVISOR_CAPABILITIES } from "../supervisor-access";
 
 const assignableRoles = [ROLES.ASSISTANT, ROLES.ADMIN, ROLES.ORG_ADMIN] as const;
@@ -18,6 +18,8 @@ const userPayload = {
     .union([z.record(z.string().uuid(), z.array(z.enum(SUPERVISOR_CAPABILITIES)).max(SUPERVISOR_CAPABILITIES.length)), z.null()])
     .optional(),
   role: z.enum(assignableRoles).optional(),
+  /** Bodega de fábrica (pedido a fábrica v2): a qué tablets llega cada aviso. */
+  factoryArea: z.union([z.enum([FACTORY_AREAS.LIQUIDS, FACTORY_AREAS.HARDWARE]), z.null()]).optional(),
 };
 
 export const createUserSchema = z.object(userPayload);
@@ -33,4 +35,5 @@ export const updateUserSchema = z.object({
   supervisorAccess: userPayload.supervisorAccess,
   isActive: z.boolean().optional(),
   role: userPayload.role,
+  factoryArea: userPayload.factoryArea,
 });

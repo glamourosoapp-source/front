@@ -1,7 +1,7 @@
 import { z } from "zod";
 
 /** Apps móviles que reciben notificaciones push. */
-export const PUSH_DEVICE_APPS = ["fabrica"] as const;
+export const PUSH_DEVICE_APPS = ["fabrica", "supervisor"] as const;
 
 /** La app registra el token de Expo del teléfono para recibir avisos. */
 export const registerPushDeviceSchema = z.object({
