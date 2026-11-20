@@ -67,6 +67,14 @@ export const factoryMarkItemSchema = z.object({
   notes: optionalNote,
 });
 
+/**
+ * Varias marcas en una sola consulta: la tablet junta los toques seguidos y los
+ * manda juntos (cada toque reinicia la espera), en vez de una consulta por toque.
+ */
+export const factoryMarkItemsSchema = z.object({
+  marks: z.array(factoryMarkItemSchema.extend({ itemId: uuid })).min(1).max(500),
+});
+
 /** Producto que fábrica agrega a un pedido en preparación (pedido en 0). */
 export const factoryAddItemSchema = z
   .object({
@@ -133,5 +141,6 @@ export const factoryAreaSchema = z.union([z.enum([FACTORY_AREAS.LIQUIDS, FACTORY
 
 export type SaveShortageOverridesInput = z.infer<typeof saveShortageOverridesSchema>;
 export type FactoryMarkItemInput = z.infer<typeof factoryMarkItemSchema>;
+export type FactoryMarkItemsInput = z.infer<typeof factoryMarkItemsSchema>;
 export type FactoryAddItemInput = z.infer<typeof factoryAddItemSchema>;
 export type FactoryDispatchInput = z.infer<typeof factoryDispatchSchema>;
