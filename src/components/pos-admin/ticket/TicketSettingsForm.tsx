@@ -121,6 +121,9 @@ export function TicketSettingsForm({
           {text("phone", "Teléfono", "negocio", {
             helperText: "Vacío: se imprime el teléfono de la sucursal.",
           })}
+          {text("phone2", "Segundo teléfono", "negocio", {
+            helperText: "Opcional: se imprime debajo del primero.",
+          })}
           {text("email", "Correo", "negocio")}
           {text("website", "Sitio web o redes", "negocio")}
           <TextField

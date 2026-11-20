@@ -41,6 +41,8 @@ export interface TicketSettings {
   addressLines: string[];
   /** Teléfono impreso. `null` = el teléfono de la sucursal. */
   phone: string | null;
+  /** Segundo teléfono impreso debajo del primero (opcional, no se hereda de la sucursal). */
+  phone2: string | null;
   email: string | null;
   website: string | null;
   /** Líneas libres extra del encabezado (van después de los datos fiscales). */
@@ -97,6 +99,7 @@ export const DEFAULT_TICKET_SETTINGS: TicketSettings = {
   taxRegime: null,
   addressLines: [],
   phone: null,
+  phone2: null,
   email: null,
   website: null,
   headerLines: [],
@@ -239,6 +242,7 @@ export function resolveTicketSettings(
       asStringArray(org.addressLines) ??
       fallback.addressLines,
     phone: text("phone", fallback.phone),
+    phone2: text("phone2", fallback.phone2),
     email: text("email", fallback.email),
     website: text("website", fallback.website),
     headerLines:
@@ -322,6 +326,7 @@ export function ticketHeaderBlock(
   if (settings.showPhone) {
     const phone = settings.phone || asText(branch?.phone);
     if (phone) lines.push(`Tel. ${phone}`);
+    if (settings.phone2 && settings.phone2 !== phone) lines.push(`Tel. ${settings.phone2}`);
   }
   if (settings.email) lines.push(settings.email);
   if (settings.website) lines.push(settings.website);
