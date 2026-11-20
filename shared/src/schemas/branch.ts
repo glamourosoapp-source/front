@@ -63,6 +63,7 @@ export const ticketSettingsSchema = z.object({
   taxRegime: nullableText(80),
   addressLines: z.union([z.array(z.string().max(60)).max(4), z.null()]).optional(),
   phone: nullableText(24),
+  phone2: nullableText(24),
   email: nullableText(80),
   website: nullableText(80),
   headerLines: z.union([z.array(z.string().max(60)).max(6), z.null()]).optional(),

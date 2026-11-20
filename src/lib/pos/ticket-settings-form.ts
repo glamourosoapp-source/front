@@ -28,6 +28,7 @@ export interface TicketDraft {
   /** Un renglón del domicilio por línea. */
   addressLines: string;
   phone: string;
+  phone2: string;
   email: string;
   website: string;
   logoUrl: string;
@@ -70,6 +71,7 @@ export const TICKET_GROUP_FIELDS: Record<TicketGroupKey, Array<keyof TicketDraft
     "taxRegime",
     "addressLines",
     "phone",
+    "phone2",
     "email",
     "website",
     "logoUrl",
@@ -147,6 +149,7 @@ export function draftFromSettings(settings: OrganizationTicketSettings): TicketD
     taxRegime: textOf(settings.taxRegime),
     addressLines: settings.addressLines.join("\n"),
     phone: textOf(settings.phone),
+    phone2: textOf(settings.phone2),
     email: textOf(settings.email),
     website: textOf(settings.website),
     logoUrl: textOf(settings.logoUrl),
@@ -195,6 +198,7 @@ export function settingsFromDraft(draft: TicketDraft): TicketSettings {
     taxRegime: text(draft.taxRegime),
     addressLines: lines(draft.addressLines),
     phone: text(draft.phone),
+    phone2: text(draft.phone2),
     email: text(draft.email),
     website: text(draft.website),
     logoUrl: text(draft.logoUrl),
@@ -307,7 +311,7 @@ export const TICKET_LINE_SPACING_LABELS: Record<TicketLineSpacing, string> = {
 export const TICKET_CONTENT_LABELS: Array<{ field: keyof TicketDraft; label: string; hint: string }> = [
   { field: "showTaxData", label: "Datos fiscales", hint: "Razón social, RFC y régimen." },
   { field: "showAddress", label: "Domicilio", hint: "El del ticket o, si está vacío, el de la sucursal." },
-  { field: "showPhone", label: "Teléfono", hint: "El del ticket o el de la sucursal." },
+  { field: "showPhone", label: "Teléfono", hint: "El del ticket o el de la sucursal, y el segundo teléfono si lo capturas." },
   { field: "showCashier", label: "Quién atiende", hint: "Nombre del cajero que cobró." },
   { field: "showCustomer", label: "Cliente", hint: "Nombre del cliente o el de mostrador." },
   { field: "showItemCodes", label: "Código del producto", hint: "El SKU antes del nombre de cada partida." },
