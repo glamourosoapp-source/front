@@ -71,8 +71,13 @@ export function CountTableGuide({ full, showsExpected }: { full: boolean; showsE
             <dt>Diferencia</dt>
             <dd>
               Contado menos esperado. <span className="count-positive">Verde</span> = sobraba,{" "}
-              <span className="count-negative">rojo</span> = faltaba. &quot;Fuera de tolerancia&quot; cuando pasa de ±1
-              L/pieza o ±2 %.
+              <span className="count-negative">rojo</span> = faltaba.
+            </dd>
+            <dt>Diferencia aceptable</dt>
+            <dd>
+              Se perdona hasta 1 litro o 1 pieza, o el 2 % de lo esperado si eso es más. Ejemplo: si se esperaban 118 L,
+              se acepta de 115.6 a 120.4 L. Si la diferencia pasa de eso, el renglón dice &quot;fuera de tolerancia&quot;
+              y no cuenta para la exactitud.
             </dd>
             <dt>Valor</dt>
             <dd>La diferencia en pesos a precio de tienda: lo que vale lo que sobró o faltó.</dd>
