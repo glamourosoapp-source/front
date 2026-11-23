@@ -256,8 +256,50 @@
   }
 }
 
-/* Inventario completo (kind: full): todo lo vivo de la sucursal, no la lista sorpresa. */
-.count-full-badge {
-  background: var(--soft-blue) !important;
-  color: var(--glam-navy) !important;
+
+/* Tipo de conteo: chip con ícono antes del nombre de la sucursal.
+   Aleatorio (lista sorpresa) en violeta; inventario completo en verde azulado. */
+.count-kind {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 9px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 700;
+  font-style: normal;
+  letter-spacing: 0.01em;
+  white-space: nowrap;
+}
+
+.count-kind.is-random {
+  background: #ede9fe;
+  color: #5b21b6;
+}
+
+.count-kind.is-full {
+  background: #ccfbf1;
+  color: #0f766e;
+}
+
+/* Franja de color a la izquierda de la tarjeta según el tipo. */
+.count-card.is-kind-random {
+  box-shadow: inset 4px 0 0 #8b5cf6;
+}
+
+.count-card.is-kind-full {
+  box-shadow: inset 4px 0 0 #14b8a6;
+}
+
+/* La exactitud lleva su propio color (la luz solo dice el estado). */
+.count-accuracy.is-good {
+  color: #15803d !important;
+}
+
+.count-accuracy.is-warn {
+  color: #b45309 !important;
+}
+
+.count-accuracy.is-bad {
+  color: #c62828 !important;
 }
