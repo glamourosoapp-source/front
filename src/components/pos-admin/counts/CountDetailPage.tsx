@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState, type CSSProperties } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { Alert, Button, Chip, Tooltip } from "@mui/material";
@@ -106,6 +106,19 @@ export function CountDetailPage() {
   useEffect(() => {
     if (canView) void load();
   }, [canView, load]);
+
+  // Alto de la barra de arriba (sticky, cambia con el ancho): el encabezado de la
+  // tabla se fija justo debajo al hacer scroll.
+  const [stickyTop, setStickyTop] = useState(0);
+  useEffect(() => {
+    const bar = document.querySelector<HTMLElement>(".topbar");
+    if (!bar) return;
+    const measure = () => setStickyTop(Math.round(bar.getBoundingClientRect().height));
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(bar);
+    return () => observer.disconnect();
+  }, []);
 
   const items = useMemo(() => count?.items ?? [], [count]);
   const closed = count?.status === INVENTORY_COUNT_STATUS.CLOSED;
@@ -306,7 +319,10 @@ export function CountDetailPage() {
             </FilterBar>
           ) : null}
 
-          <div className="counts-table-wrap">
+          <div
+            className="counts-table-wrap is-items"
+            style={{ "--count-sticky-top": `${stickyTop}px` } as CSSProperties}
+          >
             <table className="table count-items-table">
               <thead>
                 <tr>
