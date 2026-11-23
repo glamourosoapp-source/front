@@ -14,6 +14,8 @@ import { FilterBar, FilterMeta, FilterSearch, FilterSegmented } from "../FilterB
 import { formatBusinessTime, formatDateTime } from "../pos-labels";
 import { CountStatusLight } from "./CountCard";
 import { CountsNoAccess } from "./CountsPage";
+import { CountTableGuide } from "./CountTableGuide";
+import { CountWhoWhen } from "./CountWhoWhen";
 import { RevertItemDialog } from "./RevertItemDialog";
 import {
   COUNTS_HREF,
@@ -195,13 +197,6 @@ export function CountDetailPage() {
                 color={STATUS_CHIP_COLOR[count.status] ?? "default"}
               />
               {count.pendingSync ? <Chip size="small" color="warning" label="Ventas por subir" /> : null}
-              <span className="page-kicker" style={{ margin: 0 }}>
-                Lo inició {count.startedByUser?.name ?? "—"} el {formatDateTime(count.startedAt)}
-                {closed ? ` · cerrado ${formatDateTime(count.closedAt)}` : ""}
-                {count.status === INVENTORY_COUNT_STATUS.CANCELLED
-                  ? ` · cancelado ${formatDateTime(count.cancelledAt ?? count.closedAt)}`
-                  : ""}
-              </span>
             </div>
           ) : null}
         </div>
@@ -217,6 +212,8 @@ export function CountDetailPage() {
 
       {count ? (
         <>
+          <CountWhoWhen count={count} />
+
           {count.pendingSync ? (
             <Alert severity="warning">
               Al cerrar, la caja de esta sucursal tenía ventas sin subir. Lo esperado se recalcula cuando la caja
@@ -295,6 +292,8 @@ export function CountDetailPage() {
               <p className="count-notes">{count.notes}</p>
             </section>
           ) : null}
+
+          {items.length ? <CountTableGuide full={full} showsExpected={showsExpected} /> : null}
 
           {items.length ? (
             <FilterBar>
