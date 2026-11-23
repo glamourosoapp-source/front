@@ -10,7 +10,7 @@ import { INVENTORY_COUNT_ITEM_STATUS, INVENTORY_COUNT_STATUS } from "@glamouroso
 import type { InventoryCount, InventoryCountItem } from "@glamouroso/shared";
 import { httpClient, getApiErrorMessage } from "@/services/http-client";
 import { usePermissions } from "@/lib/permissions";
-import { FilterBar, FilterMeta, FilterSegmented } from "../FilterBar";
+import { FilterBar, FilterMeta, FilterSearch, FilterSegmented } from "../FilterBar";
 import { formatBusinessTime, formatDateTime } from "../pos-labels";
 import { CountStatusLight } from "./CountCard";
 import { CountsNoAccess } from "./CountsPage";
@@ -28,7 +28,7 @@ import {
 } from "./count-labels";
 import "./counts.css";
 
-type RowFilter = "all" | "diff" | "reverted";
+type RowFilter = "all" | "diff" | "outside" | "reverted";
 
 const STATUS_CHIP_COLOR: Record<string, "info" | "success" | "default"> = {
   [INVENTORY_COUNT_STATUS.IN_PROGRESS]: "info",
@@ -86,6 +86,7 @@ export function CountDetailPage() {
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
   const [filter, setFilter] = useState<RowFilter>("all");
+  const [search, setSearch] = useState("");
   const [reverting, setReverting] = useState<InventoryCountItem | null>(null);
 
   const load = useCallback(async () => {
@@ -109,6 +110,9 @@ export function CountDetailPage() {
   const items = useMemo(() => count?.items ?? [], [count]);
   const closed = count?.status === INVENTORY_COUNT_STATUS.CLOSED;
   const inProgress = count?.status === INVENTORY_COUNT_STATUS.IN_PROGRESS;
+  // El inventario completo no lleva reconteo: la columna y su cifra sobran.
+  const full = count?.kind === "full";
+  const showsRecount = !full;
   const showsExpected = closed && items.some((item) => item.expectedQty != null);
   const showsAmounts = closed && items.some((item) => item.varianceAmount != null);
 
@@ -135,17 +139,22 @@ export function CountDetailPage() {
   }, [items, count?.accuracy]);
 
   const shown = useMemo(() => {
-    const list = closed ? [...items].sort((a, b) => magnitude(b) - magnitude(a)) : items;
+    const sorted = closed ? [...items].sort((a, b) => magnitude(b) - magnitude(a)) : items;
+    const term = search.trim().toLowerCase();
+    const list = term
+      ? sorted.filter((item) => `${item.name} ${item.sku ?? ""}`.toLowerCase().includes(term))
+      : sorted;
     if (filter === "diff") return list.filter((item) => Number(item.varianceQty ?? 0) !== 0);
+    if (filter === "outside") return list.filter((item) => withinTolerance(item) === false);
     if (filter === "reverted") return list.filter((item) => item.status === INVENTORY_COUNT_ITEM_STATUS.REVERTED);
     return list;
-  }, [items, closed, filter]);
+  }, [items, closed, filter, search]);
 
   if (!canView) return <CountsNoAccess />;
 
   const progress = items.length ? Math.round((summary.counted / items.length) * 100) : 0;
   const showActions = closed && canRevert;
-  const columns = 4 + (closed ? 1 : 0) + (showsExpected ? 1 : 0) + (showsAmounts ? 1 : 0) + (showActions ? 1 : 0);
+  const columns = 3 + (showsRecount ? 1 : 0) + (closed ? 1 : 0) + (showsExpected ? 1 : 0) + (showsAmounts ? 1 : 0) + (showActions ? 1 : 0);
 
   return (
     <div className="page-stack">
@@ -231,7 +240,8 @@ export function CountDetailPage() {
                 </div>
                 <strong>{items.length}</strong>
                 <small>
-                  {summary.recounted} recontados · {summary.withDiff} con diferencia
+                  {full ? "" : `${summary.recounted} recontados · `}
+                  {summary.withDiff} con diferencia
                 </small>
               </div>
               <div className="card metric">
@@ -273,36 +283,41 @@ export function CountDetailPage() {
             </section>
           ) : null}
 
-          {closed ? (
+          {items.length ? (
             <FilterBar>
-              <FilterSegmented
-                label="Renglones"
-                value={filter}
-                onChange={setFilter}
-                options={[
-                  { value: "all", label: "Todos" },
-                  { value: "diff", label: "Con diferencia" },
-                  { value: "reverted", label: "Revertidos" },
-                ]}
-              />
+              <FilterSearch value={search} onChange={setSearch} placeholder="Buscar producto o SKU" />
+              {closed ? (
+                <FilterSegmented
+                  label="Renglones"
+                  value={filter}
+                  onChange={setFilter}
+                  options={[
+                    { value: "all", label: "Todos" },
+                    { value: "diff", label: "Con diferencia" },
+                    ...(showsExpected ? [{ value: "outside" as const, label: "Fuera de tolerancia" }] : []),
+                    { value: "reverted", label: "Revertidos" },
+                  ]}
+                />
+              ) : null}
               <FilterMeta>
-                <strong>{shown.length}</strong> de {items.length} renglones · de mayor a menor diferencia
+                <strong>{shown.length}</strong> de {items.length} renglones
+                {closed ? " · de mayor a menor diferencia" : ""}
               </FilterMeta>
             </FilterBar>
           ) : null}
 
           <div className="counts-table-wrap">
-            <table className="table">
+            <table className="table count-items-table">
               <thead>
                 <tr>
                   <th>Producto</th>
                   {showsExpected ? <th className="is-num">Esperado</th> : null}
                   <th className="is-num">Contado</th>
-                  <th className="is-num">Reconteo</th>
+                  {showsRecount ? <th className="is-num">Reconteo</th> : null}
                   {closed ? <th className="is-num">Diferencia</th> : null}
                   {showsAmounts ? <th className="is-num">Valor</th> : null}
-                  <th>Estado</th>
-                  {showActions ? <th aria-label="Acciones" /> : null}
+                  <th className="is-state">Estado</th>
+                  {showActions ? <th className="is-action" aria-label="Acciones" /> : null}
                 </tr>
               </thead>
               <tbody>
@@ -320,14 +335,15 @@ export function CountDetailPage() {
                           <Tooltip title={`Clase ${item.abcClass} por venta de 90 días`}>
                             <span className={`count-abc is-${item.abcClass}`}>{item.abcClass}</span>
                           </Tooltip>{" "}
-                          {selection ? (
-                            <Tooltip title={selection.hint}>
-                              <span>{selection.label}</span>
-                            </Tooltip>
-                          ) : (
-                            item.selectionReason
+                          {/* En el inventario completo todos entran por lo mismo: no se repite "Completo". */}
+                          {full ? null : (
+                            <>
+                              <Tooltip title={selection?.hint ?? ""}>
+                                <span>{selection?.label ?? item.selectionReason}</span>
+                              </Tooltip>
+                              {" · "}
+                            </>
                           )}
-                          {" · "}
                           {[item.sku, item.unit === "liters" ? "litros" : "piezas"].filter(Boolean).join(" · ")}
                         </small>
                       </td>
@@ -337,18 +353,20 @@ export function CountDetailPage() {
                           <span>{qtyLabel(item.countedQty, item.unit)}</span>
                         </Tooltip>
                       </td>
-                      <td className="is-num">
-                        <Tooltip title={item.recountedAt ? `Recontado a las ${formatBusinessTime(item.recountedAt)}` : ""}>
-                          <span>{item.recountQty != null ? qtyLabel(item.recountQty, item.unit) : "—"}</span>
-                        </Tooltip>
-                      </td>
+                      {showsRecount ? (
+                        <td className="is-num">
+                          <Tooltip title={item.recountedAt ? `Recontado a las ${formatBusinessTime(item.recountedAt)}` : ""}>
+                            <span>{item.recountQty != null ? qtyLabel(item.recountQty, item.unit) : "—"}</span>
+                          </Tooltip>
+                        </td>
+                      ) : null}
                       {closed ? (
                         <td
                           className={`is-num${variance != null && variance < 0 ? " count-negative" : variance != null && variance > 0 ? " count-positive" : ""}`}
                         >
                           <strong>{signedQty(variance, item.unit)}</strong>
                           {inside === false ? (
-                            <div style={{ fontSize: 11, color: "var(--muted)", fontWeight: 500 }}>fuera de tolerancia</div>
+                            <div className="count-out-tol">fuera de tolerancia</div>
                           ) : null}
                         </td>
                       ) : null}
@@ -357,14 +375,14 @@ export function CountDetailPage() {
                           {signedMoney(item.varianceAmount)}
                         </td>
                       ) : null}
-                      <td>{closed ? closedItemState(item) : inProgress ? openItemState(item) : <span className="pos-branch-muted">—</span>}</td>
+                      <td className="is-state">{closed ? closedItemState(item) : inProgress ? openItemState(item) : <span className="pos-branch-muted">—</span>}</td>
                       {showActions ? (
-                        <td style={{ textAlign: "right" }}>
+                        <td className="is-action">
                           {isRevertible(count, item) ? (
                             <Button
                               size="small"
-                              variant="outlined"
-                              color="warning"
+                              variant="text"
+                              className="count-revert-btn"
                               startIcon={<Undo2 size={14} />}
                               onClick={() => setReverting(item)}
                             >

@@ -303,3 +303,69 @@
 .count-accuracy.is-bad {
   color: #c62828 !important;
 }
+
+/* ---- Tabla de renglones del detalle ----
+   Encabezado fijo dentro de su propio scroll (un inventario completo trae
+   cientos de renglones), producto a lo ancho y cifras pegadas a su contenido. */
+.counts-table-wrap:has(.count-items-table) {
+  max-height: calc(100vh - 140px);
+  overflow: auto;
+}
+
+.count-items-table thead th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: #f8fafc;
+  box-shadow: inset 0 -1px 0 var(--border);
+}
+
+.count-items-table th:first-child,
+.count-items-table td:first-child {
+  width: 100%;
+}
+
+.count-items-table td.is-num,
+.count-items-table th.is-num {
+  min-width: 92px;
+}
+
+.count-items-table td.is-state,
+.count-items-table th.is-state {
+  width: 1%;
+  padding-left: 20px;
+}
+
+.count-items-table td.is-action,
+.count-items-table th.is-action {
+  width: 1%;
+  text-align: right;
+}
+
+.count-items-table tbody tr:hover td {
+  background: #f8fafc;
+}
+
+.count-items-table .count-name small {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.count-out-tol {
+  margin-top: 2px;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 500;
+}
+
+.count-revert-btn {
+  color: #b45309 !important;
+  font-weight: 600 !important;
+  text-transform: none !important;
+}
+
+.count-revert-btn:hover {
+  background: #fef3c7 !important;
+}
