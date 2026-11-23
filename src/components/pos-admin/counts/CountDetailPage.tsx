@@ -256,10 +256,10 @@ export function CountDetailPage() {
               </div>
               <div className="card metric">
                 <div className="metric-head">
-                  <span>Dentro de tolerancia</span>
+                  <span>Diferencia aceptable</span>
                 </div>
                 <strong>{summary.inside != null ? `${summary.inside} de ${items.length}` : "—"}</strong>
-                <small>Exactitud {percentLabel(summary.accuracy)} · ±1 L/pz o ±2 %</small>
+                <small>Exactitud del conteo: {percentLabel(summary.accuracy)}</small>
               </div>
               {showsAmounts ? (
                 <div className="card metric">
