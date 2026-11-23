@@ -18,6 +18,14 @@ export const COUNT_STATUS_LABELS: Record<string, string> = {
   [INVENTORY_COUNT_STATUS.CANCELLED]: "Cancelado",
 };
 
+/** Tipo de conteo: la lista sorpresa del supervisor o el inventario completo de la sucursal. */
+export const COUNT_KIND_LABELS: Record<string, { label: string; hint: string }> = {
+  random: { label: "Aleatorio", hint: "Lista sorpresa de renglones, contada a ciegas con reconteo." },
+  full: { label: "Inventario completo", hint: "Todo lo vivo de la sucursal, sin reconteo." },
+};
+
+export const countKindOf = (kind: string | null | undefined) => (kind === "full" ? "full" : "random");
+
 /** Por qué entró el renglón a la lista sorpresa. */
 export const COUNT_SELECTION_LABELS: Record<string, { label: string; hint: string }> = {
   due: { label: "Vencido", hint: "Le tocaba por su clase ABC (A cada mes, B cada 2, C cada 3) o nunca se había contado." },

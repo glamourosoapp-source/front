@@ -1,12 +1,14 @@
 "use client";
 
 import Link from "next/link";
-import { ChevronRight, ClipboardCheck, ClipboardList, ClipboardX, Clock, CloudUpload, UserRound } from "lucide-react";
+import { Boxes, ChevronRight, ClipboardCheck, ClipboardList, ClipboardX, Clock, CloudUpload, Shuffle, UserRound } from "lucide-react";
 import { INVENTORY_COUNT_STATUS } from "@glamouroso/shared/constants";
 import { formatDateTime, relativeDays } from "../pos-labels";
 import {
+  COUNT_KIND_LABELS,
   COUNT_STATUS_LABELS,
   accuracyTone,
+  countKindOf,
   countHref,
   percentLabel,
   signedMoney,
@@ -15,16 +17,17 @@ import {
 import "./counts.css";
 
 /**
- * Luz del conteo, hermana del foco de tienda: azul con ondas mientras está en
- * curso; ya cerrado, verde/ámbar/rojo según la exactitud; gris si se canceló.
+ * Luz del conteo, hermana del foco de tienda: solo dice el estado. Azul con
+ * ondas mientras está en curso, verde ya cerrado (se completó) y gris si se
+ * canceló. Qué tan exacto salió lo dice la cifra de Exactitud, con su color.
  */
-export function CountStatusLight({ status, accuracy }: { status: string; accuracy: number | null | undefined }) {
+export function CountStatusLight({ status }: { status: string }) {
   const tone =
     status === INVENTORY_COUNT_STATUS.IN_PROGRESS
       ? "progress"
       : status === INVENTORY_COUNT_STATUS.CANCELLED
         ? "cancelled"
-        : accuracyTone(accuracy);
+        : "good";
   const Icon =
     status === INVENTORY_COUNT_STATUS.IN_PROGRESS
       ? ClipboardList
@@ -37,6 +40,19 @@ export function CountStatusLight({ status, accuracy }: { status: string; accurac
         <Icon size={16} />
       </span>
       <span className="store-light-label">{COUNT_STATUS_LABELS[status] ?? status}</span>
+    </span>
+  );
+}
+
+/** Chip del tipo de conteo: Aleatorio (violeta) o Inventario completo (verde azulado). */
+export function CountKindChip({ kind }: { kind: string | null | undefined }) {
+  const key = countKindOf(kind);
+  const Icon = key === "full" ? Boxes : Shuffle;
+  const meta = COUNT_KIND_LABELS[key]!;
+  return (
+    <span className={`count-kind is-${key}`} title={meta.hint}>
+      <Icon size={13} aria-hidden />
+      {meta.label}
     </span>
   );
 }
@@ -77,13 +93,13 @@ export function CountCard({ count }: { count: CountListRow }) {
   const reverted = count.revertedItems ?? 0;
 
   return (
-    <section className={`pos-day pos-cut pos-branch count-card is-${count.status}`}>
+    <section className={`pos-day pos-cut pos-branch count-card is-${count.status} is-kind-${countKindOf(count.kind)}`}>
       <Link href={countHref(count.id)} className="pos-day-head">
-        <CountStatusLight status={count.status} accuracy={count.accuracy} />
+        <CountStatusLight status={count.status} />
         <span className="pos-day-date">
           <span className="pos-day-weekday">
+            <CountKindChip kind={count.kind} />
             {count.branch ? `${count.branch.code} · ${count.branch.name}` : "Sucursal"}
-            {count.kind === "full" ? <span className="pos-day-badge count-full-badge">Inventario completo</span> : null}
             {count.pendingSync ? <span className="pos-day-badge count-sync-badge">Ventas por subir</span> : null}
           </span>
           <span className="pos-day-fulldate">
@@ -136,7 +152,12 @@ export function CountCard({ count }: { count: CountListRow }) {
             value={inProgress || cancelled ? `${counted}/${total}` : String(total)}
             note={inProgress || cancelled ? "contados" : "ajustados al cerrar"}
           />
-          <RowStat label="Exactitud" value={percentLabel(count.accuracy)} note="en tolerancia" />
+          <RowStat
+            label="Exactitud"
+            value={percentLabel(count.accuracy)}
+            note="en tolerancia"
+            className={inProgress || cancelled ? undefined : `count-accuracy is-${accuracyTone(count.accuracy)}`}
+          />
           {seesAmounts ? (
             <RowStat
               label="Merma neta"

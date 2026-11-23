@@ -29,6 +29,14 @@ const STATUS_FILTERS: Array<{ value: StatusFilter; label: string }> = [
   { value: INVENTORY_COUNT_STATUS.CANCELLED, label: "Cancelados" },
 ];
 
+type KindFilter = "all" | "random" | "full";
+
+const KIND_FILTERS: Array<{ value: KindFilter; label: string }> = [
+  { value: "all", label: "Todos los tipos" },
+  { value: "random", label: "Aleatorios" },
+  { value: "full", label: "Completos" },
+];
+
 const PAGE_SIZE = 50;
 
 /**
@@ -40,6 +48,7 @@ export function CountsListTab({ initialBranchId = "" }: { initialBranchId?: stri
   const [branches, setBranches] = useState<Branch[]>([]);
   const [branchId, setBranchId] = useState(initialBranchId);
   const [status, setStatus] = useState<StatusFilter>("all");
+  const [kind, setKind] = useState<KindFilter>("all");
   const [range, setRange] = useState(() => {
     const today = todayInMexico();
     return { from: shiftDateOnly(today, -29), to: today };
@@ -71,6 +80,7 @@ export function CountsListTab({ initialBranchId = "" }: { initialBranchId?: stri
           limit: PAGE_SIZE,
           ...(branchId ? { branchId } : {}),
           ...(status !== "all" ? { status } : {}),
+          ...(kind !== "all" ? { kind } : {}),
           ...(range.from ? { from: range.from } : {}),
           ...(range.to ? { to: range.to } : {}),
         });
@@ -84,7 +94,7 @@ export function CountsListTab({ initialBranchId = "" }: { initialBranchId?: stri
         setLoading(false);
       }
     },
-    [branchId, status, range.from, range.to]
+    [branchId, status, kind, range.from, range.to]
   );
 
   useEffect(() => {
@@ -179,6 +189,7 @@ export function CountsListTab({ initialBranchId = "" }: { initialBranchId?: stri
             </MenuItem>
           ))}
         </TextField>
+        <FilterSegmented label="Tipo" options={KIND_FILTERS} value={kind} onChange={setKind} />
         <FilterSegmented label="Estado" options={STATUS_FILTERS} value={status} onChange={setStatus} />
         <FilterDateRange
           label="Fecha del conteo"

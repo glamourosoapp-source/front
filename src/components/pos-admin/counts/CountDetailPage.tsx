@@ -161,7 +161,7 @@ export function CountDetailPage() {
           <h1 className="page-title" style={{ display: "flex", alignItems: "center", gap: 10 }}>
             <ClipboardCheck size={22} style={{ color: "var(--glam-blue)", flex: "0 0 auto" }} />
             <span>
-              {count?.kind === "full" ? "Inventario completo" : "Conteo"}
+              {count?.kind === "full" ? "Inventario completo" : "Conteo aleatorio"}
               {count?.branch ? ` · ${count.branch.code} · ${count.branch.name}` : ""}
             </span>
           </h1>
@@ -183,7 +183,7 @@ export function CountDetailPage() {
             </div>
           ) : null}
         </div>
-        {count ? <CountStatusLight status={count.status} accuracy={summary.accuracy} /> : null}
+        {count ? <CountStatusLight status={count.status} /> : null}
       </div>
 
       {loading && !count ? <p className="page-kicker">Cargando conteo...</p> : null}

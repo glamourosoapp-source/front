@@ -60,9 +60,9 @@ export function CountsPage() {
         <div>
           <h1 className="page-title">Conteos de inventario</h1>
           <p className="page-kicker">
-            Cada visita del supervisor cuenta a ciegas una lista sorpresa de renglones de la sucursal y, al cerrar, la
-            diferencia se ajusta por kardex. Aquí revisas cada ajuste y, si fue un error de conteo, lo reviertes con
-            motivo.
+            Hay dos tipos: el <b>aleatorio</b>, una lista sorpresa de renglones que el supervisor cuenta a ciegas en
+            su visita, y el <b>inventario completo</b>, todo lo vivo de la sucursal. Al cerrar, la diferencia se ajusta
+            por kardex; aquí revisas cada ajuste y, si fue un error de conteo, lo reviertes con motivo.
           </p>
         </div>
       </div>
